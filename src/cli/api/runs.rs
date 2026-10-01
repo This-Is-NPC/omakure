@@ -11,10 +11,10 @@ use crate::auth::AuthContext;
 use crate::operations::core;
 use crate::operations::{OperationError, OperationErrorCode, OperationResult};
 use crate::ports::ScriptRepository;
+use axum::Extension;
 use axum::body::Body;
 use axum::extract::{Path as AxumPath, RawQuery, State};
 use axum::response::Response;
-use axum::Extension;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -248,7 +248,7 @@ fn require_implicit_secret_capabilities(
             return Some(operation_error_response(OperationError::new(
                 OperationErrorCode::InvalidInput,
                 err.to_string(),
-            )))
+            )));
         }
     };
     let secret_fields: Vec<_> = schema
@@ -290,7 +290,7 @@ fn require_implicit_secret_capabilities(
             return Some(operation_error_response(OperationError::new(
                 OperationErrorCode::InvalidInput,
                 err.to_string(),
-            )))
+            )));
         }
     };
     if let Some(response) = secret_fields
@@ -404,7 +404,7 @@ fn list_traces_request(
 #[cfg(test)]
 mod blocking_tests {
     use axum::body::Body;
-    use axum::http::{header, Request, StatusCode};
+    use axum::http::{Request, StatusCode, header};
     use std::sync::Arc;
     use std::time::Duration;
     use tower::ServiceExt;
@@ -443,9 +443,11 @@ mod blocking_tests {
         })
         .await
         .expect("list handler entered the blocking operation");
-        assert!(tokio::time::timeout(Duration::from_millis(100), &mut list)
-            .await
-            .is_err());
+        assert!(
+            tokio::time::timeout(Duration::from_millis(100), &mut list)
+                .await
+                .is_err()
+        );
         let response = tokio::time::timeout(
             Duration::from_secs(1),
             app.oneshot(

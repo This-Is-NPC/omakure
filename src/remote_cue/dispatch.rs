@@ -1,5 +1,5 @@
-use super::gates::{is_well_formed_cue_id, is_well_formed_script_name};
 use super::MAX_REASON_BYTES;
+use super::gates::{is_well_formed_cue_id, is_well_formed_script_name};
 use crate::util::hex;
 
 /// The `cue_dispatch` payload, after shape validation.

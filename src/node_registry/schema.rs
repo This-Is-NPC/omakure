@@ -1,6 +1,6 @@
 use super::error::RegistryError;
-use super::{NodeRegistry, HEALTH_PLANE_ENABLED, SCHEMA_VERSION};
-use rusqlite::{params, Transaction};
+use super::{HEALTH_PLANE_ENABLED, NodeRegistry, SCHEMA_VERSION};
+use rusqlite::{Transaction, params};
 
 pub(super) fn create_schema(
     transaction: &Transaction<'_>,

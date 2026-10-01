@@ -4,8 +4,8 @@ use crate::workspace::Workspace;
 use axum::Router;
 use std::error::Error;
 use std::path::PathBuf;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 mod audit;
 mod battery;

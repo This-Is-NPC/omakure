@@ -193,9 +193,11 @@ fn git_command_removes_api_token() {
         GitTransportPolicy::Default,
     );
 
-    assert!(command
-        .get_envs()
-        .any(|(k, v)| k == "OMAKURE_API_TOKEN" && v.is_none()));
+    assert!(
+        command
+            .get_envs()
+            .any(|(k, v)| k == "OMAKURE_API_TOKEN" && v.is_none())
+    );
 }
 
 #[test]
@@ -227,30 +229,38 @@ fn git_command_disables_prompts_and_external_config() {
     assert!(envs.iter().any(|(key, value)| {
         *key == "GIT_ALLOW_PROTOCOL" && value.map(|v| v == "file:https:http").unwrap_or(false)
     }));
-    assert!(envs
-        .iter()
-        .any(|(key, value)| *key == "GIT_ASKPASS" && value.is_none()));
-    assert!(envs
-        .iter()
-        .any(|(key, value)| *key == "SSH_ASKPASS" && value.is_none()));
-    assert!(envs
-        .iter()
-        .any(|(key, value)| *key == "GIT_SSH" && value.is_none()));
-    assert!(envs
-        .iter()
-        .any(|(key, value)| *key == "GIT_SSH_COMMAND" && value.is_none()));
-    assert!(envs
-        .iter()
-        .any(|(key, value)| *key == "GIT_TEMPLATE_DIR" && value.is_none()));
-    assert!(envs
-        .iter()
-        .any(|(key, value)| *key == "GIT_EXEC_PATH" && value.is_none()));
-    assert!(envs
-        .iter()
-        .any(|(key, value)| *key == "HOME" && value.is_none()));
-    assert!(envs
-        .iter()
-        .any(|(key, value)| *key == "XDG_CONFIG_HOME" && value.is_none()));
+    assert!(
+        envs.iter()
+            .any(|(key, value)| *key == "GIT_ASKPASS" && value.is_none())
+    );
+    assert!(
+        envs.iter()
+            .any(|(key, value)| *key == "SSH_ASKPASS" && value.is_none())
+    );
+    assert!(
+        envs.iter()
+            .any(|(key, value)| *key == "GIT_SSH" && value.is_none())
+    );
+    assert!(
+        envs.iter()
+            .any(|(key, value)| *key == "GIT_SSH_COMMAND" && value.is_none())
+    );
+    assert!(
+        envs.iter()
+            .any(|(key, value)| *key == "GIT_TEMPLATE_DIR" && value.is_none())
+    );
+    assert!(
+        envs.iter()
+            .any(|(key, value)| *key == "GIT_EXEC_PATH" && value.is_none())
+    );
+    assert!(
+        envs.iter()
+            .any(|(key, value)| *key == "HOME" && value.is_none())
+    );
+    assert!(
+        envs.iter()
+            .any(|(key, value)| *key == "XDG_CONFIG_HOME" && value.is_none())
+    );
     assert!(envs.iter().any(|(key, value)| {
         *key == "GIT_CONFIG_NOSYSTEM" && value.map(|v| v == "1").unwrap_or(false)
     }));
@@ -263,15 +273,18 @@ fn git_command_disables_prompts_and_external_config() {
                 .map(|v| v.to_string_lossy().ends_with("git-empty-config"))
                 .unwrap_or(false)
     }));
-    assert!(envs
-        .iter()
-        .any(|(key, value)| *key == "GIT_CONFIG_SYSTEM" && value.is_none()));
-    assert!(envs
-        .iter()
-        .any(|(key, value)| *key == "GIT_CONFIG_COUNT" && value.is_none()));
-    assert!(envs
-        .iter()
-        .any(|(key, value)| *key == "GIT_CONFIG_PARAMETERS" && value.is_none()));
+    assert!(
+        envs.iter()
+            .any(|(key, value)| *key == "GIT_CONFIG_SYSTEM" && value.is_none())
+    );
+    assert!(
+        envs.iter()
+            .any(|(key, value)| *key == "GIT_CONFIG_COUNT" && value.is_none())
+    );
+    assert!(
+        envs.iter()
+            .any(|(key, value)| *key == "GIT_CONFIG_PARAMETERS" && value.is_none())
+    );
 }
 
 #[test]
@@ -314,9 +327,10 @@ fn git_http_command_disables_redirects_proxies_and_pins_verified_host() {
         .map(|arg| arg.to_string_lossy().into_owned())
         .collect();
 
-    assert!(args
-        .windows(2)
-        .any(|pair| pair == ["-c", "http.followRedirects=false"]));
+    assert!(
+        args.windows(2)
+            .any(|pair| pair == ["-c", "http.followRedirects=false"])
+    );
     assert!(args.windows(2).any(|pair| pair == ["-c", "http.proxy="]));
     assert!(args.windows(2).any(|pair| {
         pair == [
@@ -334,9 +348,11 @@ fn git_http_command_disables_redirects_proxies_and_pins_verified_host() {
         "ALL_PROXY",
         "NO_PROXY",
     ] {
-        assert!(command
-            .get_envs()
-            .any(|(key, value)| env_key_eq(key, proxy) && value.is_none()));
+        assert!(
+            command
+                .get_envs()
+                .any(|(key, value)| env_key_eq(key, proxy) && value.is_none())
+        );
     }
 }
 
@@ -369,13 +385,17 @@ fn git_specs_disable_hooks_submodules_and_checkout_detached() {
         .get_args()
         .map(|arg| arg.to_string_lossy().into_owned())
         .collect();
-    assert!(config_args
-        .windows(2)
-        .any(|pair| { pair[0] == "-c" && pair[1] == "core.autocrlf=false" }));
+    assert!(
+        config_args
+            .windows(2)
+            .any(|pair| { pair[0] == "-c" && pair[1] == "core.autocrlf=false" })
+    );
     #[cfg(windows)]
-    assert!(config_args
-        .windows(2)
-        .any(|pair| { pair[0] == "-c" && pair[1] == "core.filemode=false" }));
+    assert!(
+        config_args
+            .windows(2)
+            .any(|pair| { pair[0] == "-c" && pair[1] == "core.filemode=false" })
+    );
 
     let fetch = git_fetch_spec(cache, "main");
     assert!(fetch.args.contains(&"--no-recurse-submodules".to_string()));
@@ -493,14 +513,16 @@ fn prepare_git_askpass_writes_0600_files_and_redacts_token() {
     let script = fs::read_to_string(&guard.script_path).unwrap();
     assert!(script.contains("\"$DIR/token\""));
     assert!(!script.contains(plaintext));
-    assert!(!script.contains(
-        guard
-            .script_path
-            .parent()
-            .unwrap()
-            .to_string_lossy()
-            .as_ref()
-    ));
+    assert!(
+        !script.contains(
+            guard
+                .script_path
+                .parent()
+                .unwrap()
+                .to_string_lossy()
+                .as_ref()
+        )
+    );
     drop(guard);
 }
 
@@ -552,9 +574,10 @@ fn git_command_with_askpass_sets_git_askpass_env() {
             && v.map(|p| p == guard.script_path.as_os_str())
                 .unwrap_or(false)
     }));
-    assert!(envs
-        .iter()
-        .any(|(k, v)| { *k == "GIT_TERMINAL_PROMPT" && v.map(|v| v == "0").unwrap_or(false) }));
+    assert!(
+        envs.iter()
+            .any(|(k, v)| { *k == "GIT_TERMINAL_PROMPT" && v.map(|v| v == "0").unwrap_or(false) })
+    );
     assert!(envs.iter().any(|(k, v)| {
         *k == "OMAKURE_GIT_AUTHORITY" && v.map(|v| v == "git.example.test").unwrap_or(false)
     }));

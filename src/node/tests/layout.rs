@@ -88,15 +88,17 @@ fn cli_overrides_env_and_env_overrides_defaults() {
     )
     .unwrap();
     assert_eq!(env_only.state_dir(), env_state.as_path());
-    assert!(NodeContext::resolve_for(
-        NodePlatform::Linux,
-        NodePathOverrides::new(Some(cli_state), Some(cli_config)),
-        false,
-        None,
-        None,
-        None,
-    )
-    .is_err());
+    assert!(
+        NodeContext::resolve_for(
+            NodePlatform::Linux,
+            NodePathOverrides::new(Some(cli_state), Some(cli_config)),
+            false,
+            None,
+            None,
+            None,
+        )
+        .is_err()
+    );
 }
 
 #[cfg(debug_assertions)]
@@ -141,15 +143,17 @@ fn unsafe_paths_are_rejected_without_io() {
         ),
         (PathBuf::from("/tmp/state"), PathBuf::from("relative.toml")),
     ] {
-        assert!(NodeContext::resolve_for(
-            NodePlatform::Linux,
-            NodePathOverrides::new(Some(state), Some(config)),
-            true,
-            None,
-            None,
-            None,
-        )
-        .is_err());
+        assert!(
+            NodeContext::resolve_for(
+                NodePlatform::Linux,
+                NodePathOverrides::new(Some(state), Some(config)),
+                true,
+                None,
+                None,
+                None,
+            )
+            .is_err()
+        );
     }
 }
 

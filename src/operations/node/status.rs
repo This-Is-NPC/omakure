@@ -3,7 +3,7 @@ use super::discovery::configured_discovery_status;
 use super::errors::{map_identity_error, map_node_error, map_registry_error, registry_error};
 use crate::domain::NodeConfig;
 use crate::node::{
-    NodeContext, DATABASE_FILE, IDENTITY_KEY_FILE, IDENTITY_PUBLIC_FILE,
+    DATABASE_FILE, IDENTITY_KEY_FILE, IDENTITY_PUBLIC_FILE, NodeContext,
     TRANSPORT_CERTIFICATE_FILE, TRANSPORT_KEY_FILE,
 };
 use crate::node_identity::NodeIdentity;

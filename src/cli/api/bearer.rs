@@ -1,5 +1,5 @@
 use super::audit::{
-    emit_http_audit_async, mutation_path_run_id, safe_audit_run_id, AuditRunId, HttpAuditEvent,
+    AuditRunId, HttpAuditEvent, emit_http_audit_async, mutation_path_run_id, safe_audit_run_id,
 };
 use super::respond::error_response;
 use super::router::HealthPlaneAuthState;
@@ -8,7 +8,7 @@ use crate::auth::{AuthContext, Authenticator};
 use crate::policy::DeployPolicy;
 use axum::body::Body;
 use axum::extract::State;
-use axum::http::{header, HeaderMap, Request, StatusCode};
+use axum::http::{HeaderMap, Request, StatusCode, header};
 use axum::middleware::Next;
 use axum::response::Response;
 use std::sync::Arc;

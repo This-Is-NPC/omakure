@@ -2,7 +2,7 @@ use crate::cli::args::InitArgs;
 use crate::cli::emit::emit_error;
 use crate::cli::json::{self, codes};
 use crate::domain::parse_schema;
-use crate::runtime::{script_extensions, script_kind, ScriptKind};
+use crate::runtime::{ScriptKind, script_extensions, script_kind};
 use crate::util::fs::set_executable_permissions;
 use crate::workspace::Workspace;
 use serde::Serialize;

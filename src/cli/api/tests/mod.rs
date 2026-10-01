@@ -1,14 +1,14 @@
-use super::audit::{clear_audit_hook, install_audit_hook, HttpAuditEvent};
-use super::boot::{prepare_api_boot, validate_bind, ApiConfigError};
+use super::audit::{HttpAuditEvent, clear_audit_hook, install_audit_hook};
+use super::boot::{ApiConfigError, prepare_api_boot, validate_bind};
 use super::respond::operation_error_response;
 use super::router::{
-    router, router_with_auth, router_with_deploy, router_with_health_plane, router_with_policy,
-    shared_test_health_registry, BODY_LIMIT_BYTES,
+    BODY_LIMIT_BYTES, router, router_with_auth, router_with_deploy, router_with_health_plane,
+    router_with_policy, shared_test_health_registry,
 };
-use super::scripts::{MAX_SEARCH_QUERY_LEN, MAX_SEARCH_TAGS, MAX_SEARCH_TAG_LEN};
+use super::scripts::{MAX_SEARCH_QUERY_LEN, MAX_SEARCH_TAG_LEN, MAX_SEARCH_TAGS};
 use super::state::{ApiPolicy, ReadinessGate};
 use crate::app_meta;
-use crate::auth::{self, test_credential, AuthContext, Authenticator};
+use crate::auth::{self, AuthContext, Authenticator, test_credential};
 use crate::cli::args::ApiArgs;
 use crate::inventory::HTTP_ROUTE_INVENTORY;
 use crate::operations::battery as battery_ops;
@@ -16,8 +16,8 @@ use crate::operations::envs as env_ops;
 use crate::operations::{OperationError, OperationErrorCode};
 use crate::policy::DeployPolicy;
 use crate::workspace::Workspace;
-use axum::body::{to_bytes, Body};
-use axum::http::{header, Method, Request, StatusCode};
+use axum::body::{Body, to_bytes};
+use axum::http::{Method, Request, StatusCode, header};
 use axum::response::Response;
 use std::net::SocketAddr;
 use std::process::Command;

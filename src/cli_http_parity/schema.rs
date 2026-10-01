@@ -2,7 +2,7 @@ use super::model::{
     Manifest, ManifestError, NormalizationRule, ObservableActor, ObservableCaseRequirement,
     ObservableRule, ObservableSchema, ParityClass,
 };
-use super::{checked_manifest, SCHEMA_VERSION};
+use super::{SCHEMA_VERSION, checked_manifest};
 use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -1,21 +1,21 @@
-use super::baseline::{sign_pending_baseline, BaselineAckMatch, OutboundBaseline};
+use super::IDLE_TIMEOUT;
+use super::baseline::{BaselineAckMatch, OutboundBaseline, sign_pending_baseline};
 use super::connection::ConnectionState;
-use super::cue::{sign_pending_cue, CueAckMatch, OutboundCue};
+use super::cue::{CueAckMatch, OutboundCue, sign_pending_cue};
 use super::error::DirectServiceError;
 use super::outbox::OutboxGuard;
 use super::stream::{read_frame, write_bytes};
-use super::IDLE_TIMEOUT;
 use crate::direct_health::{HealthOutcome, HealthSession};
 use crate::direct_transport::{
-    unix_seconds, Frame, TransportError, TransportSession, ENVELOPE_KIND,
+    ENVELOPE_KIND, Frame, TransportError, TransportSession, unix_seconds,
 };
 use crate::node_identity::NodeIdentity;
 use crate::node_registry::{NodeRegistry, PeerState, TransportPeer};
 use crate::remote_cue::{CueCode, CueOutcome};
 use std::io::{self, Read};
 use std::net::TcpStream;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 enum SessionStep {

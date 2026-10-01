@@ -12,7 +12,7 @@
 //! and only if it happened to exercise the same shape.
 
 use omakure::direct_health::{HealthOutcome, HealthSession};
-use omakure::direct_transport::{sign_cue_envelope, sign_health_envelope, CUE_KIND_PREFIX};
+use omakure::direct_transport::{CUE_KIND_PREFIX, sign_cue_envelope, sign_health_envelope};
 use omakure::node::{NodeContext, NodePathOverrides, NodePlatform};
 use omakure::node_identity::NodeIdentity;
 use omakure::node_registry::NodeRegistry;

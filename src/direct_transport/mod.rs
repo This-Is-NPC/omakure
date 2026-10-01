@@ -16,19 +16,19 @@ mod session;
 mod x25519;
 
 pub use carriage::{
+    BASELINE_KIND_PREFIX, CUE_KIND_PREFIX, EnvelopeView, HEALTH_KIND_PREFIX,
     enrollment_ack_accepted, enrollment_ack_offer, enrollment_request_bytes, envelope_kind_hint,
-    envelope_view, sign_baseline_envelope, sign_cue_envelope, sign_health_envelope, EnvelopeView,
-    BASELINE_KIND_PREFIX, CUE_KIND_PREFIX, HEALTH_KIND_PREFIX,
+    envelope_view, sign_baseline_envelope, sign_cue_envelope, sign_health_envelope,
 };
 pub use certificate::TransportCertificate;
 pub use envelope::{
-    authorize_peer, envelope_nonce, sign_ack, sign_manual_ack, sign_manual_request, sign_probe,
-    verify_envelope, PeerAuthorization, SignedEnvelope,
+    PeerAuthorization, SignedEnvelope, authorize_peer, envelope_nonce, sign_ack, sign_manual_ack,
+    sign_manual_request, sign_probe, verify_envelope,
 };
 pub use errors::{ProtocolErrorCode, TransportError};
 pub use frame::Frame;
 pub use handshake::{HandshakeRole, NoiseHandshake};
-pub use session::{stated_error, ReceivedMessage, TransportSession};
+pub use session::{ReceivedMessage, TransportSession, stated_error};
 pub use x25519::{
     prohibited_x25519_public_keys, validate_x25519_public, x25519_probe, x25519_public_from_private,
 };

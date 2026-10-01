@@ -1,3 +1,4 @@
+use super::SIGNED_BUNDLE_HTTP_BODY_LIMIT_BYTES;
 use super::battery::{
     add_battery_handler, inspect_battery_handler, install_battery_script_handler,
     list_batteries_handler, list_battery_scripts_handler, remove_battery_handler,
@@ -34,7 +35,6 @@ use super::state::{ApiPolicy, ApiState, ReadinessGate};
 use super::status::{
     admin_status_handler, config_handler, doctor_handler, health, ready_handler, workspace_handler,
 };
-use super::SIGNED_BUNDLE_HTTP_BODY_LIMIT_BYTES;
 use crate::auth::Authenticator;
 use crate::direct_service::TransportStatusHandle;
 use crate::node_registry::NodeRegistry;
@@ -42,12 +42,12 @@ use crate::node_registry::NodeRegistry;
 use crate::operations::node as node_ops;
 use crate::policy::DeployPolicy;
 use crate::workspace::Workspace;
+use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use axum::middleware::{self, Next};
 use axum::response::IntoResponse;
 use axum::routing::{delete, get, post, put};
-use axum::Router;
 use std::sync::Arc;
 
 #[cfg(test)]

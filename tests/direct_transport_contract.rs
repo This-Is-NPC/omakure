@@ -1,14 +1,14 @@
 use curve25519_dalek::{constants::X25519_BASEPOINT, montgomery::MontgomeryPoint};
 
 use k256::schnorr::{
-    signature::hazmat::{PrehashSigner, PrehashVerifier},
     Signature, SigningKey, VerifyingKey,
+    signature::hazmat::{PrehashSigner, PrehashVerifier},
 };
 use omakure::enrollment::{EnrollmentRole, ManualEnrollmentRequest};
 use omakure::node::{NodeContext, NodePathOverrides, NodePlatform};
 use omakure::node_identity::NodeIdentity;
 use sha2::{Digest, Sha256};
-use snow::{params::NoiseParams, Builder, HandshakeState, TransportState};
+use snow::{Builder, HandshakeState, TransportState, params::NoiseParams};
 use std::collections::BTreeSet;
 use tempfile::TempDir;
 
@@ -438,9 +438,11 @@ fn adapter_and_reference_model_drive_crypto_time_replay_and_trust_boundaries() {
         let mut mutated = production_manual.clone();
         mutated[offset] ^= 1;
         let parsed = ManualEnrollmentRequest::decode(&mutated).unwrap();
-        assert!(parsed
-            .verify(u64_value(&fixture, "manual_created_at"))
-            .is_err());
+        assert!(
+            parsed
+                .verify(u64_value(&fixture, "manual_created_at"))
+                .is_err()
+        );
 
         let mut pairing = bytes(&fixture, "manual_pairing_id_hex");
         pairing[offset - 5] ^= 1;
@@ -457,12 +459,14 @@ fn adapter_and_reference_model_drive_crypto_time_replay_and_trust_boundaries() {
     }
     let mut zero_pairing = bytes(&fixture, "manual_pairing_id_hex");
     zero_pairing.fill(0);
-    assert!(production_manual_request_with_pairing(
-        &fixture,
-        initiator_vector,
-        zero_pairing.try_into().unwrap(),
-    )
-    .is_err());
+    assert!(
+        production_manual_request_with_pairing(
+            &fixture,
+            initiator_vector,
+            zero_pairing.try_into().unwrap(),
+        )
+        .is_err()
+    );
     let mut wrong_version = production_manual.clone();
     wrong_version[4] = 1;
     assert!(ManualEnrollmentRequest::decode(&wrong_version).is_err());
@@ -734,15 +738,17 @@ fn prologue_downgrade_and_interrupted_handshake_are_not_authorized() {
     )
     .unwrap();
     let length = responder.write_message(&[], &mut message).unwrap();
-    assert!(adapter_read_message(
-        &mut initiator,
-        2,
-        &message[..length],
-        &mut payload,
-        &initiator_static,
-        None,
-    )
-    .is_err());
+    assert!(
+        adapter_read_message(
+            &mut initiator,
+            2,
+            &message[..length],
+            &mut payload,
+            &initiator_static,
+            None,
+        )
+        .is_err()
+    );
     assert!(!initiator.is_handshake_finished());
 
     assert_eq!(
@@ -781,17 +787,21 @@ fn snow_rekey_boundary_is_synchronized_in_both_directions() {
     let length = missing_sender
         .write_message(b"missing incoming rekey", &mut ciphertext)
         .unwrap();
-    assert!(missing_receiver
-        .read_message(&ciphertext[..length], &mut plaintext)
-        .is_err());
+    assert!(
+        missing_receiver
+            .read_message(&ciphertext[..length], &mut plaintext)
+            .is_err()
+    );
     let (mut early_sender, mut early_receiver) = transport_pair(&fixture);
     early_receiver.rekey_incoming();
     let length = early_sender
         .write_message(b"early incoming rekey", &mut ciphertext)
         .unwrap();
-    assert!(early_receiver
-        .read_message(&ciphertext[..length], &mut plaintext)
-        .is_err());
+    assert!(
+        early_receiver
+            .read_message(&ciphertext[..length], &mut plaintext)
+            .is_err()
+    );
 
     let (mut initiator, mut responder) = transport_pair(&fixture);
     for _ in 0..2 {

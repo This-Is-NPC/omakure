@@ -25,8 +25,8 @@ mod frame;
 
 use docker_health_node::node_material;
 use omakure::direct_transport::{
-    sign_health_envelope, sign_probe, unix_seconds, verify_envelope, HandshakeRole, NoiseHandshake,
-    TransportSession, ENVELOPE_KIND,
+    ENVELOPE_KIND, HandshakeRole, NoiseHandshake, TransportSession, sign_health_envelope,
+    sign_probe, unix_seconds, verify_envelope,
 };
 use omakure::health_plane::bounds::{
     MAX_AGE_SECONDS, MAX_FUTURE_SKEW_SECONDS, MAX_MESSAGES_PER_PEER_PER_MINUTE,
@@ -37,7 +37,7 @@ use omakure::health_plane::model::HealthCode;
 use omakure::node::{NodeContext, NodePathOverrides, NodePlatform};
 use omakure::node_identity::NodeIdentity;
 use rusqlite::{Connection, OptionalExtension};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::io::Write;
 use std::net::TcpStream;
 use std::path::{Path, PathBuf};
@@ -798,13 +798,15 @@ fn the_contracted_adversarial_matrix_is_rejected_over_production_noise() {
     cases.mark(6, "Oversized past the frozen per-kind canonical cap.");
     let mark = latest_audit_id();
     let mut oversized = profile_payload(&conductor_id, &message_id(0x06), 1);
-    oversized["profile"]["runtimes"] = json!((0..64)
-        .map(|index| json!({
-            "available": true,
-            "name": format!("runtime{index}"),
-            "version": "9.9.9999999999999999999999"
-        }))
-        .collect::<Vec<Value>>());
+    oversized["profile"]["runtimes"] = json!(
+        (0..64)
+            .map(|index| json!({
+                "available": true,
+                "name": format!("runtime{index}"),
+                "version": "9.9.9999999999999999999999"
+            }))
+            .collect::<Vec<Value>>()
+    );
     assert_dropped(
         exchange(
             &mut stream,
@@ -1333,7 +1335,7 @@ fn spoofed_envelope(
 /// ordinary suite; they need no Docker topology.
 #[cfg(test)]
 mod case_log {
-    use super::{CaseLog, CONTRACTED_CASES};
+    use super::{CONTRACTED_CASES, CaseLog};
 
     fn complete() -> CaseLog {
         let mut log = CaseLog::default();

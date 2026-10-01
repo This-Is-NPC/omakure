@@ -1,9 +1,9 @@
-use super::query::{get_run, RunRow};
-use super::state::{RunState, RunTrigger};
-use super::RunsError;
 use super::HEARTBEAT_MS;
+use super::RunsError;
+use super::query::{RunRow, get_run};
+use super::state::{RunState, RunTrigger};
 use crate::util::time::unix_millis;
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{Connection, OptionalExtension, params};
 
 /// Filters used by [`claim_next`] to scope a worker to a subset of jobs.
 #[derive(Debug, Clone, Default)]

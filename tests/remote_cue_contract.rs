@@ -16,12 +16,12 @@
 //! future change to either one breaks this test instead of silently widening
 //! what a remote caller can reach.
 
-use k256::schnorr::{signature::hazmat::PrehashSigner, SigningKey};
+use k256::schnorr::{SigningKey, signature::hazmat::PrehashSigner};
 use omakure::direct_transport::{envelope_nonce, verify_envelope};
 use omakure::health_plane::model::{RunFact, RunnerFact};
 use omakure::health_plane::report::{HealthFactsSource, HealthReporter, ProfileFacts, PulseFacts};
 use omakure::remote_cue::CueCode;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};

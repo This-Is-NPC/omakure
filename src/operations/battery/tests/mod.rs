@@ -1,8 +1,8 @@
 use super::super::{OperationError, OperationErrorCode};
 use super::git::{
-    assert_git_http_pinning_supported_with, git_command, git_command_with_context,
-    prepare_git_askpass, prepare_git_config_in, reject_unsafe_git_config_text, sanitize_git_output,
-    sanitize_git_stderr, GitExecContext, GitHttpPin, GitTransportPolicy,
+    GitExecContext, GitHttpPin, GitTransportPolicy, assert_git_http_pinning_supported_with,
+    git_command, git_command_with_context, prepare_git_askpass, prepare_git_config_in,
+    reject_unsafe_git_config_text, sanitize_git_output, sanitize_git_stderr,
 };
 use super::git_url::{
     normalize_git_url, resolve_public_git_endpoint, strip_windows_verbatim_owned, validate_git_ref,

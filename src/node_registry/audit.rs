@@ -5,11 +5,11 @@ use super::fields::{
 use super::types::{AuditEvent, PeerState};
 use super::validate::sqlite_validation_error;
 use super::{
-    NodeRegistry, MAX_ENROLLMENT_AUDIT_ROWS, MAX_LIFECYCLE_SCAN_ROWS, MAX_TRANSPORT_AUDIT_ROWS,
+    MAX_ENROLLMENT_AUDIT_ROWS, MAX_LIFECYCLE_SCAN_ROWS, MAX_TRANSPORT_AUDIT_ROWS, NodeRegistry,
 };
 use crate::util::hex;
 use chrono::Utc;
-use rusqlite::{params, Connection, OptionalExtension, Row, Transaction, TransactionBehavior};
+use rusqlite::{Connection, OptionalExtension, Row, Transaction, TransactionBehavior, params};
 
 fn validate_transport_audit_metadata(
     event_type: &str,

@@ -1,6 +1,6 @@
 use super::RunsError;
 use crate::util::time::unix_millis;
-use rusqlite::{params, params_from_iter, Connection, OptionalExtension, TransactionBehavior};
+use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params, params_from_iter};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::time::Duration;

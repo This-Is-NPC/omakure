@@ -1,14 +1,14 @@
 use super::super::{OperationError, OperationErrorCode, OperationResult};
 use super::git::{
-    assert_git_http_pinning_supported, git_checkout_detached_spec, git_clone_spec, git_fetch_spec,
-    prepare_git_askpass, prepare_git_config, reject_unsafe_local_git_config, run_git_capture,
-    run_git_capture_with_context, run_git_with_context, GitCommandSpec, GitExecContext,
-    GitTransportPolicy,
+    GitCommandSpec, GitExecContext, GitTransportPolicy, assert_git_http_pinning_supported,
+    git_checkout_detached_spec, git_clone_spec, git_fetch_spec, prepare_git_askpass,
+    prepare_git_config, reject_unsafe_local_git_config, run_git_capture,
+    run_git_capture_with_context, run_git_with_context,
 };
 use super::git_url::{resolve_public_git_endpoint, validate_git_ref, validate_git_url};
 use super::manifest::{load_manifest, validate_manifest_for_battery};
 use super::registry::{
-    cache_path_for_battery, read_registry, validate_battery_name, write_registry, BatteryPaths,
+    BatteryPaths, cache_path_for_battery, read_registry, validate_battery_name, write_registry,
 };
 use super::types::{BatterySummary, SyncBatteryRequest};
 use crate::secrets::{self, SecretAccess};

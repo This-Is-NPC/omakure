@@ -291,7 +291,9 @@ fn install_battery_script_force_overwrites_existing_target() {
     )
     .unwrap();
 
-    assert!(fs::read_to_string(target)
-        .unwrap()
-        .contains("OMAKURE_SCHEMA_START"));
+    assert!(
+        fs::read_to_string(target)
+            .unwrap()
+            .contains("OMAKURE_SCHEMA_START")
+    );
 }

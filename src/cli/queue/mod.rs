@@ -16,7 +16,7 @@ mod tests;
 
 use crate::cli::args::{QueueArgs, QueueCommand};
 use crate::cli::json;
-use crate::operations::worker::{run_standalone_workers, StandaloneWorkerOptions};
+use crate::operations::worker::{StandaloneWorkerOptions, run_standalone_workers};
 use crate::workspace::Workspace;
 use serde_json::json;
 use std::error::Error;

@@ -1,4 +1,4 @@
-use super::{format_toml_entry, Authenticator};
+use super::{Authenticator, format_toml_entry};
 use serde::Deserialize;
 use std::sync::OnceLock;
 

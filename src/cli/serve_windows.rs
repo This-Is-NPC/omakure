@@ -1,13 +1,13 @@
 /// Native Windows process and named-event primitives for `serve`.
 use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
 use windows_sys::Win32::Foundation::{
-    GetLastError, ERROR_ALREADY_EXISTS, ERROR_FILE_NOT_FOUND, ERROR_INVALID_PARAMETER, HANDLE,
+    ERROR_ALREADY_EXISTS, ERROR_FILE_NOT_FOUND, ERROR_INVALID_PARAMETER, GetLastError, HANDLE,
     WAIT_FAILED, WAIT_OBJECT_0, WAIT_TIMEOUT,
 };
-use windows_sys::Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_WRITE_THROUGH};
+use windows_sys::Win32::Storage::FileSystem::{MOVEFILE_WRITE_THROUGH, MoveFileExW};
 use windows_sys::Win32::System::Threading::{
-    CreateEventW, OpenEventW, OpenProcess, SetEvent, WaitForSingleObject, EVENT_MODIFY_STATE,
-    PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE,
+    CreateEventW, EVENT_MODIFY_STATE, OpenEventW, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+    PROCESS_SYNCHRONIZE, SetEvent, WaitForSingleObject,
 };
 
 use crate::util::windows::{wide_path, wide_str};

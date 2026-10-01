@@ -563,14 +563,18 @@ fn local_info_commands_cover_init_describe_search_doctor_help_completion_and_ser
     assert_success(&token_gen);
     let token_body = json(&token_gen);
     assert!(token_body["ok"].as_bool().unwrap());
-    assert!(token_body["data"]["token"]
-        .as_str()
-        .unwrap()
-        .starts_with("omk_live_"));
-    assert!(token_body["data"]["hash"]
-        .as_str()
-        .unwrap()
-        .contains("argon2id"));
+    assert!(
+        token_body["data"]["token"]
+            .as_str()
+            .unwrap()
+            .starts_with("omk_live_")
+    );
+    assert!(
+        token_body["data"]["hash"]
+            .as_str()
+            .unwrap()
+            .contains("argon2id")
+    );
 
     let completion = omakure_large_output(workspace.path(), &["completion", "bash"]);
     assert_success(&completion);
@@ -662,9 +666,10 @@ fn config_masks_parent_sourced_secrets_and_credential_overrides() {
     let keys = config["data"]["active_env_keys"]
         .as_array()
         .expect("active env keys");
-    assert!(keys
-        .iter()
-        .any(|key| key["key"] == "PLAIN" && key["value"] == "****"));
+    assert!(
+        keys.iter()
+            .any(|key| key["key"] == "PLAIN" && key["value"] == "****")
+    );
     assert_eq!(config["data"]["env_overrides"]["OMAKURE_REPO"], "****");
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(!stdout.contains("parent-secret-value"));
@@ -945,9 +950,11 @@ fn node_cli_commands_share_public_status_and_confirmed_trust_mutations() {
             .len(),
         64
     );
-    assert!(json(&status)["data"]["identity"]
-        .get("private_key")
-        .is_none());
+    assert!(
+        json(&status)["data"]["identity"]
+            .get("private_key")
+            .is_none()
+    );
 
     let trust = [
         "--json",
@@ -1174,24 +1181,28 @@ fn behavioral_flags_cover_tags_history_filters_init_force_and_queue_priority_tim
         &["--json", "scripts", "--tag", "alpha", "--tag", "beta"],
     );
     assert_success(&scripts);
-    assert!(json(&scripts)["data"]
-        .as_array()
-        .expect("scripts data")
-        .iter()
-        .any(|entry| entry["relative_path"] == "tools/tagged.sh"
-            || entry["path"] == "tools/tagged.sh"
-            || entry.as_str() == Some("tools/tagged.sh")));
+    assert!(
+        json(&scripts)["data"]
+            .as_array()
+            .expect("scripts data")
+            .iter()
+            .any(|entry| entry["relative_path"] == "tools/tagged.sh"
+                || entry["path"] == "tools/tagged.sh"
+                || entry.as_str() == Some("tools/tagged.sh"))
+    );
 
     let search = support::workspace_command::<20>(
         workspace.path(),
         &["--json", "search", "tagged", "--tag", "alpha"],
     );
     assert_success(&search);
-    assert!(json(&search)["data"]
-        .as_array()
-        .expect("search data")
-        .iter()
-        .any(|entry| entry["relative_path"] == "tools/tagged.sh"));
+    assert!(
+        json(&search)["data"]
+            .as_array()
+            .expect("search data")
+            .iter()
+            .any(|entry| entry["relative_path"] == "tools/tagged.sh")
+    );
 
     let run =
         support::workspace_command::<20>(workspace.path(), &["--json", "run", "tools/tagged.sh"]);
@@ -1378,11 +1389,13 @@ echo traced"##,
         workspace.path(),
         &["--json", "history", "traces", &run_id],
     );
-    assert!(json(&traces)["data"]
-        .as_array()
-        .expect("traces")
-        .iter()
-        .any(|trace| { trace["message"] == "trace message" }));
+    assert!(
+        json(&traces)["data"]
+            .as_array()
+            .expect("traces")
+            .iter()
+            .any(|trace| { trace["message"] == "trace message" })
+    );
 
     let queued = support::workspace_command::<20>(
         workspace.path(),
@@ -1650,10 +1663,12 @@ fn direct_and_queue_runs_reject_reserved_workspace_scripts() {
             let output = support::workspace_command::<20>(workspace.path(), &args);
             assert!(!output.status.success());
             assert_eq!(json(&output)["error"]["code"], code);
-            assert!(json(&output)["error"]["message"]
-                .as_str()
-                .unwrap()
-                .contains("reserved workspace metadata"));
+            assert!(
+                json(&output)["error"]["message"]
+                    .as_str()
+                    .unwrap()
+                    .contains("reserved workspace metadata")
+            );
         }
     }
 }

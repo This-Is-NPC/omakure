@@ -1,8 +1,8 @@
 use super::*;
-use crate::domain::{is_node_id, NODE_ID_BYTES};
+use crate::domain::{NODE_ID_BYTES, is_node_id};
 use crate::node_identity::NodeIdentity;
 use crate::util::hex;
-use k256::schnorr::{signature::hazmat::PrehashVerifier, Signature, VerifyingKey};
+use k256::schnorr::{Signature, VerifyingKey, signature::hazmat::PrehashVerifier};
 use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
 

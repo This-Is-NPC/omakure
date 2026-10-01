@@ -6,7 +6,7 @@ use super::types::{
 use crate::adapters::workspace_repository::FsWorkspaceRepository;
 use crate::app_meta;
 use crate::operations::path::{canonical_relative_path, canonical_scripts_root};
-use crate::operations::{io_error, OperationError, OperationErrorCode, OperationResult};
+use crate::operations::{OperationError, OperationErrorCode, OperationResult, io_error};
 use crate::ports::ScriptRepository;
 use crate::workspace::Workspace;
 use std::path::{Path, PathBuf};

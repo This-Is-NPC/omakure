@@ -239,7 +239,7 @@ fn cleanup(guard: &ComposeGuard) -> Result<(), String> {
 
 #[cfg(test)]
 mod cleanup_tests {
-    use super::{compose_command, ComposeGuard};
+    use super::{ComposeGuard, compose_command};
 
     #[test]
     fn compose_paths_are_set_only_on_child_commands() {
@@ -680,15 +680,17 @@ fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
             &path,
             &format!("/tmp/{name}"),
         );
-        assert!(!apply(
-            &compose_guard,
-            "signed-target-a",
-            &format!("/tmp/{name}"),
-            "/run/secrets/bootstrap-token/bootstrap.token",
-            &[9; 16],
-        )
-        .status
-        .success());
+        assert!(
+            !apply(
+                &compose_guard,
+                "signed-target-a",
+                &format!("/tmp/{name}"),
+                "/run/secrets/bootstrap-token/bootstrap.token",
+                &[9; 16],
+            )
+            .status
+            .success()
+        );
         assert_eq!(
             status(&compose_guard, "signed-target-a")["data"]["trust"],
             before_target_a
@@ -707,26 +709,30 @@ fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
         String::from_utf8_lossy(&target_a.stdout),
         String::from_utf8_lossy(&target_a.stderr)
     );
-    assert!(exec(
-        &compose_guard,
-        "signed-target-a",
-        &[
-            "/bin/sh",
-            "-c",
-            "test ! -e /run/secrets/bootstrap-token/bootstrap.token"
-        ],
-    )
-    .status
-    .success());
-    assert!(apply(
-        &compose_guard,
-        "signed-authority",
-        "/run/secrets/target-a.bundle",
-        "/run/secrets/bootstrap-token/bootstrap.token",
-        &[11; 16],
-    )
-    .status
-    .success());
+    assert!(
+        exec(
+            &compose_guard,
+            "signed-target-a",
+            &[
+                "/bin/sh",
+                "-c",
+                "test ! -e /run/secrets/bootstrap-token/bootstrap.token"
+            ],
+        )
+        .status
+        .success()
+    );
+    assert!(
+        apply(
+            &compose_guard,
+            "signed-authority",
+            "/run/secrets/target-a.bundle",
+            "/run/secrets/bootstrap-token/bootstrap.token",
+            &[11; 16],
+        )
+        .status
+        .success()
+    );
 
     let cross = files.join("cross.bundle");
     fs::write(&cross, &target_a_bundle).unwrap();
@@ -736,50 +742,58 @@ fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
         &cross,
         "/tmp/cross.bundle",
     );
-    assert!(exec(
-        &compose_guard,
-        "signed-target-b",
-        &[
-            "/bin/sh",
-            "-c",
-            "chmod 0644 /run/secrets/bootstrap-token/bootstrap.token"
-        ],
-    )
-    .status
-    .success());
-    assert!(!apply(
-        &compose_guard,
-        "signed-target-b",
-        "/tmp/cross.bundle",
-        "/run/secrets/bootstrap-token/bootstrap.token",
-        &[10; 16],
-    )
-    .status
-    .success());
+    assert!(
+        exec(
+            &compose_guard,
+            "signed-target-b",
+            &[
+                "/bin/sh",
+                "-c",
+                "chmod 0644 /run/secrets/bootstrap-token/bootstrap.token"
+            ],
+        )
+        .status
+        .success()
+    );
+    assert!(
+        !apply(
+            &compose_guard,
+            "signed-target-b",
+            "/tmp/cross.bundle",
+            "/run/secrets/bootstrap-token/bootstrap.token",
+            &[10; 16],
+        )
+        .status
+        .success()
+    );
     assert_eq!(
         status(&compose_guard, "signed-target-b")["data"]["trust"]["active_peer_count"],
         0
     );
-    assert!(exec(
-        &compose_guard,
-        "signed-target-b",
-        &[
-            "/bin/sh",
-            "-c",
-            "chmod 0600 /run/secrets/bootstrap-token/bootstrap.token"
-        ],
-    )
-    .status
-    .success());
-    assert!(!apply(
-        &compose_guard,
-        "signed-target-b",
-        "/tmp/cross.bundle",
-        "/run/secrets/bootstrap-token/bootstrap.token",
-        &[10; 16],
-    )
-    .status
-    .success());
+    assert!(
+        exec(
+            &compose_guard,
+            "signed-target-b",
+            &[
+                "/bin/sh",
+                "-c",
+                "chmod 0600 /run/secrets/bootstrap-token/bootstrap.token"
+            ],
+        )
+        .status
+        .success()
+    );
+    assert!(
+        !apply(
+            &compose_guard,
+            "signed-target-b",
+            "/tmp/cross.bundle",
+            "/run/secrets/bootstrap-token/bootstrap.token",
+            &[10; 16],
+        )
+        .status
+        .success()
+    );
 
     let second_manager_path = files.join("target-b-second-manager.bundle");
     copy_to_container(
@@ -820,17 +834,19 @@ fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
         status(&compose_guard, "signed-target-b")["data"]["trust"]["active_peer_count"],
         1
     );
-    assert!(exec(
-        &compose_guard,
-        "signed-target-b",
-        &[
-            "/bin/sh",
-            "-c",
-            "test ! -e /run/secrets/bootstrap-token/bootstrap.token"
-        ],
-    )
-    .status
-    .success());
+    assert!(
+        exec(
+            &compose_guard,
+            "signed-target-b",
+            &[
+                "/bin/sh",
+                "-c",
+                "test ! -e /run/secrets/bootstrap-token/bootstrap.token"
+            ],
+        )
+        .status
+        .success()
+    );
 
     let authority_endpoint = format!("{}:7988", container_ip(&compose_guard, "signed-authority"));
     let probe = exec(
@@ -970,26 +986,30 @@ fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
         &revoked_bundle_path,
         "/tmp/revoked.bundle",
     );
-    assert!(!apply(
-        &compose_guard,
-        "signed-target-a",
-        "/tmp/revoked.bundle",
-        "/run/secrets/bootstrap-token/bootstrap.token",
-        &[9; 16],
-    )
-    .status
-    .success());
-    assert!(exec(
-        &compose_guard,
-        "signed-target-a",
-        &[
-            "/bin/sh",
-            "-c",
-            "test -e /run/secrets/bootstrap-token/bootstrap.token"
-        ],
-    )
-    .status
-    .success());
+    assert!(
+        !apply(
+            &compose_guard,
+            "signed-target-a",
+            "/tmp/revoked.bundle",
+            "/run/secrets/bootstrap-token/bootstrap.token",
+            &[9; 16],
+        )
+        .status
+        .success()
+    );
+    assert!(
+        exec(
+            &compose_guard,
+            "signed-target-a",
+            &[
+                "/bin/sh",
+                "-c",
+                "test -e /run/secrets/bootstrap-token/bootstrap.token"
+            ],
+        )
+        .status
+        .success()
+    );
     assert_eq!(
         status(&compose_guard, "signed-target-a")["data"]["trust"],
         before

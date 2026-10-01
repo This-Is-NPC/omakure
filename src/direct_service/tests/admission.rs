@@ -190,9 +190,11 @@ fn admission_limits_each_source_without_starving_another_source() {
     assert!(admission.reserve(first.ip(), now).is_none());
     let second_one = admission.reserve(second.ip(), now).unwrap();
     drop(first_reservations.into_iter().next());
-    assert!(admission
-        .reserve(first.ip(), now + DIRECT_RATE_WINDOW)
-        .is_some());
+    assert!(
+        admission
+            .reserve(first.ip(), now + DIRECT_RATE_WINDOW)
+            .is_some()
+    );
     drop(second_one);
 }
 
@@ -207,13 +209,17 @@ fn admission_reservation_releases_handshake_and_byte_capacity() {
         let source = IpAddr::V6(std::net::Ipv6Addr::from(octet as u128));
         reservations.push(admission.reserve(source, Instant::now()).unwrap());
     }
-    assert!(admission
-        .reserve("127.0.0.250".parse::<IpAddr>().unwrap(), Instant::now())
-        .is_none());
+    assert!(
+        admission
+            .reserve("127.0.0.250".parse::<IpAddr>().unwrap(), Instant::now())
+            .is_none()
+    );
     drop(reservations);
-    assert!(admission
-        .reserve("127.0.0.250".parse::<IpAddr>().unwrap(), Instant::now())
-        .is_some());
+    assert!(
+        admission
+            .reserve("127.0.0.250".parse::<IpAddr>().unwrap(), Instant::now())
+            .is_some()
+    );
 }
 
 #[test]
@@ -240,9 +246,11 @@ fn admission_prunes_stale_sources_and_bounds_unique_source_churn() {
     drop(active);
 
     let later_source = IpAddr::V6(std::net::Ipv6Addr::from(999_001u128));
-    assert!(admission
-        .reserve(later_source, start + DIRECT_RATE_WINDOW)
-        .is_some());
+    assert!(
+        admission
+            .reserve(later_source, start + DIRECT_RATE_WINDOW)
+            .is_some()
+    );
     let state = admission.state.lock().unwrap();
     assert!(state.sources.len() <= DIRECT_MAX_SOURCE_ENTRIES);
     assert!(state.sources.contains_key(&active_source));

@@ -1,5 +1,5 @@
 use super::codes::CueCode;
-use super::gates::{evaluate_gates, GateDecision, LocalAuthority};
+use super::gates::{GateDecision, LocalAuthority, evaluate_gates};
 use super::session::{CueOutcome, CueSession};
 use crate::util::hex;
 

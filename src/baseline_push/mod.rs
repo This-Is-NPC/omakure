@@ -30,8 +30,8 @@
 //! so before anything goes on the wire. See `docs/internal/baseline-delivery.md`.
 
 use crate::baseline::{
-    BaselineError, BaselinePublisherKey, SignedBaselineManifest, VerifiedBaseline,
-    BASELINE_ID_BYTES, MAX_ENTRIES, MAX_MANIFEST_BYTES, PUBLISHER_ID_BYTES, PUBLISHER_KEY_BYTES,
+    BASELINE_ID_BYTES, BaselineError, BaselinePublisherKey, MAX_ENTRIES, MAX_MANIFEST_BYTES,
+    PUBLISHER_ID_BYTES, PUBLISHER_KEY_BYTES, SignedBaselineManifest, VerifiedBaseline,
 };
 use crate::node_registry::health::HealthAuthorization;
 use crate::node_registry::{PeerRole, PeerState};

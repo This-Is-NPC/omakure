@@ -19,7 +19,7 @@
 //! `{ "code": "<stable-string>", "message": "<human message>" }`.
 
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Stable schema version for the AI JSON envelope. Bumped when the envelope
 /// or any documented `data` shape changes in a non-backward-compatible way.

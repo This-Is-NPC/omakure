@@ -8,9 +8,9 @@ use crate::operations::core;
 use crate::operations::scripts as scripts_ops;
 use crate::operations::search as search_ops;
 use crate::operations::{OperationError, OperationErrorCode};
+use axum::Extension;
 use axum::extract::{Path as AxumPath, RawQuery, State};
 use axum::response::Response;
-use axum::Extension;
 use std::sync::Arc;
 
 pub(super) const MAX_SEARCH_QUERY_LEN: usize = 256;

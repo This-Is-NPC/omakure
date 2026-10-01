@@ -6,6 +6,6 @@
 mod command;
 mod routes;
 
-pub(crate) use command::{command_inventory, InventoryCommand, InventoryOption};
+pub(crate) use command::{InventoryCommand, InventoryOption, command_inventory};
 pub use command::{normalize_generated_text, render_cli_reference};
 pub use routes::HTTP_ROUTE_INVENTORY;

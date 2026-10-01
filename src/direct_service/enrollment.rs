@@ -1,9 +1,9 @@
 use super::error::DirectServiceError;
 use super::stream::{initiator_deadline, read_frame, set_stream_timeouts, time_until, write_bytes};
 use crate::direct_transport::{
-    enrollment_ack_accepted, enrollment_ack_offer, enrollment_request_bytes, envelope_nonce,
-    sign_manual_ack, sign_manual_request, unix_seconds, verify_envelope, HandshakeRole,
-    TransportError, TransportSession, ENVELOPE_KIND,
+    ENVELOPE_KIND, HandshakeRole, TransportError, TransportSession, enrollment_ack_accepted,
+    enrollment_ack_offer, enrollment_request_bytes, envelope_nonce, sign_manual_ack,
+    sign_manual_request, unix_seconds, verify_envelope,
 };
 use crate::enrollment::{EnrollmentRole, ManualEnrollmentRequest};
 use crate::node::NodeContext;

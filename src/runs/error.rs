@@ -1,6 +1,6 @@
 use super::state::RunState;
-use crate::util::sqlite::is_lock_contention;
 use crate::util::sqlite::WalOpenError;
+use crate::util::sqlite::is_lock_contention;
 
 #[derive(Debug, thiserror::Error)]
 pub enum RunsError {
@@ -18,7 +18,9 @@ pub enum RunsError {
     IllegalTransition { from: RunState, to: RunState },
     #[error("cannot cancel run in terminal state '{0}'")]
     TerminalState(RunState),
-    #[error("cannot promote run in state '{0}' to dead_letter; only failed or timed_out rows are eligible")]
+    #[error(
+        "cannot promote run in state '{0}' to dead_letter; only failed or timed_out rows are eligible"
+    )]
     DeadLetterIneligible(RunState),
     #[error(transparent)]
     DatabaseOpen(WalOpenError),

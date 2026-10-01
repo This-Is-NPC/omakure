@@ -4,7 +4,7 @@ use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};
 
 use super::path::canonical_relative_path;
-use super::{io_error, OperationError, OperationErrorCode, OperationResult};
+use super::{OperationError, OperationErrorCode, OperationResult, io_error};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SearchScriptsRequest {

@@ -26,9 +26,11 @@ fn a_performers_baseline_reads_as_unknown_none_in_sync_or_drifted() {
     // still said nothing about a baseline. Reading that as "holds none"
     // would be a verdict on a machine that has not answered.
     let pulse = pulse_payload(&target, 9, 1, BASE_NOW);
-    assert!(fixture
-        .ingest(&fixture.performer, "health_pulse", BASE_NOW, &pulse)
-        .accepted());
+    assert!(
+        fixture
+            .ingest(&fixture.performer, "health_pulse", BASE_NOW, &pulse)
+            .accepted()
+    );
     assert_eq!(
         fixture
             .plane()

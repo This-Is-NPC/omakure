@@ -28,8 +28,8 @@ use crate::util::bytes::ByteReader;
 use crate::util::digest::sha256_domain;
 use crate::util::hex;
 use k256::schnorr::{
-    signature::hazmat::{PrehashSigner, PrehashVerifier},
     Signature, SigningKey, VerifyingKey,
+    signature::hazmat::{PrehashSigner, PrehashVerifier},
 };
 use std::fmt;
 use thiserror::Error;

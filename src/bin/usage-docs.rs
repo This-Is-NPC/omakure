@@ -5,11 +5,11 @@
 
 use omakure::cli_http_parity::current_cli_ids;
 use std::{collections::BTreeSet, env, fs};
-use usage_artifacts::{compare_file, normalize, write_file, KDL_PATH};
+use usage_artifacts::{KDL_PATH, compare_file, normalize, write_file};
 use usage_docs::{
+    Spec, SpecAdmonition, SpecArg, SpecChoice, SpecCommand, SpecFlag,
     docs::{manpage::ManpageRenderer, markdown::MarkdownRenderer},
     spec::cmd::SpecExample,
-    Spec, SpecAdmonition, SpecArg, SpecChoice, SpecCommand, SpecFlag,
 };
 
 #[path = "usage_artifacts/mod.rs"]
@@ -237,19 +237,21 @@ mod tests {
         let original_name = spec.cmd.name.clone();
         assert!(spec.about_long.as_deref().unwrap().contains("{n}"));
         let original_json_shape = "{ ok, data, error, schema_version }";
-        assert!(spec
-            .about_long
-            .as_deref()
-            .unwrap()
-            .contains(original_json_shape));
+        assert!(
+            spec.about_long
+                .as_deref()
+                .unwrap()
+                .contains(original_json_shape)
+        );
         normalize_presentation(&mut spec);
         assert!(spec.about_long.as_deref().unwrap().contains('\n'));
         assert!(!spec.about_long.as_deref().unwrap().contains("{n}"));
-        assert!(spec
-            .about_long
-            .as_deref()
-            .unwrap()
-            .contains(original_json_shape));
+        assert!(
+            spec.about_long
+                .as_deref()
+                .unwrap()
+                .contains(original_json_shape)
+        );
         assert_eq!(spec.cmd.name, original_name);
     }
 }

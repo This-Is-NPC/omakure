@@ -7,14 +7,14 @@ use crate::cli::json;
 use crate::operations::config as config_ops;
 use crate::operations::core;
 use crate::operations::doctor as doctor_ops;
+use axum::Extension;
+use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::Extension;
-use axum::Json;
 use serde::Serialize;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 #[derive(Serialize)]
 struct HealthResponse {

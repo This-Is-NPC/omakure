@@ -345,19 +345,11 @@ fn is_executable_file(path: &Path) -> bool {
 }
 
 pub fn powershell_program() -> &'static str {
-    if cfg!(windows) {
-        "powershell"
-    } else {
-        "pwsh"
-    }
+    if cfg!(windows) { "powershell" } else { "pwsh" }
 }
 
 pub fn python_program() -> &'static str {
-    if cfg!(windows) {
-        "python"
-    } else {
-        "python3"
-    }
+    if cfg!(windows) { "python" } else { "python3" }
 }
 
 #[cfg(test)]

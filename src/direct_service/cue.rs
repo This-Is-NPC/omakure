@@ -1,14 +1,14 @@
+use super::IDLE_TIMEOUT;
 use super::ack::verified_ack;
 use super::connection::ConnectionState;
 use super::error::DirectServiceError;
 use super::outbox::dispatch_answer_deadline;
-use super::session::{peer_authorization, wait_readable, Readiness};
+use super::session::{Readiness, peer_authorization, wait_readable};
 use super::stream::{initiator_deadline, read_frame, set_stream_timeouts, time_until, write_bytes};
-use super::IDLE_TIMEOUT;
 use crate::direct_health::HealthSession;
 use crate::direct_transport::{
-    authorize_peer, envelope_nonce, sign_probe, unix_seconds, verify_envelope, HandshakeRole,
-    TransportError, TransportSession, ENVELOPE_KIND,
+    ENVELOPE_KIND, HandshakeRole, TransportError, TransportSession, authorize_peer, envelope_nonce,
+    sign_probe, unix_seconds, verify_envelope,
 };
 use crate::node::NodeContext;
 use crate::node_identity::NodeIdentity;

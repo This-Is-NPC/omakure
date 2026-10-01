@@ -2,11 +2,11 @@ use super::super::{OperationError, OperationErrorCode, OperationResult};
 use super::decode_fixed_hex;
 use super::errors::{map_enrollment_error, map_identity_error, map_node_error, map_registry_error};
 use super::status::{initialize_node_nonblocking, load_node_config, path_is_present};
-use super::trust::{public_peer, PublicPeer};
+use super::trust::{PublicPeer, public_peer};
 use crate::domain::NodeConfig;
 use crate::enrollment::{self};
 use crate::node::{
-    NodeContext, PrivateFileCommitStatus, PrivateTokenLease, DATABASE_FILE, IDENTITY_KEY_FILE,
+    DATABASE_FILE, IDENTITY_KEY_FILE, NodeContext, PrivateFileCommitStatus, PrivateTokenLease,
 };
 use crate::node_identity::NodeIdentity;
 use crate::node_registry::NodeRegistry;
@@ -87,7 +87,7 @@ fn apply_signed_bundle_with_actor(
                 &mut token_lease,
                 None,
                 error,
-            )
+            );
         }
     };
     let bundle = match enrollment::SignedEnrollmentBundle::decode(&bundle_bytes) {
@@ -98,7 +98,7 @@ fn apply_signed_bundle_with_actor(
                 &mut token_lease,
                 None,
                 map_enrollment_error(error),
-            )
+            );
         }
     };
     let (now, token_hash, nonce_hash) = match preflight_signed_bundle(
@@ -115,7 +115,7 @@ fn apply_signed_bundle_with_actor(
                 &mut token_lease,
                 Some(&bundle),
                 error,
-            )
+            );
         }
     };
     let mut peer = match registry
@@ -136,7 +136,7 @@ fn apply_signed_bundle_with_actor(
                 &mut token_lease,
                 Some(&bundle),
                 error,
-            )
+            );
         }
     };
     if let Some(lease) = token_lease.take() {
@@ -385,14 +385,14 @@ pub(super) fn recover_private_token_tombstones(
                         "a spent bootstrap token is still present at {}",
                         path.display()
                     ),
-                )))
+                )));
             }
             Err(error) if error.kind() == io::ErrorKind::NotFound => {}
             Err(error) => {
                 return Err(cleanup_recovery_error(&OperationError::new(
                     OperationErrorCode::IoFailed,
                     format!("{} could not be inspected: {error}", path.display()),
-                )))
+                )));
             }
         }
         registry

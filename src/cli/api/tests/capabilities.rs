@@ -109,10 +109,12 @@ async fn deploy_policy_writes_false_forbids_writes_even_with_wildcard_token() {
     assert_eq!(write.status(), StatusCode::FORBIDDEN);
     let body = response_json(write).await;
     assert_eq!(body["error"]["code"], "forbidden");
-    assert!(body["error"]["message"]
-        .as_str()
-        .unwrap()
-        .contains("deployment policy"));
+    assert!(
+        body["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("deployment policy")
+    );
 }
 
 #[tokio::test]

@@ -2,7 +2,7 @@ use super::super::fields::validate_node_id;
 use super::super::{NodeRegistry, RegistryError};
 use super::types::HealthAuditEvent;
 use crate::domain::health_plane::bounds::MAX_AUDIT_ROWS;
-use rusqlite::{params, Transaction, TransactionBehavior};
+use rusqlite::{Transaction, TransactionBehavior, params};
 
 impl NodeRegistry {
     /// Append one redacted Health Plane audit row for an outcome decided before

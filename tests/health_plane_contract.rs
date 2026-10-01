@@ -13,9 +13,9 @@
 //! `verify_envelope`, which proves the Health Plane is carriable without any
 //! change to the frozen identity construction.
 
-use k256::schnorr::{signature::hazmat::PrehashSigner, SigningKey};
-use omakure::direct_transport::{envelope_nonce, verify_envelope, TransportError};
-use serde_json::{json, Map, Value};
+use k256::schnorr::{SigningKey, signature::hazmat::PrehashSigner};
+use omakure::direct_transport::{TransportError, envelope_nonce, verify_envelope};
+use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -766,7 +766,7 @@ impl Receiver {
         match payload.get("health_version").and_then(Value::as_u64) {
             None => return Err(HealthCode::UnknownField),
             Some(version) if version != HEALTH_VERSION => {
-                return Err(HealthCode::UnsupportedVersion)
+                return Err(HealthCode::UnsupportedVersion);
             }
             Some(_) => {}
         }
@@ -824,16 +824,16 @@ impl Receiver {
         }
         match kind {
             Kind::Profile if state.hour_profiles >= MAX_PROFILES_PER_PEER_PER_HOUR => {
-                return Err(HealthCode::RateLimited)
+                return Err(HealthCode::RateLimited);
             }
             Kind::Signal if state.minute_signals >= MAX_SIGNALS_PER_PEER_PER_MINUTE => {
-                return Err(HealthCode::RateLimited)
+                return Err(HealthCode::RateLimited);
             }
             Kind::Pulse
                 if state.last_pulse_at > 0
                     && now.saturating_sub(state.last_pulse_at) < MIN_PULSE_INTERVAL_SECONDS =>
             {
-                return Err(HealthCode::RateLimited)
+                return Err(HealthCode::RateLimited);
             }
             _ => {}
         }

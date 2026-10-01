@@ -3,9 +3,9 @@ use super::super::fields::validate_node_id;
 use super::super::{NodeRegistry, RegistryError};
 use super::audit::record_health_audit_tx;
 use super::rows::{
-    active_trust_predicate, authorization_in, cleanup_corrupt_health_rows, health_peer_from_row,
-    load_peer_state, read_profile_observational, read_pulse_observational, signal_from_row,
-    CorruptHealthIdentity, CorruptHealthRow,
+    CorruptHealthIdentity, CorruptHealthRow, active_trust_predicate, authorization_in,
+    cleanup_corrupt_health_rows, health_peer_from_row, load_peer_state, read_profile_observational,
+    read_pulse_observational, signal_from_row,
 };
 use super::types::{
     HealthFeedPeer, HealthFeedSignal, HealthFleetPeer, HealthPeerSnapshot, HealthPeerState,
@@ -13,7 +13,7 @@ use super::types::{
 };
 use crate::domain::health_plane::bounds::SIGNAL_INBOX_CAPACITY;
 use crate::domain::health_plane::model::{HealthCode, HealthKind, SignalRecord};
-use rusqlite::{params, Connection, Transaction, TransactionBehavior};
+use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 
 const MAX_HEALTH_READ_ROWS: usize = 4_096;
 

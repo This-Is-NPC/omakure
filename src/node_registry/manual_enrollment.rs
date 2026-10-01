@@ -1,4 +1,4 @@
-use super::audit::{record_audit, record_enrollment_audit_tx, AuditInput};
+use super::audit::{AuditInput, record_audit, record_enrollment_audit_tx};
 use super::bundle::cleanup_enrollment_replays;
 use super::error::RegistryError;
 use super::fields::{
@@ -11,10 +11,10 @@ use super::projection::{
     insert_v2_trust_projection, project_v2_transition,
 };
 use super::types::{PeerRecord, PeerRegistration, PeerRole, PeerSource, PeerState};
-use super::{NodeRegistry, MAX_ENROLLMENT_REPLAY_ROWS, MAX_ENROLLMENT_REQUEST_ROWS};
+use super::{MAX_ENROLLMENT_REPLAY_ROWS, MAX_ENROLLMENT_REQUEST_ROWS, NodeRegistry};
 use crate::direct_transport::TransportCertificate;
 use crate::enrollment::{self, ManualEnrollmentRequest};
-use rusqlite::{params, OptionalExtension, Transaction, TransactionBehavior};
+use rusqlite::{OptionalExtension, Transaction, TransactionBehavior, params};
 
 type StagedManualEnrollment = (
     Option<Vec<u8>>,

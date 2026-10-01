@@ -1,4 +1,4 @@
-use super::producers::{parse_humantime_duration_ms, QueueDurationError};
+use super::producers::{QueueDurationError, parse_humantime_duration_ms};
 use super::*;
 #[cfg(unix)]
 use crate::cli::args::QueueWorkerArgs;
@@ -6,13 +6,13 @@ use crate::cli::args::{QueueAddArgs, QueueCancelArgs, QueueDeadLetterArgs};
 #[cfg(unix)]
 use crate::operations::worker::worker_loop;
 #[cfg(unix)]
-use crate::runs::{self, enqueue, EnqueueOptions, RunCompletion, RunState};
+use crate::runs::{self, EnqueueOptions, RunCompletion, RunState, enqueue};
 use crate::test_support::scratch_workspace;
 use std::fs;
 #[cfg(unix)]
-use std::sync::atomic::AtomicBool;
-#[cfg(unix)]
 use std::sync::Arc;
+#[cfg(unix)]
+use std::sync::atomic::AtomicBool;
 #[cfg(unix)]
 use std::thread;
 
@@ -55,9 +55,11 @@ fn parse_duration_ms_recognizes_humantime_units() {
 fn parse_duration_ms_distinguishes_invalid_text_and_overflow() {
     let invalid = parse_humantime_duration_ms("  not a duration  ").unwrap_err();
     assert!(matches!(invalid, QueueDurationError::Invalid { .. }));
-    assert!(invalid
-        .to_string()
-        .starts_with("invalid duration `not a duration`: "));
+    assert!(
+        invalid
+            .to_string()
+            .starts_with("invalid duration `not a duration`: ")
+    );
 
     let overflow = parse_humantime_duration_ms("  106751991168d  ").unwrap_err();
     assert!(matches!(overflow, QueueDurationError::TooLarge(_)));
@@ -123,9 +125,10 @@ fn add_invalid_timeout_returns_error() {
     )
     .unwrap_err();
 
-    assert!(err
-        .to_string()
-        .starts_with("invalid duration `definitely-not-a-duration`: "));
+    assert!(
+        err.to_string()
+            .starts_with("invalid duration `definitely-not-a-duration`: ")
+    );
     let _ = fs::remove_dir_all(ws.root());
 }
 
@@ -221,16 +224,20 @@ fn dead_letter_failed_row_promotes_state() {
     let conn = runs::open(&ws).unwrap();
     let updated = runs::get_run(&conn, &row.run_id).unwrap().unwrap();
     assert_eq!(updated.state, RunState::DeadLetter);
-    assert!(updated
-        .reason
-        .as_deref()
-        .unwrap_or_default()
-        .contains("first"));
-    assert!(updated
-        .reason
-        .as_deref()
-        .unwrap_or_default()
-        .contains("retry exhausted"));
+    assert!(
+        updated
+            .reason
+            .as_deref()
+            .unwrap_or_default()
+            .contains("first")
+    );
+    assert!(
+        updated
+            .reason
+            .as_deref()
+            .unwrap_or_default()
+            .contains("retry exhausted")
+    );
     let _ = fs::remove_dir_all(ws.root());
 }
 
@@ -439,10 +446,12 @@ fn worker_fails_queued_run_when_stored_env_disappears_before_execution() {
     let after = runs::get_run(&conn, &row.run_id).unwrap().unwrap();
     assert_eq!(after.state, RunState::Failed);
     assert_eq!(after.success, Some(false));
-    assert!(after
-        .error
-        .unwrap_or_default()
-        .contains("queued env resolution failed"));
+    assert!(
+        after
+            .error
+            .unwrap_or_default()
+            .contains("queued env resolution failed")
+    );
     assert!(!marker.exists());
     let _ = fs::remove_dir_all(ws.root());
 }
@@ -697,10 +706,10 @@ fn worker_runs_script_that_calls_omakure_trace_via_subprocess() {
 
     let ws = scratch_workspace("e2e_trace");
     let script_body = format!(
-            "{} trace 'first' --level info\nsleep 0.2\n{} trace 'second' --level warn --data '{{\"k\":1}}'",
-            bin.display(),
-            bin.display()
-        );
+        "{} trace 'first' --level info\nsleep 0.2\n{} trace 'second' --level warn --data '{{\"k\":1}}'",
+        bin.display(),
+        bin.display()
+    );
     let script = crate::test_support::write_bash_script(&ws, "trace_script.sh", &script_body);
     let conn = runs::open(&ws).unwrap();
     let row = enqueue(

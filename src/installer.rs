@@ -3,9 +3,9 @@ use std::error::Error;
 #[cfg(windows)]
 use std::path::Path;
 #[cfg(windows)]
-use winreg::enums::HKEY_CURRENT_USER;
-#[cfg(windows)]
 use winreg::RegKey;
+#[cfg(windows)]
+use winreg::enums::HKEY_CURRENT_USER;
 
 #[cfg(windows)]
 fn main() -> Result<(), Box<dyn Error>> {

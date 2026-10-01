@@ -21,5 +21,5 @@ mod fleet;
 mod signals;
 
 pub use facts::NodeHealthFacts;
-pub use fleet::{fleet_status, BaselineCounts, FleetStatusReport, PresenceCounts};
-pub use signals::{signal_feed, SignalCursor, SignalEntry, SignalFeedReport};
+pub use fleet::{BaselineCounts, FleetStatusReport, PresenceCounts, fleet_status};
+pub use signals::{SignalCursor, SignalEntry, SignalFeedReport, signal_feed};

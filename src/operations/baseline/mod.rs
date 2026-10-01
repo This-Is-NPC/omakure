@@ -35,15 +35,15 @@ fn map_baseline_error(error: crate::baseline::BaselineError) -> crate::operation
 }
 
 pub use install::{install_baseline, rollback_baseline};
-pub use publish::{bodies_for_manifest, publish_baseline, PublishedBaseline};
+pub use publish::{PublishedBaseline, bodies_for_manifest, publish_baseline};
 pub use record::{
-    installed_baseline, installed_baseline_path, observed_baseline_id, retained_current_path,
-    retained_previous, retained_previous_path, InstalledBaseline, RetainedBaseline,
-    BASELINE_SCRIPT_MODE,
+    BASELINE_SCRIPT_MODE, InstalledBaseline, RetainedBaseline, installed_baseline,
+    installed_baseline_path, observed_baseline_id, retained_current_path, retained_previous,
+    retained_previous_path,
 };
 pub use service::{
-    prepare_service_push, push_prepared_service, rollback_local_baseline, BaselineServiceOutcome,
-    BaselineServiceRequest, PreparedBaselinePush,
+    BaselineServiceOutcome, BaselineServiceRequest, PreparedBaselinePush, prepare_service_push,
+    push_prepared_service, rollback_local_baseline,
 };
 
 #[cfg(test)]

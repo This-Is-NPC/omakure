@@ -7,7 +7,7 @@ use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 
 use super::path::{canonical_relative_path, canonical_scripts_root, has_windows_prefix};
-use super::{io_error, OperationError, OperationErrorCode, OperationResult};
+use super::{OperationError, OperationErrorCode, OperationResult, io_error};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ListTreeRequest {

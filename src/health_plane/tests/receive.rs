@@ -308,14 +308,16 @@ fn every_contracted_rejection_produces_its_stable_code() {
         HealthCode::Future
     );
     // Replay and reordering.
-    assert!(fixture
-        .ingest(
-            &fixture.performer,
-            "health_profile",
-            BASE_NOW,
-            &profile_payload(&target, 6, 1)
-        )
-        .accepted());
+    assert!(
+        fixture
+            .ingest(
+                &fixture.performer,
+                "health_profile",
+                BASE_NOW,
+                &profile_payload(&target, 6, 1)
+            )
+            .accepted()
+    );
     assert_eq!(
         fixture.code(
             &fixture.performer,
@@ -370,9 +372,11 @@ fn a_health_error_is_only_sent_to_an_authorized_target_bound_peer() {
     // The rejections are audited with their stable codes and nothing else.
     let audit = fixture.plane().audit_events(10).unwrap();
     assert!(audit.iter().all(|event| event.outcome != "accepted"));
-    assert!(audit
-        .iter()
-        .any(|event| event.error_code == Some(HealthCode::Stale.code())));
+    assert!(
+        audit
+            .iter()
+            .any(|event| event.error_code == Some(HealthCode::Stale.code()))
+    );
 }
 
 #[test]
@@ -383,14 +387,16 @@ fn an_unsupported_version_replies_only_when_the_peer_is_addressed_and_authorized
     payload.as_object_mut().unwrap()["health_version"] = json!(2);
 
     // The peer must first be tracked for the projection to record anything.
-    assert!(fixture
-        .ingest(
-            &fixture.performer,
-            "health_profile",
-            BASE_NOW,
-            &profile_payload(&target, 9, 1)
-        )
-        .accepted());
+    assert!(
+        fixture
+            .ingest(
+                &fixture.performer,
+                "health_profile",
+                BASE_NOW,
+                &profile_payload(&target, 9, 1)
+            )
+            .accepted()
+    );
 
     let outcome = fixture.ingest(&fixture.performer, "health_profile", BASE_NOW, &payload);
     assert_eq!(outcome.code(), Some(HealthCode::UnsupportedVersion));
@@ -430,14 +436,16 @@ fn an_unsupported_version_replies_only_when_the_peer_is_addressed_and_authorized
 fn a_held_signal_acknowledges_the_unchanged_cursor() {
     let fixture = fixture();
     let target = fixture.local.clone();
-    assert!(fixture
-        .ingest(
-            &fixture.performer,
-            "health_signal",
-            BASE_NOW,
-            &signal_payload(&target, 1, 1, 101, BASE_NOW)
-        )
-        .accepted());
+    assert!(
+        fixture
+            .ingest(
+                &fixture.performer,
+                "health_signal",
+                BASE_NOW,
+                &signal_payload(&target, 1, 1, 101, BASE_NOW)
+            )
+            .accepted()
+    );
     fixture.clock.set(BASE_NOW + 20);
     let held = fixture.ingest(
         &fixture.performer,

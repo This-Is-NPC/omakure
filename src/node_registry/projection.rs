@@ -1,9 +1,9 @@
+use super::TRANSPORT_CERTIFICATE_BYTES;
 use super::error::RegistryError;
 use super::fields::{capabilities_json, decode_hex};
 use super::types::{PeerRecord, PeerRegistration, PeerState};
-use super::TRANSPORT_CERTIFICATE_BYTES;
 use crate::direct_transport::TransportCertificate;
-use rusqlite::{params, Transaction};
+use rusqlite::{Transaction, params};
 
 pub(super) fn insert_v2_trust_projection(
     transaction: &Transaction<'_>,

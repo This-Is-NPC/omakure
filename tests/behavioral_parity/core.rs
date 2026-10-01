@@ -1,7 +1,7 @@
 //! Real core/scripts/config/search paired adapter probes.
 
 use super::{BehavioralContext, ProbeEvidence};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::process::Output;
 
 pub const CASE_IDS: &[&str] = &[

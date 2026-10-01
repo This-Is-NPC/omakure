@@ -86,7 +86,7 @@ pub fn check_schemas(root: &Path) -> SchemaCheckReport {
                 total: 0,
                 parsed: 0,
                 failures: Vec::new(),
-            }
+            };
         }
     };
     let total = scripts.len();
@@ -189,10 +189,12 @@ mod tests {
 
         let report = doctor_report(&workspace).unwrap();
 
-        assert!(report
-            .workspace_paths
-            .iter()
-            .any(|path| path.label == "workspace_root"));
+        assert!(
+            report
+                .workspace_paths
+                .iter()
+                .any(|path| path.label == "workspace_root")
+        );
         assert_eq!(report.schemas.total, 0);
     }
 }

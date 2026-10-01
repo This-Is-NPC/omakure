@@ -78,7 +78,8 @@ fn test_api_help_surface_exists() {
         .find_subcommand("api")
         .expect("api subcommand should be registered");
     assert!(api.get_arguments().any(|arg| arg.get_id() == "bind"));
-    assert!(api
-        .get_arguments()
-        .any(|arg| arg.get_id() == "allow_non_loopback"));
+    assert!(
+        api.get_arguments()
+            .any(|arg| arg.get_id() == "allow_non_loopback")
+    );
 }

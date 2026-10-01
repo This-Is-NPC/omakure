@@ -5,10 +5,10 @@
 //! in-process Noise builder.
 
 use crate::direct_transport::{
-    unix_seconds, x25519_public_from_private, HandshakeRole, NoiseHandshake, TransportCertificate,
-    TransportError, CERTIFICATE_MAX_LIFETIME_SECONDS,
+    CERTIFICATE_MAX_LIFETIME_SECONDS, HandshakeRole, NoiseHandshake, TransportCertificate,
+    TransportError, unix_seconds, x25519_public_from_private,
 };
-use crate::node::{write_new_file_atomically, NodeContext, NodeError};
+use crate::node::{NodeContext, NodeError, write_new_file_atomically};
 use crate::node_identity::NodeIdentity;
 use crate::util::entropy;
 use crate::util::hex;

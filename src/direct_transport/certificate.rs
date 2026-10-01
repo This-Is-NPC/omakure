@@ -1,14 +1,14 @@
 use super::errors::TransportError;
 use super::x25519::validate_x25519_public;
 use super::{
-    CERTIFICATE_BODY_BYTES, CERTIFICATE_DOMAIN, CERTIFICATE_FUTURE_SKEW_SECONDS,
-    CERTIFICATE_MAX_LIFETIME_SECONDS, CERT_MAGIC, MAX_CERTIFICATE_BYTES,
+    CERT_MAGIC, CERTIFICATE_BODY_BYTES, CERTIFICATE_DOMAIN, CERTIFICATE_FUTURE_SKEW_SECONDS,
+    CERTIFICATE_MAX_LIFETIME_SECONDS, MAX_CERTIFICATE_BYTES,
 };
 use crate::domain::is_node_id;
 use crate::node_identity::NodeIdentity;
 use crate::util::digest::sha256_domain;
 use crate::util::hex;
-use k256::schnorr::{signature::hazmat::PrehashVerifier, Signature, VerifyingKey};
+use k256::schnorr::{Signature, VerifyingKey, signature::hazmat::PrehashVerifier};
 use std::fmt;
 
 #[derive(Clone, PartialEq, Eq)]

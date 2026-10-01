@@ -12,7 +12,7 @@ use crate::cli::emit::emit_error;
 use crate::cli::json::{self, codes};
 use crate::operations::core::check_required_fields;
 use crate::operations::core::resolve_script_path;
-use crate::run_executor::{execute_with_heartbeat, ExecutionResult, ExecutionTerminal};
+use crate::run_executor::{ExecutionResult, ExecutionTerminal, execute_with_heartbeat};
 use crate::runs::{self, EnqueueOptions, RunStore};
 use crate::workspace::Workspace;
 use std::error::Error;

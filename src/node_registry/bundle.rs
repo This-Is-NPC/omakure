@@ -1,16 +1,16 @@
-use super::audit::{record_audit, record_enrollment_audit_tx, AuditInput};
+use super::audit::{AuditInput, record_audit, record_enrollment_audit_tx};
 use super::error::RegistryError;
 use super::fields::{capabilities_json, digest, now_timestamp, validate_actor_reason};
 use super::peers::{load_peer, peer_exists, public_key_exists, reject_retained_revocation};
 use super::projection::insert_v2_trust_projection;
 use super::types::{PeerRecord, PeerRegistration, PeerRole, PeerSource, PeerState};
 use super::{
-    NodeRegistry, MAX_BOOTSTRAP_PROOF_ROWS, MAX_BUNDLE_ACTIVATIONS_PER_MINUTE,
-    MAX_ENROLLMENT_CLEANUP_ROWS, MAX_ENROLLMENT_REPLAY_ROWS,
+    MAX_BOOTSTRAP_PROOF_ROWS, MAX_BUNDLE_ACTIVATIONS_PER_MINUTE, MAX_ENROLLMENT_CLEANUP_ROWS,
+    MAX_ENROLLMENT_REPLAY_ROWS, NodeRegistry,
 };
 use crate::enrollment::SignedEnrollmentBundle;
 use crate::util::hex;
-use rusqlite::{params, OptionalExtension, Transaction, TransactionBehavior};
+use rusqlite::{OptionalExtension, Transaction, TransactionBehavior, params};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PendingBootstrapCleanup {

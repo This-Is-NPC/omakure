@@ -5,7 +5,7 @@ use super::{
     TOO_MANY_CAPABILITIES,
 };
 use crate::domain::is_node_id;
-use crate::node_identity::{node_id_for_x_only_public_key, NodeIdentityStatus};
+use crate::node_identity::{NodeIdentityStatus, node_id_for_x_only_public_key};
 use crate::util::hex;
 use chrono::{DateTime, SecondsFormat, Utc};
 use sha2::{Digest, Sha256};

@@ -281,7 +281,7 @@ impl NodeConfig {
             value => {
                 return Err(NodeConfigError::Invalid(format!(
                     "trust.enrollment `{value}` is invalid"
-                )))
+                )));
             }
         }
         if self.trust.enrollment == "disabled"
@@ -675,21 +675,25 @@ mod tests {
             format!("omk1_{first_id}@127.0.0.1:7879"),
             format!("omk1_{first_id}@127.0.0.1:7880"),
         ];
-        assert!(config
-            .validate()
-            .unwrap_err()
-            .to_string()
-            .contains("node ids"));
+        assert!(
+            config
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("node ids")
+        );
 
         config.network.static_peers = vec![
             format!("omk1_{first_id}@127.0.0.1:7879"),
             format!("omk1_{second_id}@127.0.0.1:7879"),
         ];
-        assert!(config
-            .validate()
-            .unwrap_err()
-            .to_string()
-            .contains("endpoints"));
+        assert!(
+            config
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("endpoints")
+        );
     }
 
     #[test]

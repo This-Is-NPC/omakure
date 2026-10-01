@@ -5,7 +5,7 @@ use super::*;
 use crate::domain::NodeConfig;
 use crate::enrollment::{self, EnrollmentRole, ManualEnrollmentRequest};
 use crate::node::{
-    set_private_token_fault, NodeContext, NodePathOverrides, NodePlatform, PrivateTokenFault,
+    NodeContext, NodePathOverrides, NodePlatform, PrivateTokenFault, set_private_token_fault,
 };
 use crate::node_identity::NodeIdentity;
 use crate::node_registry::NodeRegistry;

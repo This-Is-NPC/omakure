@@ -712,22 +712,30 @@ fn docker_manual_enrollment_is_pending_blocked_approved_and_restart_stable() {
         &target_db_path,
     );
     let before_registry = registry_snapshot(&target_db_path);
-    assert!(before_registry
-        .peers
-        .iter()
-        .any(|peer| peer.contains("|active")));
-    assert!(before_registry
-        .trusted
-        .iter()
-        .any(|peer| peer.contains("|active|active")));
-    assert!(before_registry
-        .audits
-        .iter()
-        .any(|event| event.starts_with("enrollment_pending|")));
-    assert!(before_registry
-        .audits
-        .iter()
-        .any(|event| event.starts_with("enrollment_approved|") && event.contains("docker-e2e")));
+    assert!(
+        before_registry
+            .peers
+            .iter()
+            .any(|peer| peer.contains("|active"))
+    );
+    assert!(
+        before_registry
+            .trusted
+            .iter()
+            .any(|peer| peer.contains("|active|active"))
+    );
+    assert!(
+        before_registry
+            .audits
+            .iter()
+            .any(|event| event.starts_with("enrollment_pending|"))
+    );
+    assert!(
+        before_registry
+            .audits
+            .iter()
+            .any(|event| event.starts_with("enrollment_approved|") && event.contains("docker-e2e"))
+    );
     assert!(
         before_registry
             .enrollment_audits

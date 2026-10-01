@@ -3,8 +3,8 @@ use crate::direct_service::TransportStatusHandle;
 use crate::policy::DeployPolicy;
 use crate::workspace::Workspace;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 pub(super) const MAX_CONCURRENT_BLOCKING_OPERATIONS: usize = 16;
 

@@ -29,9 +29,11 @@ fn timed_out_resolution_joins_all_async_work() {
     let stop = Arc::new(AtomicBool::new(false));
     let deadline = Instant::now() + Duration::from_millis(50);
     let started = Instant::now();
-    assert!(resolver
-        .resolve("timeout.invalid:7879", deadline, &stop)
-        .is_err());
+    assert!(
+        resolver
+            .resolve("timeout.invalid:7879", deadline, &stop)
+            .is_err()
+    );
     assert!(started.elapsed() < Duration::from_secs(1));
     resolver.shutdown();
     assert_eq!(ACTIVE_RESOLVER_TASKS.load(Ordering::SeqCst), 0);
@@ -75,7 +77,7 @@ fn repeated_direct_service_start_stop_does_not_accumulate_resolver_workers() {
 fn static_peer_resolution_observes_an_address_change_on_the_next_attempt() {
     use hickory_resolver::config::NameServerConfig;
     use hickory_resolver::proto::op::{Message, MessageType, ResponseCode};
-    use hickory_resolver::proto::rr::{rdata::A, RData, Record, RecordType};
+    use hickory_resolver::proto::rr::{RData, Record, RecordType, rdata::A};
     use hickory_resolver::proto::xfer::Protocol;
     use std::net::{Ipv4Addr, UdpSocket};
 

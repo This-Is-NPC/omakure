@@ -1,6 +1,6 @@
 use super::super::{NodeRegistry, PeerRole, PeerState, RegistryError};
 use super::feed::fleet_peer_in;
-use super::rows::{cleanup_corrupt_health_rows, load_peer_state, CorruptHealthIdentity};
+use super::rows::{CorruptHealthIdentity, cleanup_corrupt_health_rows, load_peer_state};
 use super::*;
 use crate::domain::health_plane::bounds::{
     AUDIT_ROW_BYTES, MAX_AGE_SECONDS, MAX_AUDIT_ROWS, MAX_FUTURE_SKEW_SECONDS,
@@ -18,7 +18,7 @@ use crate::node::NodeContext;
 use crate::node_identity::NodeIdentity;
 use crate::node_registry::{PeerRegistration, PeerSource, SCHEMA_VERSION};
 use crate::test_support::{node_context, opaque_id_hex, peer_identity};
-use rusqlite::{params, Connection, TransactionBehavior};
+use rusqlite::{Connection, TransactionBehavior, params};
 use std::sync::Arc;
 use tempfile::TempDir;
 

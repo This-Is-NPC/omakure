@@ -3,8 +3,8 @@ use crate::node_registry::RegistryError;
 use crate::run_executor::ExecutionTerminal;
 use crate::runs::{self, ClaimFilters, RunCompletion, RunRow, RunStore, RunsError};
 use crate::workspace::Workspace;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 
@@ -387,9 +387,11 @@ mod cue_preflight_tests {
 
         let error = cue_worker_preflight(&context, &workspace, &row).unwrap_err();
         assert!(matches!(error, CuePreflightError::Identity(_)));
-        assert!(error
-            .to_string()
-            .starts_with("Cue trust preflight could not load identity: "));
+        assert!(
+            error
+                .to_string()
+                .starts_with("Cue trust preflight could not load identity: ")
+        );
 
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         drop(NodeRegistry::open(&context, identity.public_status()).unwrap());

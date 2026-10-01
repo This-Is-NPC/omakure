@@ -62,12 +62,16 @@ mod tests {
 
     #[test]
     fn the_allow_list_is_sorted_and_unique() {
-        assert!(CAPABILITY_ALLOWLIST
-            .windows(2)
-            .all(|pair| pair[0] < pair[1]));
-        assert!(CAPABILITY_ALLOWLIST
-            .iter()
-            .all(|capability| capability.len() <= MAX_CAPABILITY_BYTES));
+        assert!(
+            CAPABILITY_ALLOWLIST
+                .windows(2)
+                .all(|pair| pair[0] < pair[1])
+        );
+        assert!(
+            CAPABILITY_ALLOWLIST
+                .iter()
+                .all(|capability| capability.len() <= MAX_CAPABILITY_BYTES)
+        );
     }
 
     #[test]

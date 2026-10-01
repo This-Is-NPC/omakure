@@ -46,7 +46,7 @@ mod runs;
 /// both against the shipped values on purpose: a frozen number that lives only
 /// in a fixture is a decoupled constant, and drifting from the code it claims
 /// to describe is exactly how such a number stops meaning anything.
-pub use runs::{RunTrigger, HEARTBEAT_MS};
+pub use runs::{HEARTBEAT_MS, RunTrigger};
 mod runtime;
 /// The two constants the binary needs to enter embedded-Lua host mode.
 ///

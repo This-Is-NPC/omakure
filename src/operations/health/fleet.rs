@@ -2,8 +2,8 @@ use crate::health_plane::bounds::MAX_PERFORMERS_PER_CONDUCTOR;
 use crate::health_plane::model::Presence;
 use crate::health_plane::{BaselineStatus, FleetNode, HealthPlane};
 use crate::node_registry::{NodeRegistry, PeerState};
-use crate::operations::node::map_registry_error;
 use crate::operations::OperationResult;
+use crate::operations::node::map_registry_error;
 use serde::Serialize;
 use std::collections::HashSet;
 

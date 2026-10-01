@@ -1,4 +1,4 @@
-use super::envelope::{sign_envelope, SignedEnvelope};
+use super::envelope::{SignedEnvelope, sign_envelope};
 use super::errors::TransportError;
 use crate::node_identity::NodeIdentity;
 use crate::util::hex;

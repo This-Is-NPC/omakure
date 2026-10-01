@@ -5,16 +5,16 @@
 //! or reinterpret the signed record.
 
 use crate::direct_transport::validate_x25519_public;
-use crate::domain::{is_node_id, NODE_ID_BYTES};
 use crate::domain::{MAX_CAPABILITIES, MAX_CAPABILITY_BYTES};
+use crate::domain::{NODE_ID_BYTES, is_node_id};
 use crate::node_identity::NodeIdentity;
 use crate::util::bytes::ByteReader;
 use crate::util::digest::sha256_domain;
 use crate::util::entropy;
 use crate::util::hex;
 use k256::schnorr::{
-    signature::hazmat::{PrehashSigner, PrehashVerifier},
     Signature, SigningKey, VerifyingKey,
+    signature::hazmat::{PrehashSigner, PrehashVerifier},
 };
 use std::fmt;
 use subtle::ConstantTimeEq;

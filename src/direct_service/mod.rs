@@ -31,14 +31,14 @@ mod status;
 mod stream;
 
 pub use baseline::{BaselineDispatcher, BaselinePushOutcome};
-pub use cue::{dispatch_cue, CueDispatchOutcome, CueDispatcher};
+pub use cue::{CueDispatchOutcome, CueDispatcher, dispatch_cue};
 pub use dial::probe;
 pub use enrollment::request_manual_enrollment;
 pub use error::DirectServiceError;
 pub use listener::DirectListener;
 pub use outbox::{dispatch_answer_deadline, dispatch_client_timeout};
 pub use status::{
-    parse_static_peer, StaticPeer, TransportPeerStatus, TransportStatus, TransportStatusHandle,
+    StaticPeer, TransportPeerStatus, TransportStatus, TransportStatusHandle, parse_static_peer,
 };
 
 pub const HEADER_TIMEOUT: Duration = Duration::from_secs(2);

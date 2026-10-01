@@ -1,12 +1,12 @@
 use crate::cli::args::{BatteryArgs, BatteryCommand};
 use crate::cli::emit::emit_native_operation_error;
 use crate::cli::json;
-use crate::operations::battery::{
-    add_battery, inspect_battery, install_battery_script, list_batteries, list_battery_scripts,
-    remove_battery, sync_battery, AddBatteryRequest, InspectBatteryRequest,
-    InstallBatteryScriptRequest, RemoveBatteryRequest, SyncBatteryRequest,
-};
 use crate::operations::OperationError;
+use crate::operations::battery::{
+    AddBatteryRequest, InspectBatteryRequest, InstallBatteryScriptRequest, RemoveBatteryRequest,
+    SyncBatteryRequest, add_battery, inspect_battery, install_battery_script, list_batteries,
+    list_battery_scripts, remove_battery, sync_battery,
+};
 use crate::workspace::Workspace;
 use std::error::Error;
 use std::path::PathBuf;

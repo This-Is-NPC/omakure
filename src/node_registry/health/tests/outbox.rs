@@ -41,10 +41,12 @@ fn outbox_is_bounded_drops_the_oldest_and_retires_on_acknowledgement() {
     ));
 
     let target = outbox.first().unwrap().signal_id.clone();
-    assert!(fixture
-        .registry
-        .health_mark_signal_sent(&target, &opaque_id_hex(7_777), BASE_NOW + 100)
-        .unwrap());
+    assert!(
+        fixture
+            .registry
+            .health_mark_signal_sent(&target, &opaque_id_hex(7_777), BASE_NOW + 100)
+            .unwrap()
+    );
     let local = fixture.registry.local_node_id().to_string();
     let ack = HealthPayload {
         message_id: opaque_id_hex(8_888),

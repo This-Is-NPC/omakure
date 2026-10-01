@@ -1,9 +1,9 @@
 use super::{
-    installed_baseline_path, map_baseline_error, retained_current_path, retained_previous,
-    retained_previous_path, InstalledBaseline, RetainedBaseline, BASELINE_SCRIPT_MODE,
+    BASELINE_SCRIPT_MODE, InstalledBaseline, RetainedBaseline, installed_baseline_path,
+    map_baseline_error, retained_current_path, retained_previous, retained_previous_path,
 };
 use crate::baseline::VerifiedBaseline;
-use crate::operations::battery::{install_verified_script, InstallState};
+use crate::operations::battery::{InstallState, install_verified_script};
 use crate::operations::{OperationError, OperationErrorCode, OperationResult};
 use crate::util::hex;
 use crate::workspace::Workspace;
@@ -138,7 +138,7 @@ pub fn install_baseline(
                     OperationErrorCode::IoFailed,
                     format!("failed to serialize the baseline record: {error}"),
                 ),
-            ))
+            ));
         }
     };
 

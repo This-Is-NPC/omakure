@@ -1,4 +1,4 @@
-use serde::{de::Error as _, Deserialize};
+use serde::{Deserialize, de::Error as _};
 use serde_json::Value;
 
 use crate::error::SchemaError;

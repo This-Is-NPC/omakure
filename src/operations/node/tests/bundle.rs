@@ -224,9 +224,11 @@ fn signed_bundle_token_consumption_faults_are_recoverable_across_restart() {
         &fixture.token_path,
     )
     .unwrap_err();
-    assert!(recovery_error
-        .message
-        .contains("bootstrap token cleanup recovery failed"));
+    assert!(
+        recovery_error
+            .message
+            .contains("bootstrap token cleanup recovery failed")
+    );
     set_private_token_fault(PrivateTokenFault::None);
     recover_private_token_tombstones(
         &fixture.target,
@@ -236,11 +238,16 @@ fn signed_bundle_token_consumption_faults_are_recoverable_across_restart() {
     )
     .unwrap();
     assert!(!fixture.token_path.exists());
-    assert!(fixture
-        .target
-        .list_private_token_tombstones(&fixture.token_path, enrollment::MAX_BOOTSTRAP_TOKEN_BYTES,)
-        .unwrap()
-        .is_empty());
+    assert!(
+        fixture
+            .target
+            .list_private_token_tombstones(
+                &fixture.token_path,
+                enrollment::MAX_BOOTSTRAP_TOKEN_BYTES,
+            )
+            .unwrap()
+            .is_empty()
+    );
     let cleanup_count: i64 = Connection::open(fixture.target.database_path())
         .unwrap()
         .query_row(

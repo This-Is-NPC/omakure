@@ -1,13 +1,13 @@
 #[cfg(unix)]
 use super::lifecycle::LockError;
-use super::lifecycle::{acquire_lock, pid_file, release_lock};
 #[cfg(windows)]
 use super::lifecycle::{
-    publish_windows_pid_file, read_windows_pid_file, WindowsPidFile, WindowsPidFileError,
-    WindowsPidPublicationError,
+    WindowsPidFile, WindowsPidFileError, WindowsPidPublicationError, publish_windows_pid_file,
+    read_windows_pid_file,
 };
+use super::lifecycle::{acquire_lock, pid_file, release_lock};
 use super::logging::log_file;
-use super::scheduler::{build_args_from_defaults, scheduler_tick, SchedulerTickError};
+use super::scheduler::{SchedulerTickError, build_args_from_defaults, scheduler_tick};
 use crate::runs::{self, RunStore, RunTrigger};
 use crate::test_support::workspace_in;
 use crate::workspace::Workspace;
@@ -86,11 +86,13 @@ fn tick_enqueues_scheduled_run_on_first_fire() {
     let rows = all_runs(&ws);
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].trigger, RunTrigger::Scheduled);
-    assert!(rows[0]
-        .cron_schedule_id
-        .as_deref()
-        .unwrap()
-        .contains("@* * * * *"));
+    assert!(
+        rows[0]
+            .cron_schedule_id
+            .as_deref()
+            .unwrap()
+            .contains("@* * * * *")
+    );
 }
 
 #[test]
@@ -104,9 +106,11 @@ fn tick_reports_run_store_open_failure_without_changing_error_text() {
 
     let error = scheduler_tick(&workspace, Utc::now()).unwrap_err();
     assert!(matches!(error, SchedulerTickError::OpenRuns(_)));
-    assert!(error
-        .to_string()
-        .starts_with("open runs.sqlite: Create history dir failed: "));
+    assert!(
+        error
+            .to_string()
+            .starts_with("open runs.sqlite: Create history dir failed: ")
+    );
 }
 
 #[test]
@@ -255,9 +259,10 @@ fn acquire_lock_reports_create_failure_with_path() {
         LockError::Create { path, source }
             if path == &pid_file(&ws) && source.kind() == std::io::ErrorKind::NotFound
     ));
-    assert!(err
-        .to_string()
-        .starts_with(&format!("create {}: ", pid_file(&ws).display())));
+    assert!(
+        err.to_string()
+            .starts_with(&format!("create {}: ", pid_file(&ws).display()))
+    );
 }
 
 #[cfg(unix)]
@@ -334,9 +339,11 @@ fn windows_pid_file_read_error_keeps_path_and_source() {
         WindowsPidFileError::Read { path: failed_path, source }
             if failed_path == &path && source.kind() == std::io::ErrorKind::NotFound
     ));
-    assert!(error
-        .to_string()
-        .starts_with(&format!("read {}: ", path.display())));
+    assert!(
+        error
+            .to_string()
+            .starts_with(&format!("read {}: ", path.display()))
+    );
 }
 
 #[cfg(windows)]
@@ -396,9 +403,11 @@ fn windows_pid_publication_is_complete_and_exclusive() {
     publish_windows_pid_file(&pid_file(&ws), &identity).unwrap();
 
     assert_eq!(read_windows_pid_file(&pid_file(&ws)).unwrap(), identity);
-    assert!(!pid_file(&ws)
-        .with_file_name("daemon.pid.00000000000000000000000000000004.tmp")
-        .exists());
+    assert!(
+        !pid_file(&ws)
+            .with_file_name("daemon.pid.00000000000000000000000000000004.tmp")
+            .exists()
+    );
 
     let replacement = WindowsPidFile {
         pid: 401,
@@ -411,9 +420,11 @@ fn windows_pid_publication_is_complete_and_exclusive() {
         pid_file(&ws).display()
     )));
     assert_eq!(read_windows_pid_file(&pid_file(&ws)).unwrap(), identity);
-    assert!(!pid_file(&ws)
-        .with_file_name("daemon.pid.00000000000000000000000000000005.tmp")
-        .exists());
+    assert!(
+        !pid_file(&ws)
+            .with_file_name("daemon.pid.00000000000000000000000000000005.tmp")
+            .exists()
+    );
 }
 
 #[cfg(windows)]
@@ -433,7 +444,9 @@ fn windows_pid_publication_reports_create_failure() {
             if failed_path == &temp_path
                 && source.kind() == std::io::ErrorKind::NotFound
     ));
-    assert!(error
-        .to_string()
-        .starts_with(&format!("create {}: ", temp_path.display())));
+    assert!(
+        error
+            .to_string()
+            .starts_with(&format!("create {}: ", temp_path.display()))
+    );
 }

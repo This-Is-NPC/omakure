@@ -2,9 +2,9 @@ use super::admission::AdmissionController;
 use super::baseline::PendingBaseline;
 use super::cue::PendingCue;
 use super::error::DirectServiceError;
-use super::outbox::{push_pending, take_pending, Outbox};
+use super::outbox::{Outbox, push_pending, take_pending};
 use super::status::{
-    refresh_status, StaticPeer, TransportPeerStatus, TransportStatus, TransportStatusHandle,
+    StaticPeer, TransportPeerStatus, TransportStatus, TransportStatusHandle, refresh_status,
 };
 use crate::direct_transport::TransportError;
 use crate::health_plane::report::HealthReporter;

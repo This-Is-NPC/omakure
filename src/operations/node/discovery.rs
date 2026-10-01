@@ -1,5 +1,5 @@
 use super::super::{OperationError, OperationErrorCode, OperationResult};
-use super::status::{load_node_config, public_config, PublicNodeConfig};
+use super::status::{PublicNodeConfig, load_node_config, public_config};
 use crate::node::NodeContext;
 use std::time::Duration;
 

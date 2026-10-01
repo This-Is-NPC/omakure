@@ -180,10 +180,12 @@ async fn private_https_sync_denied_without_credentials_use() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
     let body = response_json(response).await;
-    assert!(body["error"]["message"]
-        .as_str()
-        .unwrap_or("")
-        .contains("credentials:use"));
+    assert!(
+        body["error"]["message"]
+            .as_str()
+            .unwrap_or("")
+            .contains("credentials:use")
+    );
     assert!(!body.to_string().contains("sync-secret-value"));
 }
 

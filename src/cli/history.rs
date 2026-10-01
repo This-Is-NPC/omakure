@@ -8,7 +8,7 @@ use crate::cli::emit::{emit_error, emit_operation_error};
 use crate::cli::json::{self, codes};
 use crate::operations::core::{self, ListRunsRequest, ListTracesRequest, ShowRunRequest};
 use crate::operations::{OperationError, OperationErrorCode};
-use crate::runs::{format_run_timestamp, RunRow, RunStats, TraceRow};
+use crate::runs::{RunRow, RunStats, TraceRow, format_run_timestamp};
 use crate::workspace::Workspace;
 use serde::Serialize;
 use std::error::Error;

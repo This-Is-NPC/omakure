@@ -1,9 +1,9 @@
 use super::*;
+use crate::baseline::FUTURE_SKEW_SECONDS;
 use crate::baseline::SignedBaselineManifest;
 use crate::baseline::VerifiedBaseline;
-use crate::baseline::FUTURE_SKEW_SECONDS;
-use crate::operations::battery::install_verified_script;
 use crate::operations::OperationErrorCode;
+use crate::operations::battery::install_verified_script;
 use crate::test_support::{baseline_scripts, workspace_in};
 use crate::util::hex;
 use k256::schnorr::SigningKey;
@@ -331,13 +331,15 @@ fn a_rollback_under_a_revoked_publisher_is_refused_and_changes_nothing() {
     let mut stranger = policy(false);
     stranger.publishers[0].public_key[0] ^= 0xff;
     assert!(rollback_baseline(&workspace, &stranger, true, 1_800_000_300).is_err());
-    assert!(rollback_baseline(
-        &workspace,
-        &crate::baseline_push::BaselinePolicy::default(),
-        true,
-        1_800_000_300
-    )
-    .is_err());
+    assert!(
+        rollback_baseline(
+            &workspace,
+            &crate::baseline_push::BaselinePolicy::default(),
+            true,
+            1_800_000_300
+        )
+        .is_err()
+    );
 
     assert_eq!(
         installed_baseline(&workspace).expect("record").baseline_id,

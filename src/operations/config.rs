@@ -1,6 +1,6 @@
 use crate::adapters::environments::{
-    is_sensitive_key, resolve_active_env, should_mask_env_value, FsEnvironmentRepository,
-    MASKED_ENV_VALUE,
+    FsEnvironmentRepository, MASKED_ENV_VALUE, is_sensitive_key, resolve_active_env,
+    should_mask_env_value,
 };
 use crate::app_meta;
 use crate::ports::EnvironmentRepository;
@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use std::env;
 use std::path::Path;
 
-use super::{io_error, OperationResult};
+use super::{OperationResult, io_error};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConfigSummary {

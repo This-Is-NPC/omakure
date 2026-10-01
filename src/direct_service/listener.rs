@@ -2,13 +2,13 @@ use super::admission::{AdmissionController, AdmissionReservation, AdmissionState
 use super::connection::{ConnectionDirection, ConnectionState};
 use super::enrollment::serve_enrollment_request;
 use super::error::DirectServiceError;
-use super::session::{drain_until_hangup, hold_session, peer_authorization, SessionInputs};
+use super::session::{SessionInputs, drain_until_hangup, hold_session, peer_authorization};
 use super::stream::{read_frame, set_stream_timeouts, write_bytes};
 use super::{DIRECT_QUEUE_CAPACITY, DIRECT_WORKERS, HANDSHAKE_TIMEOUT, UNKNOWN_NODE_ID};
 use crate::direct_health::HealthSession;
 use crate::direct_transport::{
-    authorize_peer, envelope_nonce, sign_ack, unix_seconds, verify_envelope, HandshakeRole,
-    TransportError, ENVELOPE_KIND,
+    ENVELOPE_KIND, HandshakeRole, TransportError, authorize_peer, envelope_nonce, sign_ack,
+    unix_seconds, verify_envelope,
 };
 use crate::node::NodeContext;
 use crate::node_identity::NodeIdentity;
@@ -18,7 +18,7 @@ use crate::util::hex;
 use std::io;
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TrySendError};
+use std::sync::mpsc::{Receiver, SyncSender, TrySendError, sync_channel};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};

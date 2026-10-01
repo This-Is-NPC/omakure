@@ -417,11 +417,13 @@ fn curl_json(
     let value = request_json(guard, method, url, true, body)
         .unwrap_or_else(|error| panic!("curl failed: {error}"));
     if include_addresses {
-        assert!(value["data"]["candidates"]
-            .as_array()
-            .is_some_and(|candidates| candidates
-                .iter()
-                .all(|candidate| candidate["address"].is_string())));
+        assert!(
+            value["data"]["candidates"]
+                .as_array()
+                .is_some_and(|candidates| candidates
+                    .iter()
+                    .all(|candidate| candidate["address"].is_string()))
+        );
     }
     value
 }
@@ -541,11 +543,13 @@ fn docker_discovery_finds_nodes_without_creating_trust_or_sessions() {
         &format!("{TARGET_API}/v1/node/status"),
         false,
     );
-    assert!(status["data"]["discovery"]["candidates"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .all(|candidate| candidate["address"].is_null()));
+    assert!(
+        status["data"]["discovery"]["candidates"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|candidate| candidate["address"].is_null())
+    );
 
     let target_ip = container_ip(&compose_guard, "enrollment-target");
     let blocked = exec(
@@ -678,33 +682,39 @@ fn docker_discovery_finds_nodes_without_creating_trust_or_sessions() {
     );
     assert_eq!(json_output(&accepted)["data"]["accepted"], true);
 
-    assert!(compose(
-        &compose_guard,
-        &["-p", compose_project(), "stop", "enrollment-candidate"]
-    )
-    .status
-    .success());
+    assert!(
+        compose(
+            &compose_guard,
+            &["-p", compose_project(), "stop", "enrollment-candidate"]
+        )
+        .status
+        .success()
+    );
     wait_for_stopped(&compose_guard, "enrollment-candidate");
-    assert!(compose(
-        &compose_guard,
-        &["-p", compose_project(), "stop", "enrollment-target"]
-    )
-    .status
-    .success());
+    assert!(
+        compose(
+            &compose_guard,
+            &["-p", compose_project(), "stop", "enrollment-target"]
+        )
+        .status
+        .success()
+    );
     wait_for_stopped(&compose_guard, "enrollment-target");
-    assert!(compose(
-        &compose_guard,
-        &[
-            "-p",
-            compose_project(),
-            "up",
-            "-d",
-            "--no-deps",
-            "enrollment-target"
-        ]
-    )
-    .status
-    .success());
+    assert!(
+        compose(
+            &compose_guard,
+            &[
+                "-p",
+                compose_project(),
+                "up",
+                "-d",
+                "--no-deps",
+                "enrollment-target"
+            ]
+        )
+        .status
+        .success()
+    );
     wait_for_service_ready(&compose_guard, "enrollment-target", 17878);
     let empty_after_restart = curl(
         &compose_guard,
@@ -720,12 +730,14 @@ fn docker_discovery_finds_nodes_without_creating_trust_or_sessions() {
         "observer retained or rediscovered candidates before sender restart: {empty_after_restart}"
     );
 
-    assert!(compose(
-        &compose_guard,
-        &["-p", compose_project(), "start", "enrollment-candidate"]
-    )
-    .status
-    .success());
+    assert!(
+        compose(
+            &compose_guard,
+            &["-p", compose_project(), "start", "enrollment-candidate"]
+        )
+        .status
+        .success()
+    );
     wait_for_health(&compose_guard);
     let restart_deadline = Instant::now() + Duration::from_secs(15);
     loop {

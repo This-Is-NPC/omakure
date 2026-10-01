@@ -98,9 +98,11 @@ fn test_node_serve_help_surface_exists() {
         .find_subcommand("serve")
         .expect("node serve should be registered");
     assert!(serve.get_arguments().any(|arg| arg.get_id() == "workers"));
-    assert!(serve
-        .get_arguments()
-        .any(|arg| arg.get_id() == "readiness_requires_worker"));
+    assert!(
+        serve
+            .get_arguments()
+            .any(|arg| arg.get_id() == "readiness_requires_worker")
+    );
 }
 
 #[test]

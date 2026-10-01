@@ -1,10 +1,10 @@
+use super::NodeError;
 #[cfg(unix)]
-use super::fs_unix::{mode_is_no_broader_than, UnixOwner};
+use super::fs_unix::{UnixOwner, mode_is_no_broader_than};
 #[cfg(windows)]
 use super::fs_windows::{validate_windows_security, windows_has_reparse_point};
 #[cfg(not(unix))]
 use super::layout::NodePlatform;
-use super::NodeError;
 use crate::util::entropy;
 use crate::util::hex;
 use std::fs;

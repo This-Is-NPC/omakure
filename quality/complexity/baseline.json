@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "4afd64232693c592231f2383a081b381dd80a1fccd80a2175ac73b1c66965ad3",
+  "canonical_sha256": "d515f51eeea8ab4b63c7117b4a9c63d8ec105fccd8ef14399b1615407a9643e3",
   "config_identity": "no-config",
   "files": [
     {
@@ -11615,7 +11615,7 @@
         "identity": "crate::auth::reload::install_sighup_reload::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/auth/reload.rs",
-        "signature": "thread::spawn(move || loop {",
+        "signature": "thread::spawn(move || {",
         "source_class": "handwritten"
       },
       "identity": "crate::auth::reload::install_sighup_reload::<closure>",
@@ -11631,7 +11631,7 @@
         "name": "<closure>"
       },
       "path": "src/auth/reload.rs",
-      "signature": "thread::spawn(move || loop {",
+      "signature": "thread::spawn(move || {",
       "source_class": "handwritten"
     },
     {

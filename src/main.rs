@@ -31,8 +31,8 @@ fn default_scripts_dir() -> PathBuf {
 
 #[cfg(windows)]
 fn windows_documents_dir() -> Option<PathBuf> {
-    use winreg::enums::HKEY_CURRENT_USER;
     use winreg::RegKey;
+    use winreg::enums::HKEY_CURRENT_USER;
 
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let subkeys = [
@@ -237,7 +237,7 @@ fn run() -> Result<(), Box<dyn Error>> {
 
 fn generate_completions(shell: Shell) {
     use clap::CommandFactory;
-    use clap_complete::{generate, Shell as ClapShell};
+    use clap_complete::{Shell as ClapShell, generate};
 
     let mut cmd = Cli::command();
     let shell = match shell {

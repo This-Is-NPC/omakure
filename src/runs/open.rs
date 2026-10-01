@@ -1,5 +1,5 @@
 use super::RunsError;
-use crate::util::sqlite::{WalDatabase, OPEN_RETRY_DELAYS};
+use crate::util::sqlite::{OPEN_RETRY_DELAYS, WalDatabase};
 use crate::workspace::Workspace;
 use rusqlite::Connection;
 use std::fs;

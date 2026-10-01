@@ -1,5 +1,5 @@
 use super::router::router_with_transport;
-use super::state::{ApiPolicy, ReadinessGate, MAX_CONCURRENT_BLOCKING_OPERATIONS};
+use super::state::{ApiPolicy, MAX_CONCURRENT_BLOCKING_OPERATIONS, ReadinessGate};
 use crate::auth::{self, Authenticator};
 use crate::cli::args::ApiArgs;
 use crate::direct_service::TransportStatusHandle;
@@ -9,8 +9,8 @@ use axum::Router;
 use std::error::Error;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

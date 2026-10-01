@@ -1,5 +1,5 @@
 use crate::operations::path::has_windows_prefix;
-use crate::operations::{io_error, OperationError, OperationErrorCode, OperationResult};
+use crate::operations::{OperationError, OperationErrorCode, OperationResult, io_error};
 use crate::runtime::script_extensions;
 use std::path::{Component, Path, PathBuf};
 

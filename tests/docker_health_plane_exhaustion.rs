@@ -26,8 +26,8 @@ mod frame;
 use docker_health_node::node_material;
 use omakure::direct_service::RETRY_BACKOFF;
 use omakure::direct_transport::{
-    envelope_nonce, sign_ack, unix_seconds, verify_envelope, HandshakeRole, NoiseHandshake,
-    ENVELOPE_KIND, MAX_FRAME_LENGTH,
+    ENVELOPE_KIND, HandshakeRole, MAX_FRAME_LENGTH, NoiseHandshake, envelope_nonce, sign_ack,
+    unix_seconds, verify_envelope,
 };
 use omakure::health_plane::bounds::{ACK_TIMEOUT_SECONDS, MAX_RETRIES, RETRY_BACKOFF_SECONDS};
 use serde_json::Value;

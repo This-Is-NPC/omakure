@@ -96,9 +96,11 @@ fn observational_registry_reads_succeed_while_writer_is_reserved() {
     assert!(registry.peers_limited(1).is_ok());
     assert!(registry.revocations().is_ok());
     assert!(registry.audit_events().is_ok());
-    assert!(registry
-        .transport_peer(&status.node_id, &status.public_key_hex)
-        .is_ok());
+    assert!(
+        registry
+            .transport_peer(&status.node_id, &status.public_key_hex)
+            .is_ok()
+    );
 
     writer_transaction.rollback().unwrap();
 }

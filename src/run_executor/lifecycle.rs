@@ -1,7 +1,7 @@
 use super::admission::{execution_script_path, parse_args_json, secret_access_for_row};
 use super::environment::{push_reserved_run_env, write_redaction_file};
 use super::pipes::{
-    drain_channel, spawn_pipe_reader_to_channel, HEARTBEAT_TICK_MS, PIPE_DRAIN_BUDGET_MS,
+    HEARTBEAT_TICK_MS, PIPE_DRAIN_BUDGET_MS, drain_channel, spawn_pipe_reader_to_channel,
 };
 use super::{CancelFlag, ExecutionResult, ExecutionTerminal};
 use crate::adapters::script_runner::MultiScriptRunner;
@@ -11,9 +11,9 @@ use crate::workspace::Workspace;
 use std::io;
 use std::path::PathBuf;
 use std::process::{Child, ExitStatus};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
-use std::sync::Arc;
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -267,7 +267,7 @@ pub fn execute_with_heartbeat_guarded(
             return execution_error(
                 ExecutionTerminal::Errored,
                 format!("build command failed: {}", err),
-            )
+            );
         }
     };
 
@@ -276,7 +276,7 @@ pub fn execute_with_heartbeat_guarded(
     let mut child = match child_result {
         Ok(c) => c,
         Err(err) => {
-            return execution_error(ExecutionTerminal::Errored, format!("spawn failed: {}", err))
+            return execution_error(ExecutionTerminal::Errored, format!("spawn failed: {}", err));
         }
     };
 

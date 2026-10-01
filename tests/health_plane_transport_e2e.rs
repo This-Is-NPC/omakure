@@ -21,8 +21,8 @@
 mod support;
 
 use omakure::direct_transport::{
-    sign_health_envelope, sign_probe, unix_seconds, verify_envelope, HandshakeRole, NoiseHandshake,
-    TransportSession, ENVELOPE_KIND,
+    ENVELOPE_KIND, HandshakeRole, NoiseHandshake, TransportSession, sign_health_envelope,
+    sign_probe, unix_seconds, verify_envelope,
 };
 use omakure::health_plane::bounds::{
     MAX_AGE_SECONDS, MAX_CANONICAL_PROFILE, MAX_FUTURE_SKEW_SECONDS,
@@ -35,7 +35,7 @@ use omakure::node::{NodeContext, NodePathOverrides, NodePlatform};
 use omakure::node_identity::NodeIdentity;
 use omakure::node_registry::NodeRegistry;
 use rusqlite::Connection;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::path::Path;
@@ -859,10 +859,10 @@ fn two_real_nodes_exchange_profile_and_pulse_and_both_adapters_agree() {
     let previous_sequence = node_row(&online, &performer_id).expect("row")["pulse"]["sequence"]
         .as_u64()
         .expect("pulse sequence");
-    let previous_revision = node_row(&online, &performer_id).expect("row")["profile"]
-        ["profile_revision"]
-        .as_u64()
-        .expect("profile revision");
+    let previous_revision =
+        node_row(&online, &performer_id).expect("row")["profile"]["profile_revision"]
+            .as_u64()
+            .expect("profile revision");
     let mut performer_server = Some(serve(performer.path()));
     let recovered = wait_for_pulse_after(&conductor_server, &performer_id, previous_sequence);
     let row = node_row(&recovered, &performer_id).expect("performer row");
@@ -1051,13 +1051,15 @@ fn contracted_adversaries_are_rejected_without_unauthorized_state_mutation() {
 
     // 5. Oversized: past the frozen per-kind canonical cap.
     let mut oversized = profile_payload(&conductor_id, 0x06, 1);
-    oversized["profile"]["runtimes"] = json!((0..64)
-        .map(|index| json!({
-            "available": true,
-            "name": format!("runtime{index}"),
-            "version": "9.9.9999999999999999999999"
-        }))
-        .collect::<Vec<Value>>());
+    oversized["profile"]["runtimes"] = json!(
+        (0..64)
+            .map(|index| json!({
+                "available": true,
+                "name": format!("runtime{index}"),
+                "version": "9.9.9999999999999999999999"
+            }))
+            .collect::<Vec<Value>>()
+    );
     assert!(
         serde_jcs::to_vec(&oversized).unwrap().len() > MAX_CANONICAL_PROFILE / 2,
         "the oversized fixture must actually be large"
@@ -1446,9 +1448,11 @@ fn three_real_nodes_carry_one_redacted_run_completed_signal_to_the_conductor() {
     // crosses the boundary.
     let opaque = run["run_id"].as_str().expect("run id");
     assert_eq!(opaque.len(), 32);
-    assert!(opaque
-        .bytes()
-        .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()));
+    assert!(
+        opaque
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    );
     assert_ne!(opaque, local_run_id, "the local run id is never carried");
     let encoded = feed.to_string();
     for forbidden in [

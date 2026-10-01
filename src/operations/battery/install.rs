@@ -9,11 +9,11 @@ use super::fs_unix::{
     create_new_file_at, linkat_file, open_dir_no_follow, open_existing_file_at_no_follow,
     renameat_file, unlinkat_file,
 };
-use super::git::{run_git_capture, GitCommandSpec};
+use super::git::{GitCommandSpec, run_git_capture};
 #[cfg(unix)]
 use super::git_url::redacted_git_url;
 #[cfg(unix)]
-use super::manifest::{open_validated_script_entry, BatteryManifestScript};
+use super::manifest::{BatteryManifestScript, open_validated_script_entry};
 #[cfg(unix)]
 use super::path_safety::reject_symlink_components;
 use super::path_safety::{

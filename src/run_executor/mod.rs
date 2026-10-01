@@ -11,8 +11,8 @@
 //! `omakure run` both call this function so the two surfaces never drift.
 
 use crate::runs::RunCompletion;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 mod admission;
 mod environment;

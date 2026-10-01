@@ -153,8 +153,10 @@ mod tests {
                 "-d"
             ]
         );
-        assert!(command
-            .get_envs()
-            .any(|(key, _)| key == "OMAKURE_ENROLLMENT_TARGET_TOKENS_FILE"));
+        assert!(
+            command
+                .get_envs()
+                .any(|(key, _)| key == "OMAKURE_ENROLLMENT_TARGET_TOKENS_FILE")
+        );
     }
 }

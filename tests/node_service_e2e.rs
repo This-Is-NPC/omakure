@@ -495,8 +495,10 @@ fn missing_node_registry_blocks_start_without_replacing_identity() {
     assert!(!output.status.success());
     assert_eq!(fs::read(identity_path).unwrap(), identity_before);
     assert!(!database_path.exists());
-    assert!(String::from_utf8_lossy(&output.stderr)
-        .contains("node identity state is invalid or insecure"));
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("node identity state is invalid or insecure")
+    );
 }
 
 #[test]
@@ -637,8 +639,10 @@ fn reset_while_node_service_is_active_refuses_without_mutation() {
         Duration::from_secs(10),
     );
     assert!(!reset.status.success());
-    assert!(String::from_utf8_lossy(&reset.stdout)
-        .contains("node service is active; stop it before changing node state"));
+    assert!(
+        String::from_utf8_lossy(&reset.stdout)
+            .contains("node service is active; stop it before changing node state")
+    );
     assert_eq!(
         fs::read(state.join("identity.key")).unwrap(),
         identity_before
@@ -666,9 +670,11 @@ fn init_while_node_service_is_active_conflicts_without_hanging_or_mutating_ident
 
     let api_init = server.post_json("/v1/node/init", &json!({}));
     assert_eq!(api_init.status, 409, "body: {}", api_init.safe_body());
-    assert!(api_init
-        .body
-        .contains("node service is active; stop it before changing node state"));
+    assert!(
+        api_init
+            .body
+            .contains("node service is active; stop it before changing node state")
+    );
 
     let cli_init = support::command_with_timeout(
         support::omakure_command()
@@ -680,8 +686,10 @@ fn init_while_node_service_is_active_conflicts_without_hanging_or_mutating_ident
         Duration::from_secs(5),
     );
     assert!(!cli_init.status.success());
-    assert!(String::from_utf8_lossy(&cli_init.stdout)
-        .contains("node service is active; stop it before changing node state"));
+    assert!(
+        String::from_utf8_lossy(&cli_init.stdout)
+            .contains("node service is active; stop it before changing node state")
+    );
     assert_eq!(
         fs::read(state.join("identity.key")).unwrap(),
         identity_before

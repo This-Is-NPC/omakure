@@ -1,9 +1,10 @@
 use super::codes::CueCode;
-use super::dispatch::{content_hash, CueDecisionRecord, CueDispatch, ScriptBinding};
+use super::dispatch::{CueDecisionRecord, CueDispatch, ScriptBinding, content_hash};
 use super::enqueue::CueEnqueueError;
 use super::gates::{
-    declares_secret_field, evaluate_gates, is_declared_or_from_declared_battery, is_regular_file,
-    resolve_in_listing, within_validity_window, GateDecision, LocalAuthority,
+    GateDecision, LocalAuthority, declares_secret_field, evaluate_gates,
+    is_declared_or_from_declared_battery, is_regular_file, resolve_in_listing,
+    within_validity_window,
 };
 use super::{
     CUE_RETENTION_SECONDS, KIND_ACK, KIND_DISPATCH, MAX_CANONICAL_CUE_DISPATCH,

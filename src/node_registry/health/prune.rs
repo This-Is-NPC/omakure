@@ -7,7 +7,7 @@ use crate::domain::health_plane::bounds::{
     REPLAY_SECURITY_FLOOR_SECONDS, SIGNAL_INBOX_CAPACITY, VERSION_INCOMPATIBLE_EXPIRY_SECONDS,
 };
 use crate::domain::health_plane::model::HealthCode;
-use rusqlite::{params, Transaction, TransactionBehavior};
+use rusqlite::{Transaction, TransactionBehavior, params};
 
 impl NodeRegistry {
     /// Delete all Health Plane state for peers that are no longer actively

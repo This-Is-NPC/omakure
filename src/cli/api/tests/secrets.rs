@@ -24,10 +24,12 @@ async fn secrets_metadata_endpoint_redacts_values() {
     let rendered = body.to_string();
     assert!(!rendered.contains(secret_value));
     assert_eq!(body["data"][0]["id"], "secret://prod/token");
-    assert!(body["data"][0]["source"]
-        .as_str()
-        .unwrap()
-        .starts_with("file:"));
+    assert!(
+        body["data"][0]["source"]
+            .as_str()
+            .unwrap()
+            .starts_with("file:")
+    );
     assert!(body["data"][0].get("value").is_none());
 }
 

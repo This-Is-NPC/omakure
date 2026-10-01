@@ -4,7 +4,7 @@ use super::errors::{
     registry_error,
 };
 use super::status::{open_initialized_registry, read_node_config};
-use super::trust::{list_trusted_peers, public_peer, PublicPeer};
+use super::trust::{PublicPeer, list_trusted_peers, public_peer};
 use super::{decode_fixed_hex, require_confirmation};
 use crate::enrollment::{self, EnrollmentRole, ManualEnrollmentRequest};
 use crate::node::NodeContext;

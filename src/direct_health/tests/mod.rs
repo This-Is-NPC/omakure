@@ -55,8 +55,8 @@ use crate::health_plane::model::RunnerFact;
 use crate::health_plane::report::{HealthFactsSource, ProfileFacts, PulseFacts};
 
 use crate::node_registry::{PeerRegistration, PeerSource};
-use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 use std::sync::Mutex as StdMutex;
+use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 use tempfile::TempDir;
 
 mod emission;

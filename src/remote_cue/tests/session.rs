@@ -218,9 +218,10 @@ fn a_unique_cue_id_creates_a_distinct_durable_run() {
     )
     .unwrap();
     assert_eq!(runs.len(), 2, "distinct Cue ids must create two runs");
-    assert!(runs
-        .iter()
-        .all(|run| run.trigger == crate::runs::RunTrigger::Cue));
+    assert!(
+        runs.iter()
+            .all(|run| run.trigger == crate::runs::RunTrigger::Cue)
+    );
 }
 
 #[test]

@@ -19,19 +19,21 @@ pub fn install_sighup_reload(auth: Authenticator) {
     let flag_for_hook = Arc::clone(&flag);
     let _ = signal_hook::flag::register(signal_hook::consts::SIGHUP, flag_for_hook);
 
-    thread::spawn(move || loop {
-        if flag.swap(false, Ordering::SeqCst) {
-            match auth.reload() {
-                Ok(()) => eprintln!("omakure: reloaded tokens file"),
-                Err(err) => {
-                    eprintln!(
-                        "omakure: tokens reload failed; keeping last valid set ({})",
-                        err.status_message()
-                    );
+    thread::spawn(move || {
+        loop {
+            if flag.swap(false, Ordering::SeqCst) {
+                match auth.reload() {
+                    Ok(()) => eprintln!("omakure: reloaded tokens file"),
+                    Err(err) => {
+                        eprintln!(
+                            "omakure: tokens reload failed; keeping last valid set ({})",
+                            err.status_message()
+                        );
+                    }
                 }
             }
+            thread::sleep(Duration::from_millis(200));
         }
-        thread::sleep(Duration::from_millis(200));
     });
 }
 

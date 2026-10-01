@@ -3,7 +3,7 @@ use crate::health_plane::bounds::{
     HEALTH_VERSION, MAX_SAFE_INTEGER, MAX_STORED_SIGNAL_BYTES, OPAQUE_ID_HEX_CHARS, SIGNATURE_BYTES,
 };
 use crate::health_plane::model::{HealthCode, HealthKind, SignalRecord};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// The fixed-width envelope fields used when measuring a Signal's real size.
 ///

@@ -16,7 +16,7 @@ fn opened_file_identity_detects_path_replacement() {
 #[cfg(all(unix, debug_assertions))]
 #[test]
 fn private_bounded_file_reader_enforces_path_mode_and_size() {
-    use std::os::unix::fs::{symlink, PermissionsExt};
+    use std::os::unix::fs::{PermissionsExt, symlink};
 
     let tmp = tempfile::TempDir::new().unwrap();
     let context = test_context(tmp.path());

@@ -6,9 +6,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 #[cfg(windows)]
-use winreg::enums::HKEY_CURRENT_USER;
-#[cfg(windows)]
 use winreg::RegKey;
+#[cfg(windows)]
+use winreg::enums::HKEY_CURRENT_USER;
 
 pub fn run(scripts_dir: PathBuf, options: UninstallArgs) -> Result<(), Box<dyn Error>> {
     let exe = env::current_exe()?;

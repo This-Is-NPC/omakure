@@ -11,7 +11,7 @@ use crate::domain::health_plane::bounds::{
 use crate::domain::health_plane::model::{
     HealthCode, HealthDecision, ProfileSnapshot, PulseSnapshot, SignalRecord,
 };
-use rusqlite::{params, Transaction, TransactionBehavior};
+use rusqlite::{Transaction, TransactionBehavior, params};
 
 impl NodeRegistry {
     /// The one new read-only projection required by Health Plane

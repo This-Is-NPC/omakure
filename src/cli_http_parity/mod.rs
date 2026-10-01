@@ -11,7 +11,7 @@ mod manifest;
 mod model;
 mod schema;
 
-pub use compare::{compare_observables_for_case, validate_observables_for_case, ObservableError};
+pub use compare::{ObservableError, compare_observables_for_case, validate_observables_for_case};
 pub use docs::{check_docs_freshness, render_markdown};
 pub use manifest::http_ids;
 pub use model::{
@@ -19,7 +19,7 @@ pub use model::{
     ObservableCaseRequirement, ObservableRule, ObservableSchema, ParityClass, ParityEntry,
     SemanticDifference, SurfaceInventory,
 };
-pub use schema::{checked_registry, BehaviorCase};
+pub use schema::{BehaviorCase, checked_registry};
 
 pub const SCHEMA_VERSION: u32 = 1;
 pub const MANIFEST_PATH: &str = "fixtures/cli-http-parity.toml";

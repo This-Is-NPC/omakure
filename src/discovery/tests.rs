@@ -178,10 +178,12 @@ fn status_redacts_addresses_by_default_and_expires_candidates() {
         detailed.candidates[0].address.as_deref(),
         Some("192.0.2.10:7988")
     );
-    assert!(snapshot
-        .public_status(false, 1_700_000_016)
-        .candidates
-        .is_empty());
+    assert!(
+        snapshot
+            .public_status(false, 1_700_000_016)
+            .candidates
+            .is_empty()
+    );
 }
 
 #[test]

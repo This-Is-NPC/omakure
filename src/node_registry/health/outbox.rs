@@ -7,7 +7,7 @@ use crate::domain::health_plane::bounds::{SIGNAL_OUTBOX_CAPACITY, SIGNAL_RETENTI
 use crate::domain::health_plane::model::{
     HealthCode, HealthKind, RunFact, SignalKind, SignalRecord,
 };
-use rusqlite::{params, OptionalExtension, TransactionBehavior};
+use rusqlite::{OptionalExtension, TransactionBehavior, params};
 
 impl NodeRegistry {
     /// Append one Signal to the bounded Performer outbox.

@@ -175,9 +175,11 @@ fn full_transition_graph_and_revocation_precedence() {
         .register_pending_with_transport(registration(&identity, 3), None)
         .unwrap();
     assert_eq!(peer.state, PeerState::Pending);
-    assert!(registry
-        .transition_peer(&peer.node_id, PeerState::Active, "", "reason")
-        .is_err());
+    assert!(
+        registry
+            .transition_peer(&peer.node_id, PeerState::Active, "", "reason")
+            .is_err()
+    );
     assert_eq!(
         registry
             .transition_peer(&peer.node_id, PeerState::Active, "operator", "approve")
@@ -234,18 +236,22 @@ fn rejects_self_duplicates_invalid_capabilities_and_bad_transitions() {
         registry.register_pending_with_transport(registration(&identity, 7), None),
         Err(RegistryError::Duplicate(_))
     ));
-    assert!(registry
-        .transition_peer(&peer.node_id, PeerState::Suspended, "operator", "bad")
-        .is_ok());
+    assert!(
+        registry
+            .transition_peer(&peer.node_id, PeerState::Suspended, "operator", "bad")
+            .is_ok()
+    );
     assert!(matches!(
         registry.transition_peer(&peer.node_id, PeerState::Suspended, "operator", "again"),
         Err(RegistryError::InvalidTransition { .. })
     ));
     let mut unsupported = registration(&identity, 9);
     unsupported.capabilities = vec!["not-supported".to_string()];
-    assert!(registry
-        .register_pending_with_transport(unsupported, None)
-        .is_err());
+    assert!(
+        registry
+            .register_pending_with_transport(unsupported, None)
+            .is_err()
+    );
 }
 
 #[test]
@@ -257,9 +263,11 @@ fn transaction_failure_does_not_leave_partial_peer_or_audit() {
     let peer = registry
         .register_pending_with_transport(registration(&identity, 11), None)
         .unwrap();
-    assert!(registry
-        .transition_peer(&peer.node_id, PeerState::Active, "operator", " ")
-        .is_err());
+    assert!(
+        registry
+            .transition_peer(&peer.node_id, PeerState::Active, "operator", " ")
+            .is_err()
+    );
     assert_eq!(
         registry.peer(&peer.node_id).unwrap().unwrap().state,
         PeerState::Pending

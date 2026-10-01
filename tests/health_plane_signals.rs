@@ -26,17 +26,17 @@ use omakure::health_plane::bounds::{
 };
 use omakure::health_plane::model::{HealthCode, HealthDecision, RunFact, RunnerFact, SignalKind};
 use omakure::health_plane::report::{
-    ack_payload as ack_body, HealthFactsSource, HealthReporter, ProfileFacts, PulseFacts,
+    HealthFactsSource, HealthReporter, ProfileFacts, PulseFacts, ack_payload as ack_body,
 };
 use omakure::health_plane::{HealthClock, HealthPlane, HealthReply, InboundHealthMessage};
 use omakure::node::{NodeContext, NodePathOverrides, NodePlatform};
 use omakure::node_identity::NodeIdentity;
 use omakure::node_registry::NodeRegistry;
 use rusqlite::Connection;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicI64, Ordering};
 use tempfile::TempDir;
 
 const BASE_NOW: i64 = 1_700_000_000;
@@ -55,7 +55,7 @@ struct SharedClock(Arc<FixedClock>);
 
 impl HealthClock for SharedClock {
     fn unix_seconds(&self) -> i64 {
-        self.0 .0.load(Ordering::SeqCst)
+        self.0.0.load(Ordering::SeqCst)
     }
 
     fn monotonic_millis(&self) -> u64 {
@@ -708,10 +708,12 @@ fn contracted_signal_rejections_are_audited_and_mutate_neither_health_nor_trust(
         status_before
     );
     assert_eq!(plane.signals(&performer, 64).expect("signals").len(), 1);
-    assert!(plane
-        .signals(&no_notifications, 64)
-        .expect("signals")
-        .is_empty());
+    assert!(
+        plane
+            .signals(&no_notifications, 64)
+            .expect("signals")
+            .is_empty()
+    );
 
     // The audit trail records the stable code and nothing else.
     let audit = health_audit(&node);
@@ -864,10 +866,12 @@ fn inbox_capacity_retention_and_storage_stay_inside_every_frozen_bound() {
     node.advance(SIGNAL_RETENTION_SECONDS + 1);
     let report = plane.prune().expect("prune");
     assert_eq!(report.expired_signals, SIGNAL_INBOX_CAPACITY as u64);
-    assert!(plane
-        .signals(&performer, 1_000)
-        .expect("signals")
-        .is_empty());
+    assert!(
+        plane
+            .signals(&performer, 1_000)
+            .expect("signals")
+            .is_empty()
+    );
 }
 
 #[test]
@@ -906,23 +910,27 @@ fn an_acknowledgement_retires_exactly_the_outbox_signal_it_names() {
     );
 
     // The same logical Signal is never queued twice.
-    assert!(plane
-        .enqueue_signal(
-            &conductor,
-            &hex16(31),
-            SignalKind::RunCompleted,
-            node.now(),
-            None,
-            Some(&run),
-            900,
-        )
-        .is_err());
+    assert!(
+        plane
+            .enqueue_signal(
+                &conductor,
+                &hex16(31),
+                SignalKind::RunCompleted,
+                node.now(),
+                None,
+                Some(&run),
+                900,
+            )
+            .is_err()
+    );
     assert_eq!(plane.outbox(64).expect("outbox").len(), 1);
 
     let message_id = hex16(32);
-    assert!(plane
-        .mark_signal_sent(&hex16(31), &message_id)
-        .expect("mark sent"));
+    assert!(
+        plane
+            .mark_signal_sent(&hex16(31), &message_id)
+            .expect("mark sent")
+    );
 
     // The Conductor's acknowledgement retires exactly that entry.
     let outcome = plane

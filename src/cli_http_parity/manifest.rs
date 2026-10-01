@@ -1,8 +1,8 @@
+use super::SCHEMA_VERSION;
 use super::model::{
     InventorySets, Manifest, ManifestError, ParityClass, ParityEntry, SurfaceInventory,
 };
-use super::schema::{validate_observable_schema, BehaviorCase};
-use super::SCHEMA_VERSION;
+use super::schema::{BehaviorCase, validate_observable_schema};
 use std::collections::{BTreeMap, BTreeSet};
 
 impl Manifest {

@@ -27,13 +27,13 @@ mod session;
 
 pub use codes::CueCode;
 pub use dispatch::content_hash;
-pub use enqueue::{derive_run_id, CueEnqueueError};
+pub use enqueue::{CueEnqueueError, derive_run_id};
 pub use gates::{
-    declares_secret_field, evaluate_gates, is_declared, is_declared_or_from_declared_battery,
-    is_regular_file, is_well_formed_cue_id, is_well_formed_script_name, resolve_in_listing,
-    within_validity_window, ExecutionGuard, ExecutionLockError, GateDecision, LocalAuthority,
+    ExecutionGuard, ExecutionLockError, GateDecision, LocalAuthority, declares_secret_field,
+    evaluate_gates, is_declared, is_declared_or_from_declared_battery, is_regular_file,
+    is_well_formed_cue_id, is_well_formed_script_name, resolve_in_listing, within_validity_window,
 };
-pub use session::{read_policy, CueOutcome, CuePolicy, CueSession};
+pub use session::{CueOutcome, CuePolicy, CueSession, read_policy};
 
 /// The frozen maximum lifetime of a Cue, in seconds.
 pub const MAX_LIFETIME_SECONDS: i64 = 300;

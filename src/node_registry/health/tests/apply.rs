@@ -22,11 +22,13 @@ fn authorization_projection_reports_role_and_capabilities_without_mutating() {
     assert!(fixture.registry.health_peer_states().unwrap().is_empty());
 
     let (unknown, _, _) = peer_identity(77);
-    assert!(fixture
-        .registry
-        .health_authorization(&unknown)
-        .unwrap()
-        .is_none());
+    assert!(
+        fixture
+            .registry
+            .health_authorization(&unknown)
+            .unwrap()
+            .is_none()
+    );
 }
 
 #[test]
@@ -336,16 +338,18 @@ fn a_failed_apply_rolls_back_completely_and_preserves_evidence() {
         )
         .unwrap();
 
-    assert!(fixture
-        .registry
-        .apply_health_message(HealthApplyRequest {
-            sender: &node_id,
-            payload: &profile(&local, 1, 1),
-            created_at: BASE_NOW,
-            now: BASE_NOW,
-            message_bytes: 1_327,
-        })
-        .is_err());
+    assert!(
+        fixture
+            .registry
+            .apply_health_message(HealthApplyRequest {
+                sender: &node_id,
+                payload: &profile(&local, 1, 1),
+                created_at: BASE_NOW,
+                now: BASE_NOW,
+                message_bytes: 1_327,
+            })
+            .is_err()
+    );
 
     // Nothing partial survives: no peer row, no replay key, no audit row.
     assert!(fixture.registry.health_peer_states().unwrap().is_empty());

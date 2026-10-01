@@ -1,4 +1,4 @@
-use super::file::{load_tokens_file, parse_tokens_toml, MAX_TOKENS_PER_FILE};
+use super::file::{MAX_TOKENS_PER_FILE, load_tokens_file, parse_tokens_toml};
 use super::types::AuthError;
 use crate::util::entropy;
 use crate::util::hex;

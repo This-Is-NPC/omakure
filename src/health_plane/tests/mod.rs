@@ -5,8 +5,8 @@ use crate::node_identity::NodeIdentity;
 use crate::node_registry::{PeerRegistration, PeerRole, PeerSource};
 
 use serde_json::json;
-use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicI64, Ordering};
 use tempfile::TempDir;
 
 mod fleet;

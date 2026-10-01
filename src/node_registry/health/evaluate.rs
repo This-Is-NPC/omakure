@@ -9,7 +9,7 @@ use crate::domain::health_plane::bounds::{
     REORDER_BUFFER_ENTRIES, SIGNAL_GLOBAL_INBOX_CAPACITY, SIGNAL_INBOX_CAPACITY,
 };
 use crate::domain::health_plane::model::{HealthBody, HealthCode, HealthDecision, HealthKind};
-use rusqlite::{params, OptionalExtension, Transaction};
+use rusqlite::{OptionalExtension, Transaction, params};
 
 pub(super) fn evaluate(
     transaction: &Transaction<'_>,
@@ -351,10 +351,10 @@ fn rate_check(
     }
     match kind {
         HealthKind::Profile if hour_profiles >= MAX_PROFILES_PER_PEER_PER_HOUR => {
-            return Ok(Some(HealthCode::RateLimited))
+            return Ok(Some(HealthCode::RateLimited));
         }
         HealthKind::Signal if minute_signals >= MAX_SIGNALS_PER_PEER_PER_MINUTE => {
-            return Ok(Some(HealthCode::RateLimited))
+            return Ok(Some(HealthCode::RateLimited));
         }
         HealthKind::Pulse
             if state.last_pulse_at.is_some_and(|last_pulse_at| {

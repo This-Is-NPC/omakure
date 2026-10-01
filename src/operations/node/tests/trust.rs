@@ -140,17 +140,19 @@ fn manual_import_update_and_revoke_are_public_and_replay_safe() {
     )
     .unwrap();
     assert_eq!(revoked.state, "revoked");
-    assert!(revoke_peer(
-        &context,
-        &workspace,
-        RevocationRequest {
-            node_id,
-            actor: "operator".into(),
-            reason: "replay".into(),
-            confirmed: true,
-        },
-    )
-    .is_err());
+    assert!(
+        revoke_peer(
+            &context,
+            &workspace,
+            RevocationRequest {
+                node_id,
+                actor: "operator".into(),
+                reason: "replay".into(),
+                confirmed: true,
+            },
+        )
+        .is_err()
+    );
 }
 
 #[test]
@@ -183,10 +185,12 @@ fn revocation_succeeds_with_pending_cleanup_when_runs_storage_is_unavailable() {
     .expect("trust withdrawal must not depend on runs storage");
     assert_eq!(revoked.state, "revoked");
     assert!(revoked.cleanup_pending);
-    assert!(revoked
-        .cleanup_error
-        .as_deref()
-        .is_some_and(|error| error.contains("runs database")));
+    assert!(
+        revoked
+            .cleanup_error
+            .as_deref()
+            .is_some_and(|error| error.contains("runs database"))
+    );
 }
 
 #[test]
@@ -234,9 +238,11 @@ fn revoked_cue_cleanup_reconciles_after_runs_storage_returns() {
 
     let error = reconcile_revoked_cue_runs(&context, &workspace).unwrap_err();
     assert_eq!(error.code, OperationErrorCode::IoFailed);
-    assert!(error
-        .message
-        .starts_with("cannot reconcile revoked Cue runs: Create history dir failed: "));
+    assert!(
+        error
+            .message
+            .starts_with("cannot reconcile revoked Cue runs: Create history dir failed: ")
+    );
 
     fs::remove_file(&history).unwrap();
     fs::rename(&history_backup, &history).unwrap();

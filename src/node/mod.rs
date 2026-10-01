@@ -18,16 +18,16 @@ mod state;
 
 pub use context::NodeContext;
 pub use layout::{
-    default_layout, NodeLayout, NodePathOverrides, NodePlatform, AUTHORITY_KEY_FILE, DATABASE_FILE,
-    IDENTITY_KEY_FILE, IDENTITY_LOCK_FILE, IDENTITY_PUBLIC_FILE, LIFECYCLE_LOCK_FILE,
-    PUBLISHER_KEY_FILE, STATE_NOT_INITIALIZED, TRANSPORT_CERTIFICATE_FILE, TRANSPORT_KEY_FILE,
+    AUTHORITY_KEY_FILE, DATABASE_FILE, IDENTITY_KEY_FILE, IDENTITY_LOCK_FILE, IDENTITY_PUBLIC_FILE,
+    LIFECYCLE_LOCK_FILE, NodeLayout, NodePathOverrides, NodePlatform, PUBLISHER_KEY_FILE,
+    STATE_NOT_INITIALIZED, TRANSPORT_CERTIFICATE_FILE, TRANSPORT_KEY_FILE, default_layout,
 };
-pub(crate) use policy::{read_policy_config, warn_policy_unreadable, PolicyConfig};
-#[cfg(test)]
-pub(crate) use private_token::{set_private_token_fault, PrivateTokenFault};
+pub(crate) use policy::{PolicyConfig, read_policy_config, warn_policy_unreadable};
 pub(crate) use private_token::{
-    PrivateFileCommitStatus, PrivateTokenLease, PRIVATE_TOKEN_TOMBSTONE_RETRY_LIMIT,
+    PRIVATE_TOKEN_TOMBSTONE_RETRY_LIMIT, PrivateFileCommitStatus, PrivateTokenLease,
 };
+#[cfg(test)]
+pub(crate) use private_token::{PrivateTokenFault, set_private_token_fault};
 pub(crate) use security::{is_not_found, write_new_file_atomically};
 pub use state::NodeInitialization;
 

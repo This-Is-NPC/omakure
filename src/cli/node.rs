@@ -4,8 +4,8 @@ use crate::cli::json;
 use crate::domain::NodeConfig;
 use crate::node::{NodeContext, NodeError, NodePathOverrides};
 use crate::operations::node as node_ops;
-use crate::operations::{baseline as baseline_ops, cue as cue_ops};
 use crate::operations::{OperationError, OperationErrorCode, OperationResult};
+use crate::operations::{baseline as baseline_ops, cue as cue_ops};
 use crate::util::hex;
 use std::error::Error;
 use std::fs;
@@ -46,7 +46,7 @@ fn dispatch_cue(
                 return Err(OperationError::new(
                     OperationErrorCode::InvalidInput,
                     error.to_string(),
-                ))
+                ));
             }
         }
     }

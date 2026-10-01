@@ -323,20 +323,22 @@ mod tests {
         let authority = EnrollmentAuthority::create(&context).expect("create");
         let node = format!("omk1_{}", "a".repeat(64));
 
-        assert!(authority
-            .issue(
-                [1u8; crate::enrollment::REQUEST_ID_BYTES],
-                "org".to_string(),
-                node.clone(),
-                node,
-                [2u8; 32],
-                [3u8; 32],
-                [0u8; crate::direct_transport::MAX_CERTIFICATE_BYTES],
-                crate::enrollment::EnrollmentRole::Conductor,
-                vec!["remote-run".to_string()],
-                1_800_000_000,
-                1_800_003_600,
-            )
-            .is_err());
+        assert!(
+            authority
+                .issue(
+                    [1u8; crate::enrollment::REQUEST_ID_BYTES],
+                    "org".to_string(),
+                    node.clone(),
+                    node,
+                    [2u8; 32],
+                    [3u8; 32],
+                    [0u8; crate::direct_transport::MAX_CERTIFICATE_BYTES],
+                    crate::enrollment::EnrollmentRole::Conductor,
+                    vec!["remote-run".to_string()],
+                    1_800_000_000,
+                    1_800_003_600,
+                )
+                .is_err()
+        );
     }
 }

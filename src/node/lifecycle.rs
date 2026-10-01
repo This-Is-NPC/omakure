@@ -1,6 +1,6 @@
+use super::NodeError;
 use super::context::NodeContext;
 use super::layout::LIFECYCLE_LOCK_FILE;
-use super::NodeError;
 use fs2::FileExt;
 use std::fs;
 use std::io;

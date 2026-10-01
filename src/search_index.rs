@@ -2,7 +2,7 @@ use crate::adapters::workspace_repository::FsWorkspaceRepository;
 use crate::ports::ScriptRepository;
 use crate::util::path::logical_relative_path;
 use crate::util::sqlite::WalDatabase;
-use rusqlite::{params, params_from_iter, Connection, TransactionBehavior};
+use rusqlite::{Connection, TransactionBehavior, params, params_from_iter};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -456,9 +456,11 @@ mod tests {
         let index = SearchIndex::new(parent.join("search.sqlite"));
         let error = index.search(tmp.path(), "").unwrap_err();
         assert!(matches!(&error, SearchIndexError::DatabaseOpen(_)));
-        assert!(error
-            .to_string()
-            .starts_with("Create search db folder failed: "));
+        assert!(
+            error
+                .to_string()
+                .starts_with("Create search db folder failed: ")
+        );
     }
 
     #[test]
@@ -474,9 +476,11 @@ mod tests {
                 ..
             }
         ));
-        assert!(error
-            .to_string()
-            .starts_with("Canonicalize search root failed: "));
+        assert!(
+            error
+                .to_string()
+                .starts_with("Canonicalize search root failed: ")
+        );
     }
 
     #[test]
@@ -663,9 +667,10 @@ echo deploying
         // Query all
         let all = index.query("").unwrap();
         assert_eq!(all.len(), 2);
-        assert!(all
-            .iter()
-            .any(|result| result.script_path == Path::new("deploy.sh")));
+        assert!(
+            all.iter()
+                .any(|result| result.script_path == Path::new("deploy.sh"))
+        );
     }
 
     #[test]

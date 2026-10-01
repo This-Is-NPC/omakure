@@ -1,11 +1,11 @@
+use super::DIRECT_ENVELOPE_DOMAIN;
 use super::certificate::TransportCertificate;
 use super::errors::TransportError;
-use super::DIRECT_ENVELOPE_DOMAIN;
 use crate::node_identity::{Bip340Signature, DirectEnvelopePrehash, NodeIdentity};
 use crate::node_registry::PeerState;
 use crate::util::digest::sha256_domain;
 use crate::util::hex;
-use k256::schnorr::{signature::hazmat::PrehashVerifier, Signature, VerifyingKey};
+use k256::schnorr::{Signature, VerifyingKey, signature::hazmat::PrehashVerifier};
 use serde_json::Value;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

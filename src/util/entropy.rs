@@ -1,5 +1,5 @@
-use rand::rngs::OsRng;
 use rand::TryRngCore;
+use rand::rngs::OsRng;
 
 pub fn fill_bytes(bytes: &mut [u8]) {
     OsRng

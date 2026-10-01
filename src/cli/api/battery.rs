@@ -7,10 +7,10 @@ use crate::auth::AuthContext;
 use crate::operations::battery as battery_ops;
 use crate::operations::{OperationError, OperationErrorCode, OperationResult};
 use crate::workspace::Workspace;
+use axum::Extension;
 use axum::body::Body;
 use axum::extract::{Path as AxumPath, RawQuery, State};
 use axum::response::Response;
-use axum::Extension;
 use serde::Deserialize;
 use std::sync::Arc;
 

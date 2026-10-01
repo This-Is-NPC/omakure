@@ -20,8 +20,8 @@
 //! ingest at all.
 
 use crate::direct_transport::{
-    envelope_kind_hint, envelope_nonce, envelope_view, sign_health_envelope, verify_envelope,
-    TransportError, HEALTH_KIND_PREFIX,
+    HEALTH_KIND_PREFIX, TransportError, envelope_kind_hint, envelope_nonce, envelope_view,
+    sign_health_envelope, verify_envelope,
 };
 use crate::health_plane::bounds::{
     ACK_TIMEOUT_SECONDS, CAPABILITY_SIGNAL, MAX_RETRIES, MAX_SIGNALS_PER_PEER_PER_MINUTE,
@@ -30,7 +30,7 @@ use crate::health_plane::bounds::{
 };
 use crate::health_plane::model::{HealthCode, HealthKind, SignalKind, SignalRecord};
 use crate::health_plane::report::{
-    ack_payload, error_payload, run_signal_id, signal_encoded_bytes, signal_payload, HealthReporter,
+    HealthReporter, ack_payload, error_payload, run_signal_id, signal_encoded_bytes, signal_payload,
 };
 use crate::health_plane::{
     HealthClock, HealthPlane, HealthReply, InboundHealthMessage, SystemHealthClock,
@@ -253,7 +253,7 @@ impl<'a> HealthSession<'a> {
                 return HealthOutcome::Failed {
                     kind: kind_text,
                     error: error.to_string(),
-                }
+                };
             }
         };
 

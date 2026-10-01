@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::env;
 use std::fs;
-use usage_artifacts::{compare_file, normalize, write_file, KDL_PATH};
+use usage_artifacts::{KDL_PATH, compare_file, normalize, write_file};
 
 #[path = "usage_artifacts/mod.rs"]
 mod usage_artifacts;

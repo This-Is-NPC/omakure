@@ -18,12 +18,12 @@
 mod support;
 
 use omakure::direct_transport::{
-    sign_probe, unix_seconds, verify_envelope, HandshakeRole, NoiseHandshake, TransportCertificate,
-    TransportSession, ENVELOPE_KIND,
+    ENVELOPE_KIND, HandshakeRole, NoiseHandshake, TransportCertificate, TransportSession,
+    sign_probe, unix_seconds, verify_envelope,
 };
 use omakure::node_identity::NodeIdentity;
 use rusqlite::Connection;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::io::Write;
 use std::net::TcpStream;

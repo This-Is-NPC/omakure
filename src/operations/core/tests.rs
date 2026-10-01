@@ -91,14 +91,16 @@ fn reserved_metadata_is_not_an_executable_subject() {
         }
     }
     write_script(ws.scripts_root(), "installed/job.sh", &[]);
-    assert!(enqueue_run(
-        &ws,
-        EnqueueRunRequest {
-            script: "installed/job".into(),
-            ..cue_request()
-        }
-    )
-    .is_ok());
+    assert!(
+        enqueue_run(
+            &ws,
+            EnqueueRunRequest {
+                script: "installed/job".into(),
+                ..cue_request()
+            }
+        )
+        .is_ok()
+    );
 }
 
 #[cfg(unix)]

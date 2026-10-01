@@ -733,15 +733,17 @@ mod tests {
         fs::write(&binary, b"release payload").unwrap();
         let archive = root.path().join("payload.tar.gz");
         let pack = || {
-            assert!(Command::new("tar")
-                .arg("-czf")
-                .arg(&archive)
-                .arg("-C")
-                .arg(&source)
-                .arg("omakure")
-                .status()
-                .unwrap()
-                .success());
+            assert!(
+                Command::new("tar")
+                    .arg("-czf")
+                    .arg(&archive)
+                    .arg("-C")
+                    .arg(&source)
+                    .arg("omakure")
+                    .status()
+                    .unwrap()
+                    .success()
+            );
         };
         pack();
         let staging = update_staging_in(root.path()).unwrap();
@@ -769,16 +771,20 @@ mod tests {
         symlink(&victim, root.path().join("omakure.new")).unwrap();
         install_binary_unix(&source, &target).unwrap();
         assert_eq!(fs::read_to_string(&victim).unwrap(), "untouched");
-        assert!(fs::symlink_metadata(root.path().join("omakure.new"))
-            .unwrap()
-            .file_type()
-            .is_symlink());
+        assert!(
+            fs::symlink_metadata(root.path().join("omakure.new"))
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
         assert_updated_binary_executes(&target);
-        assert!(!fs::read_dir(root.path()).unwrap().any(|entry| entry
-            .unwrap()
-            .file_name()
-            .to_string_lossy()
-            .starts_with(".omakure-update-")));
+        assert!(!fs::read_dir(root.path()).unwrap().any(|entry| {
+            entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .starts_with(".omakure-update-")
+        }));
     }
 
     #[cfg(unix)]
@@ -906,20 +912,24 @@ mod tests {
         // Missing target forces a real File.Replace failure. Use a PID outside
         // the normal process range without overflowing PowerShell's Int32.
         let script = windows_replace_script(staging.path(), &staged, &target, i32::MAX as u32);
-        assert!(!Command::new("powershell")
-            .args(["-NoProfile", "-Command", &script])
-            .status()
-            .unwrap()
-            .success());
+        assert!(
+            !Command::new("powershell")
+                .args(["-NoProfile", "-Command", &script])
+                .status()
+                .unwrap()
+                .success()
+        );
         assert_eq!(fs::read_to_string(&backup).unwrap(), "recovery marker");
         assert_eq!(fs::read_to_string(&staged).unwrap(), "new");
         fs::remove_file(&backup).unwrap();
         fs::write(&target, "old").unwrap();
-        assert!(Command::new("powershell")
-            .args(["-NoProfile", "-Command", &script])
-            .status()
-            .unwrap()
-            .success());
+        assert!(
+            Command::new("powershell")
+                .args(["-NoProfile", "-Command", &script])
+                .status()
+                .unwrap()
+                .success()
+        );
         assert_eq!(fs::read_to_string(&target).unwrap(), "new");
         assert!(!staging.path().exists());
     }
@@ -945,11 +955,13 @@ mod tests {
              }}",
             ps_quote(&staging.path().display().to_string()),
         );
-        assert!(Command::new("powershell")
-            .args(["-NoProfile", "-Command", &script])
-            .status()
-            .unwrap()
-            .success());
+        assert!(
+            Command::new("powershell")
+                .args(["-NoProfile", "-Command", &script])
+                .status()
+                .unwrap()
+                .success()
+        );
         assert_eq!(
             fs::read_to_string(staging.path().join("marker")).unwrap(),
             "owned"
@@ -966,12 +978,14 @@ mod tests {
         );
         assert!(script.contains("[IO.File]::Replace("));
         assert!(script.contains("'C:/owned''s staging/replacement'"));
-        assert!(script.contains(&ps_quote(
-            &Path::new("C:/owned's staging")
-                .join("backup")
-                .display()
-                .to_string()
-        )));
+        assert!(
+            script.contains(&ps_quote(
+                &Path::new("C:/owned's staging")
+                    .join("backup")
+                    .display()
+                    .to_string()
+            ))
+        );
         assert!(script.contains("Remove-Item -LiteralPath 'C:/owned''s staging'"));
         assert!(!script.contains("Move-Item"));
         assert!(!script.contains("finally"));

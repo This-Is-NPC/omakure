@@ -1,4 +1,4 @@
-use super::audit::{record_audit, AuditInput};
+use super::audit::{AuditInput, record_audit};
 use super::error::RegistryError;
 #[cfg(test)]
 use super::fields::validate_registration;
@@ -16,9 +16,9 @@ use super::types::{
     PeerCounts, PeerRecord, PeerRole, PeerSource, PeerState, RevocationRecord, TransportPeer,
 };
 use super::validate::sqlite_validation_error;
-use super::{NodeRegistry, MAX_REASON_BYTES};
+use super::{MAX_REASON_BYTES, NodeRegistry};
 use crate::node_identity::node_id_for_x_only_public_key;
-use rusqlite::{params, OptionalExtension, Row, Transaction, TransactionBehavior};
+use rusqlite::{OptionalExtension, Row, Transaction, TransactionBehavior, params};
 use serde_json::Value;
 
 impl NodeRegistry {

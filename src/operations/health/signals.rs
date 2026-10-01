@@ -1,9 +1,9 @@
+use crate::health_plane::HealthPlane;
 use crate::health_plane::bounds::{SIGNAL_INBOX_CAPACITY, SIGNAL_RETENTION_SECONDS};
 use crate::health_plane::model::SignalRecord;
-use crate::health_plane::HealthPlane;
 use crate::node_registry::NodeRegistry;
-use crate::operations::node::map_registry_error;
 use crate::operations::OperationResult;
+use crate::operations::node::map_registry_error;
 use serde::Serialize;
 use std::collections::HashSet;
 

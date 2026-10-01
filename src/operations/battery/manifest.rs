@@ -6,7 +6,7 @@ use super::path_safety::{
     reject_unsafe_relative_path,
 };
 use crate::domain::{extract_schema_block, parse_schema};
-use crate::runtime::{script_kind, ScriptKind};
+use crate::runtime::{ScriptKind, script_kind};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;

@@ -108,11 +108,13 @@ fn comparator_reports_missing_case_and_envelope_variants() {
     }
     let schema = comparison_schema();
     let value = serde_json::json!({"status": "ok", "id": "same", "created_at": "now"});
-    assert!(compare_observables_for_case(
-        &schema,
-        "fixture.success",
-        &value,
-        &serde_json::json!({"transport": true})
-    )
-    .is_err());
+    assert!(
+        compare_observables_for_case(
+            &schema,
+            "fixture.success",
+            &value,
+            &serde_json::json!({"transport": true})
+        )
+        .is_err()
+    );
 }

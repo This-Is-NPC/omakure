@@ -11,10 +11,12 @@ fn pure_health_reads_succeed_while_writer_is_reserved() {
         .unwrap();
 
     assert!(fixture.registry.health_fleet_snapshot(BASE_NOW).is_ok());
-    assert!(fixture
-        .registry
-        .health_node_snapshot(&node_id, BASE_NOW)
-        .is_ok());
+    assert!(
+        fixture
+            .registry
+            .health_node_snapshot(&node_id, BASE_NOW)
+            .is_ok()
+    );
     assert!(fixture.registry.health_signal_feed(16, BASE_NOW).is_ok());
 
     writer_transaction.rollback().unwrap();

@@ -1,11 +1,11 @@
-use super::certificate::{certificate_payload, parse_certificate_payload, TransportCertificate};
+use super::certificate::{TransportCertificate, certificate_payload, parse_certificate_payload};
 use super::errors::TransportError;
 use super::frame::Frame;
 use super::session::TransportSession;
 use super::x25519::{x25519_probe, x25519_public_from_private};
 use super::{HANDSHAKE_KIND, MAX_HANDSHAKE_MESSAGE_BYTES, NOISE_NAME, PROLOGUE};
 use crate::util::entropy;
-use snow::{params::NoiseParams, Builder, HandshakeState};
+use snow::{Builder, HandshakeState, params::NoiseParams};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HandshakeRole {

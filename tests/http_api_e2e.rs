@@ -1,6 +1,6 @@
 mod support;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::fs;
 use std::path::Path;
 use std::process::Output;
@@ -261,11 +261,13 @@ fn http_route_inventory_maps_all_current_router_entries() {
         notes, from_source,
         "HTTP_ROUTE_COVERAGE_NOTES must match HTTP_ROUTE_INVENTORY in src/inventory/routes.rs"
     );
-    assert!(HTTP_ROUTE_COVERAGE_NOTES
-        .iter()
-        .all(|(_, coverage)| match coverage {
-            RouteCoverage::Covered(note) => !note.trim().is_empty(),
-        }));
+    assert!(
+        HTTP_ROUTE_COVERAGE_NOTES
+            .iter()
+            .all(|(_, coverage)| match coverage {
+                RouteCoverage::Covered(note) => !note.trim().is_empty(),
+            })
+    );
 }
 
 fn parse_http_route_inventory_from_source() -> Vec<(&'static str, &'static str)> {
@@ -630,10 +632,12 @@ fn scripts_search_tree_family_routes() {
 
     let content = server.get("/v1/scripts/tools/job.sh/content");
     assert_eq!(content.status, 200, "body: {}", content.safe_body());
-    assert!(content.json()["data"]["content"]
-        .as_str()
-        .unwrap_or("")
-        .contains("OMAKURE_SCHEMA_START"));
+    assert!(
+        content.json()["data"]["content"]
+            .as_str()
+            .unwrap_or("")
+            .contains("OMAKURE_SCHEMA_START")
+    );
 
     let search = server.get("/v1/search?q=job");
     assert_eq!(search.status, 200, "body: {}", search.safe_body());
@@ -1003,11 +1007,13 @@ fn batteries_family_routes() {
 
     let scripts = server.get("/v1/batteries/fixture/scripts");
     assert_eq!(scripts.status, 200, "body: {}", scripts.safe_body());
-    assert!(scripts.json()["data"]
-        .as_array()
-        .expect("battery scripts")
-        .iter()
-        .any(|entry| entry["id"] == "local.echo"));
+    assert!(
+        scripts.json()["data"]
+            .as_array()
+            .expect("battery scripts")
+            .iter()
+            .any(|entry| entry["id"] == "local.echo")
+    );
 
     #[cfg(unix)]
     {
@@ -1283,9 +1289,11 @@ fn node_management_routes_use_shared_operations_and_exact_scopes() {
             .len(),
         64
     );
-    assert!(status.json()["data"]["identity"]
-        .get("private_key")
-        .is_none());
+    assert!(
+        status.json()["data"]["identity"]
+            .get("private_key")
+            .is_none()
+    );
 
     let peer = json!({
         "node_id": "omk1_71319375521da1a36e37088c56b0e957043cc8459de4d0a54642e5e0b2443a92",
@@ -1299,10 +1307,12 @@ fn node_management_routes_use_shared_operations_and_exact_scopes() {
     let not_confirmed = server.post_json("/v1/node/peers", &peer);
     assert_eq!(not_confirmed.status, 403);
     assert_error_code(&not_confirmed.json(), "forbidden");
-    assert!(server.get("/v1/node/peers").json()["data"]
-        .as_array()
-        .unwrap()
-        .is_empty());
+    assert!(
+        server.get("/v1/node/peers").json()["data"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
 
     let mut confirmed_peer = peer.clone();
     confirmed_peer["confirmed"] = json!(true);
@@ -1427,10 +1437,12 @@ fn node_management_routes_use_shared_operations_and_exact_scopes() {
         "body: {}",
         after_revoke.safe_body()
     );
-    assert!(after_revoke.json()["data"]["nodes"]
-        .as_array()
-        .unwrap()
-        .is_empty());
+    assert!(
+        after_revoke.json()["data"]["nodes"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
     assert_eq!(after_revoke.json()["data"]["presence"]["total"], 0);
     assert_eq!(after_revoke.json()["data"]["baselines"]["total"], 0);
 

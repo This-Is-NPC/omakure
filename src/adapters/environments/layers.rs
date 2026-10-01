@@ -1,5 +1,5 @@
 use super::values::{expand_env_value, should_mask_env_value, strip_quotes};
-use super::{load_active_env_name, FsEnvironmentRepository, MASKED_ENV_VALUE};
+use super::{FsEnvironmentRepository, MASKED_ENV_VALUE, load_active_env_name};
 use crate::error::{AppResult, EnvironmentError};
 use std::collections::HashMap;
 use std::fs;

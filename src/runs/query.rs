@@ -1,6 +1,6 @@
-use super::state::{RunState, RunStateSet, RunTrigger};
 use super::RunsError;
-use rusqlite::{params, params_from_iter, Connection, OptionalExtension};
+use super::state::{RunState, RunStateSet, RunTrigger};
+use rusqlite::{Connection, OptionalExtension, params, params_from_iter};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

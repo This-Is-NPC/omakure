@@ -576,8 +576,7 @@ mod helper_tests {
     use super::*;
     #[test]
     fn fragment_anchors_include_headings_and_explicit_ids() {
-        let document =
-            "# Intro\n## How to Run\n<a id=\"custom-section\"></a>\n<a name='legacy-section'></a>\n";
+        let document = "# Intro\n## How to Run\n<a id=\"custom-section\"></a>\n<a name='legacy-section'></a>\n";
         assert_anchor_exists(document, "how-to-run", "guide.md#how-to-run");
         assert_anchor_exists(document, "custom-section", "guide.md#custom-section");
         assert_anchor_exists(document, "legacy-section", "guide.md#legacy-section");

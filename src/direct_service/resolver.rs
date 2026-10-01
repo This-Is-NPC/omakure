@@ -1,17 +1,17 @@
 use super::stream::time_until;
 use super::{RESOLVER_CONCURRENCY, RESOLVER_QUEUE_CAPACITY};
 use crate::direct_transport::TransportError;
+use hickory_resolver::TokioResolver;
 use hickory_resolver::config::ResolverConfig;
 use hickory_resolver::name_server::TokioConnectionProvider;
-use hickory_resolver::TokioResolver;
 use std::io;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{sync_channel, SyncSender};
+use std::sync::mpsc::{SyncSender, sync_channel};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
-use tokio::sync::{mpsc, oneshot, Semaphore};
+use tokio::sync::{Semaphore, mpsc, oneshot};
 use tokio::task::JoinSet;
 
 #[derive(Debug)]
@@ -150,7 +150,7 @@ impl Resolver {
                 Ok(result) => return result.map_err(|_| TransportError::Internal),
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                    return Err(TransportError::Internal)
+                    return Err(TransportError::Internal);
                 }
             }
         }

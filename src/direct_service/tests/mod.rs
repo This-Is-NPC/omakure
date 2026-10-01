@@ -4,17 +4,17 @@ use super::baseline::{
 };
 use super::connection::{ConnectionDirection, ConnectionState};
 use super::cue::{
-    resolve_cue_id, CueAckMatch, CueDispatchOutcome, CueDispatcher, OutboundCue, PendingCue,
+    CueAckMatch, CueDispatchOutcome, CueDispatcher, OutboundCue, PendingCue, resolve_cue_id,
 };
 use super::dial::{connect_and_hold, retry_backoff};
 use super::error::DirectServiceError;
 use super::outbox::{dispatch_answer_deadline, dispatch_client_timeout};
-use super::resolver::{Resolver, ACTIVE_RESOLVER_TASKS, ACTIVE_RESOLVER_WORKERS};
+use super::resolver::{ACTIVE_RESOLVER_TASKS, ACTIVE_RESOLVER_WORKERS, Resolver};
 use super::session::error_to_transport;
 use super::status::{StaticPeer, TransportStatus};
 use super::stream::{deadline_timeout, initiator_deadline, read_frame, transfer_until};
 use super::*;
-use crate::direct_transport::{unix_seconds, Frame, TransportError};
+use crate::direct_transport::{Frame, TransportError, unix_seconds};
 use crate::node::NodeContext;
 use crate::node_identity::NodeIdentity;
 use crate::node_registry::NodeRegistry;

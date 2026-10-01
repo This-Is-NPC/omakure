@@ -307,7 +307,7 @@ impl<'registry> HealthPlane<'registry> {
                     code,
                     byte_count,
                     now,
-                )
+                );
             }
         };
 

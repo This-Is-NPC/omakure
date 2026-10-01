@@ -265,10 +265,12 @@ async fn tree_and_content_endpoints_return_safe_browsing_data() {
     assert_eq!(content.status(), StatusCode::OK);
     let content_body = response_json(content).await;
     assert_eq!(content_body["data"]["relative_path"], "tools/job.sh");
-    assert!(content_body["data"]["content"]
-        .as_str()
-        .unwrap()
-        .contains("echo ok"));
+    assert!(
+        content_body["data"]["content"]
+            .as_str()
+            .unwrap()
+            .contains("echo ok")
+    );
 }
 
 #[tokio::test]

@@ -1,7 +1,7 @@
-use crate::domain::{extract_schema_block, parse_schema, Schema};
+use crate::domain::{Schema, extract_schema_block, parse_schema};
 use crate::error::{AppResult, ScriptError};
 use crate::ports::{ScriptRepository, WorkspaceEntry, WorkspaceEntryKind};
-use crate::runtime::{script_kind, ScriptKind};
+use crate::runtime::{ScriptKind, script_kind};
 
 use std::fs;
 use std::io;

@@ -2,7 +2,7 @@ use super::ack::verified_ack;
 use super::connection::ConnectionState;
 use super::error::DirectServiceError;
 use super::outbox::dispatch_answer_deadline;
-use crate::direct_transport::{unix_seconds, TransportError};
+use crate::direct_transport::{TransportError, unix_seconds};
 use crate::node_identity::NodeIdentity;
 use crate::util::entropy;
 use crate::util::hex;

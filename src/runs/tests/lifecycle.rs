@@ -170,9 +170,11 @@ fn cue_revocation_failure_is_atomic_and_is_not_reported_as_cleanup_success() {
             ..
         }
     ));
-    assert!(error
-        .to_string()
-        .contains("injected Cue cancellation failure"));
+    assert!(
+        error
+            .to_string()
+            .contains("injected Cue cancellation failure")
+    );
     assert_eq!(
         get_run(&conn, &running.run_id).unwrap().unwrap().state,
         RunState::Running
@@ -483,7 +485,10 @@ fn dead_letter_only_succeeds_on_failed_or_timed_out() {
         &err,
         RunsError::DeadLetterIneligible(RunState::Completed)
     ));
-    assert_eq!(err.to_string(), "cannot promote run in state 'completed' to dead_letter; only failed or timed_out rows are eligible");
+    assert_eq!(
+        err.to_string(),
+        "cannot promote run in state 'completed' to dead_letter; only failed or timed_out rows are eligible"
+    );
 
     let _ = fs::remove_dir_all(ws.root());
 }
@@ -496,9 +501,11 @@ fn dead_letter_only_succeeds_on_failed_or_timed_out() {
 fn claim_next_returns_none_when_empty() {
     let ws = scratch_workspace("claim_empty");
     let conn = open(&ws).expect("open");
-    assert!(claim_next(&conn, "w", &ClaimFilters::default())
-        .unwrap()
-        .is_none());
+    assert!(
+        claim_next(&conn, "w", &ClaimFilters::default())
+            .unwrap()
+            .is_none()
+    );
     let _ = fs::remove_dir_all(ws.root());
 }
 
@@ -671,9 +678,11 @@ fn claim_next_does_not_reclaim_fresh_lease() {
     // Claim once with worker A, leaving a fresh lease in the future.
     claim_next(&conn, "A", &ClaimFilters::default()).unwrap();
     // Worker B must NOT be able to steal it.
-    assert!(claim_next(&conn, "B", &ClaimFilters::default())
-        .unwrap()
-        .is_none());
+    assert!(
+        claim_next(&conn, "B", &ClaimFilters::default())
+            .unwrap()
+            .is_none()
+    );
     // The original row must still be owned by A.
     let loaded = get_run(&conn, &row.run_id).unwrap().unwrap();
     assert_eq!(loaded.worker_id.as_deref(), Some("A"));

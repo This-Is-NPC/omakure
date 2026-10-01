@@ -1,6 +1,6 @@
 //! Real node, baseline and enrollment paired adapter probes.
 
-use super::{evidence, BehavioralContext, ProbeEvidence};
+use super::{BehavioralContext, ProbeEvidence, evidence};
 use omakure::baseline::SignedBaselineManifest;
 use omakure::baseline_push::BaselinePush;
 use omakure::discovery::Beacon;
@@ -10,7 +10,7 @@ use omakure::node_identity::NodeIdentity;
 use omakure::node_transport::LocalTransport;
 use omakure::operations::baseline::RetainedBaseline;
 use omakure::operations::node as node_ops;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::fs;
 use std::net::UdpSocket;
 #[cfg(unix)]

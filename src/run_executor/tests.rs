@@ -1,6 +1,6 @@
 use super::admission::parse_args_json;
 #[cfg(unix)]
-use super::environment::{bash_safe_current_exe, write_redaction_file, RedactionFileError};
+use super::environment::{RedactionFileError, bash_safe_current_exe, write_redaction_file};
 use super::*;
 #[cfg(unix)]
 use crate::adapters::environments::resolve_run_env;
@@ -42,11 +42,13 @@ fn queued_subject_replaced_with_metadata_symlink_is_not_executed() {
 
     let result = execute_with_heartbeat(&ws, &row, vec![], None);
     assert_eq!(result.terminal, ExecutionTerminal::Errored);
-    assert!(result
-        .completion
-        .error
-        .unwrap()
-        .contains("reserved workspace metadata"));
+    assert!(
+        result
+            .completion
+            .error
+            .unwrap()
+            .contains("reserved workspace metadata")
+    );
     assert!(result.completion.stdout.is_empty());
 }
 
@@ -91,11 +93,13 @@ fn a_cue_run_refuses_a_script_that_changed_after_it_was_authorized() {
         "the substituted script must not have run at all, got: {:?}",
         swapped.completion.stdout
     );
-    assert!(swapped
-        .completion
-        .error
-        .unwrap_or_default()
-        .contains("changed after this remote run was authorized"));
+    assert!(
+        swapped
+            .completion
+            .error
+            .unwrap_or_default()
+            .contains("changed after this remote run was authorized")
+    );
     let _ = fs::remove_dir_all(ws.root());
 }
 
@@ -325,11 +329,13 @@ printf '%s\n' "$OMAKURE_REDACT_SECRETS_FILE"
         None,
     );
     assert_eq!(blocked.terminal, ExecutionTerminal::Errored);
-    assert!(blocked
-        .completion
-        .error
-        .as_deref()
-        .is_some_and(|error| error.starts_with("create redaction dir failed: ")));
+    assert!(
+        blocked
+            .completion
+            .error
+            .as_deref()
+            .is_some_and(|error| error.starts_with("create redaction dir failed: "))
+    );
     assert!(blocked.completion.stdout.is_empty());
     fs::remove_file(ws.history_dir()).unwrap();
     fs::rename(history_backup, ws.history_dir()).unwrap();
@@ -551,12 +557,14 @@ fn execute_returns_errored_when_script_missing() {
 
     let result = execute_with_heartbeat(&ws, &row, vec![], None);
     assert_eq!(result.terminal, ExecutionTerminal::Errored);
-    assert!(result
-        .completion
-        .error
-        .as_deref()
-        .unwrap_or("")
-        .contains("script not found"));
+    assert!(
+        result
+            .completion
+            .error
+            .as_deref()
+            .unwrap_or("")
+            .contains("script not found")
+    );
     let _ = fs::remove_dir_all(ws.root());
 }
 
@@ -615,12 +623,14 @@ echo done"#,
 
     let result = execute_with_heartbeat(&ws, &row, vec![], None);
     assert_eq!(result.terminal, ExecutionTerminal::Failed);
-    assert!(result
-        .completion
-        .error
-        .as_deref()
-        .unwrap_or("")
-        .contains("required field"));
+    assert!(
+        result
+            .completion
+            .error
+            .as_deref()
+            .unwrap_or("")
+            .contains("required field")
+    );
     let _ = fs::remove_dir_all(ws.root());
 }
 

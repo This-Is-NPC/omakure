@@ -1,15 +1,15 @@
+use super::NodeError;
 #[cfg(unix)]
 use super::fs_unix::{owner_policy, validate_open_file_identity};
 #[cfg(windows)]
 use super::fs_windows::{validate_open_file_identity, validate_windows_security_handle};
 use super::layout::{
-    default_layout, paths_overlap, validate_absolute_path, NodeLayout, NodePathOverrides,
-    NodePlatform, NODE_CONFIG_ENV, NODE_STATE_DIR_ENV, NODE_TEST_MODE_ENV,
+    NODE_CONFIG_ENV, NODE_STATE_DIR_ENV, NODE_TEST_MODE_ENV, NodeLayout, NodePathOverrides,
+    NodePlatform, default_layout, paths_overlap, validate_absolute_path,
 };
 #[cfg(not(unix))]
 use super::security::owner_policy;
 use super::security::{ensure_safe_parent_if_present, validate_file_security_metadata};
-use super::NodeError;
 use crate::node_identity::NodeIdentityStatus;
 use crate::node_registry::{NodeRegistry, RegistryError};
 use std::env;
@@ -192,7 +192,7 @@ impl NodeContext {
                 return Err(NodeError::InsecurePath(format!(
                     "{} could not be opened securely",
                     path.display()
-                )))
+                )));
             }
         };
         let metadata = file.metadata()?;

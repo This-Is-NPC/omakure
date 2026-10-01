@@ -106,9 +106,11 @@ fn deferred_corrupt_health_cleanup_keeps_newer_replacements_without_audit() {
             }
         )
     }));
-    assert!(corrupt
-        .iter()
-        .any(|row| { matches!(row.identity, CorruptHealthIdentity::Pulse { sequence: 1 }) }));
+    assert!(
+        corrupt
+            .iter()
+            .any(|row| { matches!(row.identity, CorruptHealthIdentity::Pulse { sequence: 1 }) })
+    );
     drop(connection);
 
     // These writes happen after observation but before deferred cleanup.
@@ -143,12 +145,14 @@ fn deferred_corrupt_health_cleanup_keeps_newer_replacements_without_audit() {
         .unwrap();
     assert_eq!(profile_revision, 2);
     assert_eq!(sequence, 2);
-    assert!(fixture
-        .registry
-        .health_audit_events(100)
-        .unwrap()
-        .iter()
-        .all(|event| event.event_code != "corrupt_row"));
+    assert!(
+        fixture
+            .registry
+            .health_audit_events(100)
+            .unwrap()
+            .iter()
+            .all(|event| event.event_code != "corrupt_row")
+    );
 }
 
 #[test]

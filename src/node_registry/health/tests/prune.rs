@@ -81,11 +81,13 @@ fn pruning_enforces_signal_replay_and_audit_retention() {
     let report = fixture.registry.health_prune(later).unwrap();
     assert_eq!(report.expired_signals, 1);
     assert!(report.expired_replay_keys >= 1);
-    assert!(fixture
-        .registry
-        .health_signals(&node_id, 64, later)
-        .unwrap()
-        .is_empty());
+    assert!(
+        fixture
+            .registry
+            .health_signals(&node_id, 64, later)
+            .unwrap()
+            .is_empty()
+    );
 
     // The replay security floor keeps young keys even past their retention.
     apply(

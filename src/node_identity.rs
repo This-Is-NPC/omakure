@@ -1,7 +1,7 @@
 use crate::domain::NODE_ID_PREFIX;
 use crate::node::{
-    write_new_file_atomically, NodeContext, NodeError, DATABASE_FILE, IDENTITY_KEY_FILE,
-    IDENTITY_LOCK_FILE, IDENTITY_PUBLIC_FILE, LIFECYCLE_LOCK_FILE, STATE_NOT_INITIALIZED,
+    DATABASE_FILE, IDENTITY_KEY_FILE, IDENTITY_LOCK_FILE, IDENTITY_PUBLIC_FILE,
+    LIFECYCLE_LOCK_FILE, NodeContext, NodeError, STATE_NOT_INITIALIZED, write_new_file_atomically,
 };
 use crate::node_key::{KeyFileError, PRIVATE_KEY_BYTES};
 use crate::node_registry::RegistryError;
@@ -9,7 +9,7 @@ use crate::util::digest::sha256_domain;
 use crate::util::hex;
 use fs2::FileExt;
 use k256::elliptic_curve::Generate;
-use k256::schnorr::{signature::hazmat::PrehashSigner, Signature, SigningKey};
+use k256::schnorr::{Signature, SigningKey, signature::hazmat::PrehashSigner};
 use std::fs;
 use std::io;
 use std::path::Path;
@@ -386,7 +386,7 @@ mod tests {
     use crate::test_support::node_context;
 
     #[cfg(debug_assertions)]
-    use k256::schnorr::{signature::hazmat::PrehashVerifier, VerifyingKey};
+    use k256::schnorr::{VerifyingKey, signature::hazmat::PrehashVerifier};
     use serde::Deserialize;
     #[cfg(debug_assertions)]
     use std::sync::Arc;
@@ -563,7 +563,7 @@ mod tests {
     #[cfg(all(unix, debug_assertions))]
     #[test]
     fn insecure_permissions_and_symlinks_fail_closed() {
-        use std::os::unix::fs::{symlink, PermissionsExt};
+        use std::os::unix::fs::{PermissionsExt, symlink};
         let tmp = tempfile::TempDir::new().unwrap();
         let context = node_context(tmp.path());
         context.ensure_state_directory().unwrap();
@@ -633,9 +633,11 @@ mod tests {
             history.join("runs.sqlite"),
         ] {
             let contents = fs::read(path).unwrap();
-            assert!(!contents
-                .windows(private.len())
-                .any(|window| window == private));
+            assert!(
+                !contents
+                    .windows(private.len())
+                    .any(|window| window == private)
+            );
         }
         assert_eq!(identity.public_status().public_key_hex.len(), 64);
         assert!(hex::is_lower(&identity.public_status().public_key_hex));

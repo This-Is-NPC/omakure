@@ -119,11 +119,13 @@ fn write_file_atomic_does_not_follow_predictable_temp_symlink() {
 
     assert_eq!(fs::read_to_string(&target).unwrap(), "TOKEN=secret\n");
     assert_eq!(fs::read_to_string(&outside).unwrap(), "outside=original\n");
-    assert!(old_predictable_tmp
-        .symlink_metadata()
-        .unwrap()
-        .file_type()
-        .is_symlink());
+    assert!(
+        old_predictable_tmp
+            .symlink_metadata()
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
 }
 
 #[rstest]

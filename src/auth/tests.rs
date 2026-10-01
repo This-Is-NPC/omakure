@@ -1,5 +1,5 @@
-use super::bearer::{authenticate_against_file, verify_argon2, ARGON2_VERIFY_COUNT};
-use super::token::{selector_token_plaintext, PLAINTEXT_BYTES};
+use super::bearer::{ARGON2_VERIFY_COUNT, authenticate_against_file, verify_argon2};
+use super::token::{PLAINTEXT_BYTES, selector_token_plaintext};
 use super::*;
 use std::fs;
 use std::path::Path;
@@ -62,11 +62,11 @@ scopes = ["*"]
 fn parse_rejects_unknown_top_level_and_token_fields() {
     let hash = hash_token(&test_token_plaintext("ci")).unwrap();
     let top_level = format!(
-            "version = 1\nunknown = true\n[[tokens]]\nid = \"ci\"\nhash = \"{hash}\"\nscopes = [\"*\"]\n"
-        );
+        "version = 1\nunknown = true\n[[tokens]]\nid = \"ci\"\nhash = \"{hash}\"\nscopes = [\"*\"]\n"
+    );
     let entry = format!(
-            "version = 1\n[[tokens]]\nid = \"ci\"\nhash = \"{hash}\"\nscopes = [\"*\"]\nunknown = true\n"
-        );
+        "version = 1\n[[tokens]]\nid = \"ci\"\nhash = \"{hash}\"\nscopes = [\"*\"]\nunknown = true\n"
+    );
 
     for (field, text) in [("top-level", top_level), ("entry", entry)] {
         let err = parse_tokens_toml(&text).unwrap_err();
@@ -352,10 +352,12 @@ enabled = true
     assert!(!local_error.contains(source_canary));
     let after = auth.status();
     assert_eq!(after.last_reload_ok, Some(false));
-    assert!(after
-        .last_reload_error
-        .as_deref()
-        .is_some_and(|e| !e.is_empty()));
+    assert!(
+        after
+            .last_reload_error
+            .as_deref()
+            .is_some_and(|e| !e.is_empty())
+    );
     assert!(after.last_reload_at_ms.is_some());
     assert_eq!(after.token_count, 1);
     assert!(auth.authenticate(&plaintext).is_some());
@@ -491,9 +493,11 @@ fn concurrent_process_appends_do_not_lose_updates() {
     let tokens = load_tokens_file(&path).unwrap();
     assert_eq!(tokens.len(), 6);
     for index in 0..6 {
-        assert!(tokens
-            .iter()
-            .any(|token| token.id == format!("process-{index}")));
+        assert!(
+            tokens
+                .iter()
+                .any(|token| token.id == format!("process-{index}"))
+        );
     }
 }
 

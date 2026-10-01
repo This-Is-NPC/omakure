@@ -4,9 +4,9 @@
 //! `Cli::command()` so it cannot drift from `--help`.
 
 use crate::cli::json::{self, SCHEMA_VERSION};
-use crate::inventory::{command_inventory, InventoryCommand, InventoryOption};
+use crate::inventory::{InventoryCommand, InventoryOption, command_inventory};
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::error::Error;
 
@@ -338,30 +338,36 @@ mod tests {
             .iter()
             .find(|command| command.name == "baseline")
             .unwrap();
-        assert!(baseline
-            .subcommands
-            .iter()
-            .any(|command| command.id == "node baseline publish"));
+        assert!(
+            baseline
+                .subcommands
+                .iter()
+                .any(|command| command.id == "node baseline publish")
+        );
 
         let enroll = node
             .subcommands
             .iter()
             .find(|command| command.name == "enroll")
             .unwrap();
-        assert!(enroll
-            .subcommands
-            .iter()
-            .any(|command| command.id == "node enroll approve"));
+        assert!(
+            enroll
+                .subcommands
+                .iter()
+                .any(|command| command.id == "node enroll approve")
+        );
 
         let authority = node
             .subcommands
             .iter()
             .find(|command| command.name == "authority")
             .unwrap();
-        assert!(authority
-            .subcommands
-            .iter()
-            .any(|command| command.id == "node authority issue"));
+        assert!(
+            authority
+                .subcommands
+                .iter()
+                .any(|command| command.id == "node authority issue")
+        );
     }
 
     #[test]
@@ -377,10 +383,11 @@ mod tests {
             .iter()
             .find(|command| command.name == "add")
             .unwrap();
-        assert!(add
-            .flags
-            .iter()
-            .any(|flag| flag.long.as_deref() == Some("run-id")));
+        assert!(
+            add.flags
+                .iter()
+                .any(|flag| flag.long.as_deref() == Some("run-id"))
+        );
 
         let battery = payload
             .verbs
@@ -392,10 +399,11 @@ mod tests {
             .iter()
             .find(|command| command.name == "add")
             .unwrap();
-        assert!(add
-            .flags
-            .iter()
-            .any(|flag| flag.long.as_deref() == Some("token-ref")));
+        assert!(
+            add.flags
+                .iter()
+                .any(|flag| flag.long.as_deref() == Some("token-ref"))
+        );
     }
 
     #[test]
@@ -411,10 +419,12 @@ mod tests {
             .iter()
             .find(|command| command.name == "worker")
             .unwrap();
-        assert!(!worker
-            .flags
-            .iter()
-            .any(|flag| flag.long.as_deref() == Some("once")));
+        assert!(
+            !worker
+                .flags
+                .iter()
+                .any(|flag| flag.long.as_deref() == Some("once"))
+        );
     }
 
     #[test]

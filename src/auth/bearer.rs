@@ -1,8 +1,8 @@
 use super::token::{PLAINTEXT_BYTES, TOKEN_PREFIX};
 use super::types::{AuthContext, TokenRecord};
 use crate::util::hex;
-use argon2::password_hash::{PasswordHash, PasswordVerifier};
 use argon2::Argon2;
+use argon2::password_hash::{PasswordHash, PasswordVerifier};
 
 #[cfg(test)]
 thread_local! {

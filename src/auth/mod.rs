@@ -17,13 +17,13 @@ mod tests;
 
 pub use append::append_token_entry;
 #[cfg(test)]
-pub use file::{load_tokens_file, parse_tokens_toml, MAX_TOKENS_PER_FILE};
+pub use file::{MAX_TOKENS_PER_FILE, load_tokens_file, parse_tokens_toml};
 pub use reload::install_sighup_reload;
 pub use token::generate_token;
 #[cfg(test)]
 pub use token::test_token_plaintext;
 #[cfg(test)]
-pub use token::{format_toml_entry, hash_token, TOKEN_PREFIX};
+pub use token::{TOKEN_PREFIX, format_toml_entry, hash_token};
 #[cfg(test)]
 pub use types::TokenRecord;
 pub use types::{AuthContext, AuthError, AuthStatus, Authenticator};

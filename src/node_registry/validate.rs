@@ -2,7 +2,7 @@ use super::audit::audit_from_row;
 use super::error::RegistryError;
 use super::fields::{validate_bounded_text, validate_node_id, validate_timestamp};
 use super::peers::{peer_from_row, revocation_from_row};
-use super::{NodeRegistry, HEALTH_PLANE_ENABLED, MAX_REASON_BYTES, SCHEMA_VERSION};
+use super::{HEALTH_PLANE_ENABLED, MAX_REASON_BYTES, NodeRegistry, SCHEMA_VERSION};
 use rusqlite::Connection;
 
 pub(super) fn validate_schema(

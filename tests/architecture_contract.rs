@@ -650,28 +650,36 @@ fn production_architecture_boundaries_are_clean() {
         "src/cli/run/mod.rs",
         &fs::read_to_string(src.join("cli/run/mod.rs")).unwrap(),
     );
-    assert!(direct
-        .findings
-        .iter()
-        .all(|finding| finding.rule != "ARCH-EXECUTOR-CONVERGENCE"));
-    assert!(direct
-        .executor_calls
-        .iter()
-        .any(|call| call == "execute_with_heartbeat"));
+    assert!(
+        direct
+            .findings
+            .iter()
+            .all(|finding| finding.rule != "ARCH-EXECUTOR-CONVERGENCE")
+    );
+    assert!(
+        direct
+            .executor_calls
+            .iter()
+            .any(|call| call == "execute_with_heartbeat")
+    );
 
     let worker = parse_contract(
         Rule::Executor,
         "src/operations/worker.rs",
         &fs::read_to_string(src.join("operations/worker.rs")).unwrap(),
     );
-    assert!(worker
-        .findings
-        .iter()
-        .all(|finding| finding.rule != "ARCH-EXECUTOR-CONVERGENCE"));
-    assert!(worker
-        .executor_calls
-        .iter()
-        .any(|call| call == "execute_with_heartbeat_guarded"));
+    assert!(
+        worker
+            .findings
+            .iter()
+            .all(|finding| finding.rule != "ARCH-EXECUTOR-CONVERGENCE")
+    );
+    assert!(
+        worker
+            .executor_calls
+            .iter()
+            .any(|call| call == "execute_with_heartbeat_guarded")
+    );
 
     let node_service = fs::read_to_string(src.join("cli/node_service.rs")).unwrap();
     let storage = parse_contract(
@@ -692,10 +700,12 @@ fn production_architecture_boundaries_are_clean() {
         "src/cli/serve/scheduler.rs",
         &fs::read_to_string(src.join("cli/serve/scheduler.rs")).unwrap(),
     );
-    assert!(scheduler
-        .findings
-        .iter()
-        .all(|finding| finding.rule != "ARCH-EXECUTOR-CONVERGENCE"));
+    assert!(
+        scheduler
+            .findings
+            .iter()
+            .all(|finding| finding.rule != "ARCH-EXECUTOR-CONVERGENCE")
+    );
     assert!(
         scheduler.executor_calls.is_empty(),
         "scheduler must enqueue only"
@@ -807,10 +817,12 @@ fn battery_git_operations_reject_process_execution() {
         "fixture:battery_git.rs",
         "fn run() { let _ = std::process::Command::new(\"git\").output(); }",
     );
-    assert!(contract
-        .findings
-        .iter()
-        .any(|finding| finding.rule == "ARCH-GIT-PROCESS"));
+    assert!(
+        contract
+            .findings
+            .iter()
+            .any(|finding| finding.rule == "ARCH-GIT-PROCESS")
+    );
 }
 
 #[test]
@@ -852,10 +864,12 @@ fn battery_filesystem_syscalls_stay_in_adapters() {
         "fn install() { libc::renameat(0, std::ptr::null(), 0, std::ptr::null()); }",
     ] {
         let contract = parse_contract(Rule::BatteryFilesystem, "fixture:battery.rs", source);
-        assert!(contract
-            .findings
-            .iter()
-            .any(|finding| finding.rule == "ARCH-BATTERY-FS"));
+        assert!(
+            contract
+                .findings
+                .iter()
+                .any(|finding| finding.rule == "ARCH-BATTERY-FS")
+        );
     }
 }
 

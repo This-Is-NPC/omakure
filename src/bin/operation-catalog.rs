@@ -36,7 +36,7 @@ fn run() -> Result<(), CatalogError> {
         other => {
             return Err(CatalogError::Parse(format!(
                 "unknown argument {other}; expected --write or --check"
-            )))
+            )));
         }
     }
     println!("operation catalog {command}: {MANIFEST_PATH}, {DOCS_PATH}, {SUPPORT_MATRIX_PATH}");

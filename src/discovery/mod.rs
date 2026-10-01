@@ -12,7 +12,7 @@ mod service;
 mod snapshot;
 
 pub use beacon::Beacon;
-pub use service::{platform_supported, DiscoveryService};
+pub use service::{DiscoveryService, platform_supported};
 pub use snapshot::{
     DiscoveryCandidate, DiscoveryLimits, DiscoverySnapshot, DiscoveryStatus, DiscoveryStatusHandle,
 };

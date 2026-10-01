@@ -24,10 +24,10 @@ use omakure::health_plane::{HealthClock, HealthPlane, HealthReply, InboundHealth
 use omakure::node::{NodeContext, NodePathOverrides, NodePlatform};
 use omakure::node_identity::NodeIdentity;
 use omakure::node_registry::{NodeRegistry, PeerState};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicI64, Ordering};
 use tempfile::TempDir;
 
 const BASE_NOW: i64 = 1_700_000_000;
@@ -42,7 +42,7 @@ struct SharedClock(Arc<FixedClock>);
 
 impl HealthClock for SharedClock {
     fn unix_seconds(&self) -> i64 {
-        self.0 .0.load(Ordering::SeqCst)
+        self.0.0.load(Ordering::SeqCst)
     }
 
     fn monotonic_millis(&self) -> u64 {
@@ -494,9 +494,11 @@ fn the_public_projection_never_carries_a_forbidden_field() {
 
     // The audit trail records the stable code and metadata, never the payload.
     let audit = plane.audit_events(16).expect("audit");
-    assert!(audit
-        .iter()
-        .any(|event| event.error_code == Some(HealthCode::UnknownField.code())));
+    assert!(
+        audit
+            .iter()
+            .any(|event| event.error_code == Some(HealthCode::UnknownField.code()))
+    );
     for event in &audit {
         let rendered = format!("{event:?}");
         assert!(!rendered.contains("workshop"), "audit leaked: {rendered}");

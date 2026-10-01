@@ -3,7 +3,7 @@ use crate::health_plane::bounds::{
 };
 use crate::health_plane::model::{RunFact, RunnerFact, RuntimeFact};
 use crate::health_plane::report::{
-    opaque_run_id, sanitize_signal_run, HealthFactsSource, ProfileFacts, PulseFacts,
+    HealthFactsSource, ProfileFacts, PulseFacts, opaque_run_id, sanitize_signal_run,
 };
 use crate::runs::{self, RunState, RunStateSet, RunStore};
 use crate::workspace::Workspace;

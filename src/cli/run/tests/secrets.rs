@@ -200,9 +200,11 @@ fn test_run_missing_required_secret_is_error() {
     assert!(err.to_string().contains("required field `TOKEN`"));
     let ws = workspace_in(&tmp);
     let conn = runs::open(&ws).unwrap();
-    assert!(runs::get_run(&conn, "rid-missing-secret")
-        .unwrap()
-        .is_none());
+    assert!(
+        runs::get_run(&conn, "rid-missing-secret")
+            .unwrap()
+            .is_none()
+    );
 }
 
 // A --env-file path the user passed that does not exist is a hard error
@@ -237,7 +239,9 @@ fn test_run_missing_env_file_is_error() {
     );
     let ws = workspace_in(&tmp);
     let conn = runs::open(&ws).unwrap();
-    assert!(runs::get_run(&conn, "rid-missing-envfile")
-        .unwrap()
-        .is_none());
+    assert!(
+        runs::get_run(&conn, "rid-missing-envfile")
+            .unwrap()
+            .is_none()
+    );
 }

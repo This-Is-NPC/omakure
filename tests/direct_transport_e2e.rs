@@ -2,7 +2,7 @@ mod support;
 
 use rusqlite::Connection;
 use serde_json::Value;
-use snow::{params::NoiseParams, Builder};
+use snow::{Builder, params::NoiseParams};
 use std::io::Write;
 use std::net::{Shutdown, TcpStream};
 use std::path::Path;
@@ -10,8 +10,8 @@ use std::process::Output;
 use std::time::{Duration, Instant};
 
 use omakure::direct_transport::{
-    sign_probe, unix_seconds, Frame, HandshakeRole, NoiseHandshake, TransportCertificate,
-    TransportSession, ENVELOPE_KIND, NOISE_NAME, PROLOGUE,
+    ENVELOPE_KIND, Frame, HandshakeRole, NOISE_NAME, NoiseHandshake, PROLOGUE,
+    TransportCertificate, TransportSession, sign_probe, unix_seconds,
 };
 use omakure::node_identity::NodeIdentity;
 

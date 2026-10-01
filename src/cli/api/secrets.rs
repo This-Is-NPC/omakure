@@ -4,11 +4,11 @@ use super::respond::{error_response, operation_error_response};
 use super::state::{ApiCapability, ApiState};
 use crate::auth::AuthContext;
 use crate::cli::json;
+use axum::Extension;
+use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::Extension;
-use axum::Json;
 use std::sync::Arc;
 
 pub(super) async fn list_secrets_metadata_handler(

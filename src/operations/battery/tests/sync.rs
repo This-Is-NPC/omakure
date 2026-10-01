@@ -32,11 +32,12 @@ fn sync_battery_is_idempotent_on_repeated_prepare_and_sync() {
     .unwrap();
 
     assert_eq!(second.resolved_commit, first.resolved_commit);
-    assert!(ws
-        .root()
-        .join(second.cache_path)
-        .join(MANIFEST_FILE)
-        .exists());
+    assert!(
+        ws.root()
+            .join(second.cache_path)
+            .join(MANIFEST_FILE)
+            .exists()
+    );
 }
 
 #[test]

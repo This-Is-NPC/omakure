@@ -7,7 +7,7 @@ use crate::workspace::Workspace;
 use serde::Serialize;
 use std::time::Duration;
 
-use super::{rollback_baseline, InstalledBaseline};
+use super::{InstalledBaseline, rollback_baseline};
 
 pub struct BaselineServiceRequest {
     pub peer_node_id: String,

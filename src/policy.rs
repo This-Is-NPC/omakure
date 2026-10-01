@@ -519,9 +519,10 @@ mod tests {
         p.routes.trust = false;
         assert!(p.routes.allows("GET", "/v1/node/peers"));
         assert!(!p.routes.allows("POST", "/v1/node/peers"));
-        assert!(!p
-            .routes
-            .allows("PATCH", "/v1/node/peers/omk1_test/capabilities"));
+        assert!(
+            !p.routes
+                .allows("PATCH", "/v1/node/peers/omk1_test/capabilities")
+        );
         assert!(!p.routes.allows("POST", "/v1/node/peers/omk1_test/revoke"));
     }
 
@@ -533,14 +534,16 @@ mod tests {
         p.routes.enrollment = false;
         assert!(p.routes.allows("GET", "/v1/node/enrollments"));
         assert!(!p.routes.allows("POST", "/v1/node/enrollments"));
-        assert!(!p
-            .routes
-            .allows("POST", "/v1/node/enrollments/omk1_test/approve"));
+        assert!(
+            !p.routes
+                .allows("POST", "/v1/node/enrollments/omk1_test/approve")
+        );
         p.routes.enrollment = true;
         p.routes.trust = false;
-        assert!(p
-            .routes
-            .allows("POST", "/v1/node/enrollments/omk1_test/approve"));
+        assert!(
+            p.routes
+                .allows("POST", "/v1/node/enrollments/omk1_test/approve")
+        );
     }
 
     #[test]
@@ -697,9 +700,10 @@ max_concurrent_verifications = 4
         let err = parse_policy_toml(&text).unwrap_err();
 
         assert!(matches!(err, PolicyError::Invalid(_)));
-        assert!(err
-            .to_string()
-            .contains(&format!("must be <= {MAX_CONCURRENT_AUTH_VERIFICATIONS}")));
+        assert!(
+            err.to_string()
+                .contains(&format!("must be <= {MAX_CONCURRENT_AUTH_VERIFICATIONS}"))
+        );
     }
 
     #[test]

@@ -7,7 +7,7 @@ use crate::domain::health_plane::model::{
     SignalKind, SignalRecord,
 };
 use crate::util::hex;
-use rusqlite::{params, Connection, OptionalExtension, Transaction, TransactionBehavior};
+use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 
 pub(super) fn health_authorization_from_row(
     node_id: &str,
@@ -304,7 +304,7 @@ fn quarantine_row_if_observed(
             return Err(RegistryError::Corrupt(format!(
                 "corrupt health row identity does not match table {:?}",
                 row.table
-            )))
+            )));
         }
     };
     if deleted == 1 {

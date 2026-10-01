@@ -1,5 +1,5 @@
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 pub(crate) fn install_signal_handlers(flag: Arc<AtomicBool>) {
     use signal_hook::consts::{SIGINT, SIGTERM};

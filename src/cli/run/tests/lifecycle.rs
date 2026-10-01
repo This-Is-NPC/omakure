@@ -138,11 +138,13 @@ fn test_finalize_run_cancelled_records_output() {
     assert_eq!(final_row.state, RunState::Cancelled);
     assert_eq!(final_row.stdout, "partial\n");
     assert_eq!(final_row.exit_code, Some(130));
-    assert!(final_row
-        .error
-        .as_deref()
-        .unwrap_or_default()
-        .contains("cancelled"));
+    assert!(
+        final_row
+            .error
+            .as_deref()
+            .unwrap_or_default()
+            .contains("cancelled")
+    );
 }
 
 #[test]

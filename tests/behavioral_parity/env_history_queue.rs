@@ -1,7 +1,7 @@
 //! Real paired probes for history, queue, and managed-environment adapters.
 
-use super::{evidence, require_path, BehavioralContext, ProbeEvidence};
-use serde_json::{json, Value};
+use super::{BehavioralContext, ProbeEvidence, evidence, require_path};
+use serde_json::{Value, json};
 use std::time::Duration;
 
 use super::support::AuthMode;

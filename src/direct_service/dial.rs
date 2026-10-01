@@ -2,15 +2,15 @@ use super::connection::{ConnectionDirection, ConnectionState};
 use super::error::DirectServiceError;
 use super::resolver::Resolver;
 use super::session::{
-    audit_error, error_to_transport, hold_session, peer_authorization, SessionInputs,
+    SessionInputs, audit_error, error_to_transport, hold_session, peer_authorization,
 };
 use super::status::StaticPeer;
 use super::stream::{initiator_deadline, read_frame, set_stream_timeouts, time_until, write_bytes};
 use super::{RETRY_BACKOFF, RETRY_BACKOFF_CEILING, RETRY_JITTER_MAX};
 use crate::direct_health::HealthSession;
 use crate::direct_transport::{
-    authorize_peer, sign_probe, unix_seconds, verify_envelope, HandshakeRole, TransportError,
-    ENVELOPE_KIND,
+    ENVELOPE_KIND, HandshakeRole, TransportError, authorize_peer, sign_probe, unix_seconds,
+    verify_envelope,
 };
 use crate::node::NodeContext;
 use crate::node_identity::NodeIdentity;
@@ -20,8 +20,8 @@ use crate::util::entropy;
 use crate::util::hex;
 use std::io;
 use std::net::{SocketAddr, TcpStream};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 

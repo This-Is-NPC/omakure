@@ -1,3 +1,4 @@
+use super::RunsError;
 use crate::util::sqlite::{WalDatabase, OPEN_RETRY_DELAYS};
 use crate::workspace::Workspace;
 use rusqlite::Connection;
@@ -24,9 +25,12 @@ fn runs_open_lock() -> &'static Mutex<()> {
 
 /// Open the run-log database for `workspace`, creating it and its schema if
 /// necessary.
-pub fn open(workspace: &Workspace) -> Result<Connection, String> {
+pub fn open(workspace: &Workspace) -> Result<Connection, RunsError> {
     let history_dir = workspace.history_dir();
-    fs::create_dir_all(history_dir).map_err(|err| format!("Create history dir failed: {}", err))?;
+    fs::create_dir_all(history_dir).map_err(|source| RunsError::Filesystem {
+        operation: "Create history dir failed",
+        source,
+    })?;
     let _open_guard = runs_open_lock()
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -42,26 +46,31 @@ pub fn runs_db_path(workspace: &Workspace) -> PathBuf {
 }
 
 #[cfg(test)]
-pub(super) fn open_connection(db_path: &Path) -> Result<Connection, String> {
+pub(super) fn open_connection(db_path: &Path) -> Result<Connection, RunsError> {
     let _open_guard = runs_open_lock()
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
     open_connection_inner(db_path)
 }
 
-fn open_connection_inner(db_path: &Path) -> Result<Connection, String> {
-    let conn = RUNS_DATABASE.open(db_path)?;
+fn open_connection_inner(db_path: &Path) -> Result<Connection, RunsError> {
+    let conn = RUNS_DATABASE
+        .open(db_path)
+        .map_err(RunsError::DatabaseOpen)?;
     // ON DELETE CASCADE on run_traces requires foreign keys to be enforced
     // explicitly: SQLite ships with foreign_keys=OFF for backward
     // compatibility.
     conn.execute_batch("PRAGMA foreign_keys = ON")
-        .map_err(|err| format!("Enable foreign keys failed: {}", err))?;
+        .map_err(|source| RunsError::Sqlite {
+            operation: "Enable foreign keys failed",
+            source,
+        })?;
     Ok(conn)
 }
 
 /// Initialize the `runs` and `run_traces` tables and indexes. Idempotent
 /// (uses `CREATE TABLE IF NOT EXISTS`), so safe to call on every open.
-pub fn init_schema(conn: &Connection) -> Result<(), String> {
+pub fn init_schema(conn: &Connection) -> Result<(), RunsError> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS runs (
             run_id TEXT PRIMARY KEY,
@@ -126,5 +135,8 @@ pub fn init_schema(conn: &Connection) -> Result<(), String> {
         );
         CREATE INDEX IF NOT EXISTS idx_traces_run_id ON run_traces(run_id, sequence);",
     )
-    .map_err(|err| format!("Init runs db failed: {}", err))
+    .map_err(|source| RunsError::Sqlite {
+        operation: "Init runs db failed",
+        source,
+    })
 }

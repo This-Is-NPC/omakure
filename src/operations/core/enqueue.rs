@@ -1,4 +1,4 @@
-use super::run_queries::io_error_string;
+use super::run_queries::io_error_runs;
 use super::script_path::resolve_script_path;
 use super::types::EnqueueRunRequest;
 use crate::app_meta;
@@ -61,7 +61,7 @@ pub fn enqueue_run_with_access(
             format!("required field `{}` is missing: {}", field, message),
         )
     })?;
-    let conn = runs::open(workspace).map_err(io_error_string)?;
+    let conn = runs::open(workspace).map_err(io_error_runs)?;
     runs::enqueue(
         &conn,
         canonical.to_string_lossy().as_ref(),
@@ -82,7 +82,7 @@ pub fn enqueue_run_with_access(
             script_content_hash: None,
         },
     )
-    .map_err(|error| io_error_string(error.to_string()))
+    .map_err(io_error_runs)
 }
 
 /// Enqueue a run that a remote Conductor asked for.
@@ -136,7 +136,7 @@ pub fn enqueue_cue_run(
         )
     })?;
 
-    let mut conn = runs::open(workspace).map_err(io_error_string)?;
+    let mut conn = runs::open(workspace).map_err(io_error_runs)?;
     runs::enqueue_cue(
         &mut conn,
         canonical.to_string_lossy().as_ref(),
@@ -157,5 +157,5 @@ pub fn enqueue_cue_run(
             script_content_hash: Some(authorized_content_hash.to_string()),
         },
     )
-    .map_err(|error| io_error_string(error.to_string()))
+    .map_err(io_error_runs)
 }

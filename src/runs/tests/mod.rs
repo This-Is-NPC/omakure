@@ -1,5 +1,5 @@
 use super::ids::generate_run_id;
-use super::open::{open_connection, runs_db_path};
+use super::open::{init_schema, open_connection, runs_db_path};
 use super::query::has_live_scheduled_run;
 use super::*;
 use crate::test_support::scratch_workspace;

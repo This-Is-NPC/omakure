@@ -487,6 +487,17 @@ fn duplicate_enqueue_preserves_io_error_code_and_message() {
 }
 
 #[test]
+fn unreadable_runs_workspace_preserves_io_code_and_text() {
+    let dir = TempDir::new().unwrap();
+    let ws = workspace_in(&dir);
+    std::fs::remove_dir_all(ws.history_dir()).unwrap();
+    std::fs::write(ws.history_dir(), "blocking file").unwrap();
+    let error = list_runs(&ws, ListRunsRequest::default()).unwrap_err();
+    assert_eq!(error.code, OperationErrorCode::IoFailed);
+    assert!(error.message.starts_with("Create history dir failed: "));
+}
+
+#[test]
 fn enqueue_list_show_cancel_and_stats_share_runs_state_machine() {
     let dir = TempDir::new().unwrap();
     let ws = workspace_in(&dir);

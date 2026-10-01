@@ -499,9 +499,9 @@ fn health_maintenance_loop(
 }
 
 fn run_health_maintenance(context: &crate::node::NodeContext, workspace: &Workspace) {
-    match crate::runs::open(workspace).and_then(|conn| {
-        crate::runs::recover_abandoned_cue_runs(&conn).map_err(|error| error.to_string())
-    }) {
+    match crate::runs::open(workspace)
+        .and_then(|conn| crate::runs::recover_abandoned_cue_runs(&conn))
+    {
         Ok(recovered) => {
             for run_id in recovered {
                 eprintln!("omakure: resolved abandoned remote run {run_id} without re-running it");

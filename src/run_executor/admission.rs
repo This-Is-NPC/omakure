@@ -63,9 +63,7 @@ fn check_cue_script_unchanged(
         return Ok(());
     }
     let recorded = runs::open(workspace)
-        .and_then(|conn| {
-            runs::get_run_script_hash(&conn, &row.run_id).map_err(|error| error.to_string())
-        })
+        .and_then(|conn| runs::get_run_script_hash(&conn, &row.run_id))
         .map_err(|err| format!("authorized script content lookup failed: {err}"))?
         .ok_or_else(|| {
             "no authorized script content was recorded for this remote run".to_string()
@@ -92,9 +90,9 @@ pub(super) fn secret_access_for_row(
                 .map(|(_, value)| value.starts_with("secret://"))
                 .unwrap_or(false)
     });
-    let refs = match runs::open(workspace).and_then(|conn| {
-        runs::get_run_secret_refs(&conn, &row.run_id).map_err(|error| error.to_string())
-    }) {
+    let refs = match runs::open(workspace)
+        .and_then(|conn| runs::get_run_secret_refs(&conn, &row.run_id))
+    {
         Ok(Some(refs)) => refs,
         Ok(None) if has_provider_ref => {
             return Err("secret provider policy missing for queued run".to_string())

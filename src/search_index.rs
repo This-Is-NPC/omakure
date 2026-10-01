@@ -273,7 +273,7 @@ const SEARCH_DATABASE: WalDatabase = WalDatabase {
 fn open_connection(db_path: &Path) -> Result<Connection, SearchIndexError> {
     SEARCH_DATABASE
         .open(db_path)
-        .map_err(SearchIndexError::DatabaseOpen)
+        .map_err(|error| SearchIndexError::DatabaseOpen(error.to_string()))
 }
 fn init_db(conn: &Connection) -> Result<(), SearchIndexError> {
     conn.execute_batch(

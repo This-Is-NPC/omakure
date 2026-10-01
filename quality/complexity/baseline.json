@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "73e200fc0d67dd43b7ffedf11cfc1c89465b0565d6c8037b9f883a40fe90b6b6",
+  "canonical_sha256": "cace9a686cd4c963860b2141caf782a57def535e5e09bcce5530227ef03569e5",
   "config_identity": "no-config",
   "files": [
     {
@@ -96705,23 +96705,23 @@
         "identity": "crate::runs::open::open",
         "macro_expansion": "not_measured",
         "path": "src/runs/open.rs",
-        "signature": "pub fn open(workspace: &Workspace) -> Result<Connection, String>",
+        "signature": "pub fn open(workspace: &Workspace) -> Result<Connection, RunsError>",
         "source_class": "handwritten"
       },
       "identity": "crate::runs::open::open",
       "kind": "function",
-      "line": 27,
+      "line": 28,
       "name": "open",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 27,
+        "line": 28,
         "name": "open"
       },
       "path": "src/runs/open.rs",
-      "signature": "pub fn open(workspace: &Workspace) -> Result<Connection, String>",
+      "signature": "pub fn open(workspace: &Workspace) -> Result<Connection, RunsError>",
       "source_class": "handwritten"
     },
     {
@@ -96809,23 +96809,23 @@
         "identity": "crate::runs::open::open_connection",
         "macro_expansion": "not_measured",
         "path": "src/runs/open.rs",
-        "signature": "pub(super) fn open_connection(db_path: &Path) -> Result<Connection, String>",
+        "signature": "pub(super) fn open_connection(db_path: &Path) -> Result<Connection, RunsError>",
         "source_class": "handwritten"
       },
       "identity": "crate::runs::open::open_connection",
       "kind": "function",
-      "line": 45,
+      "line": 49,
       "name": "open_connection",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 45,
+        "line": 49,
         "name": "open_connection"
       },
       "path": "src/runs/open.rs",
-      "signature": "pub(super) fn open_connection(db_path: &Path) -> Result<Connection, String>",
+      "signature": "pub(super) fn open_connection(db_path: &Path) -> Result<Connection, RunsError>",
       "source_class": "handwritten"
     },
     {
@@ -96855,29 +96855,29 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 5,
-      "cyclomatic": 7,
+      "cognitive": 0,
+      "cyclomatic": 1,
       "derived": {
         "identity": "crate::runs::open::open_connection_inner",
         "macro_expansion": "not_measured",
         "path": "src/runs/open.rs",
-        "signature": "fn open_connection_inner(db_path: &Path) -> Result<Connection, String>",
+        "signature": "fn open_connection_inner(db_path: &Path) -> Result<Connection, RunsError>",
         "source_class": "handwritten"
       },
       "identity": "crate::runs::open::open_connection_inner",
       "kind": "function",
-      "line": 52,
+      "line": 56,
       "name": "open_connection_inner",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 5,
-        "cyclomatic": 7,
+        "cognitive": 0,
+        "cyclomatic": 1,
         "kind": "function",
-        "line": 52,
+        "line": 56,
         "name": "open_connection_inner"
       },
       "path": "src/runs/open.rs",
-      "signature": "fn open_connection_inner(db_path: &Path) -> Result<Connection, String>",
+      "signature": "fn open_connection_inner(db_path: &Path) -> Result<Connection, RunsError>",
       "source_class": "handwritten"
     },
     {
@@ -96939,23 +96939,23 @@
         "identity": "crate::runs::open::init_schema",
         "macro_expansion": "not_measured",
         "path": "src/runs/open.rs",
-        "signature": "pub fn init_schema(conn: &Connection) -> Result<(), String>",
+        "signature": "pub fn init_schema(conn: &Connection) -> Result<(), RunsError>",
         "source_class": "handwritten"
       },
       "identity": "crate::runs::open::init_schema",
       "kind": "function",
-      "line": 64,
+      "line": 73,
       "name": "init_schema",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 64,
+        "line": 73,
         "name": "init_schema"
       },
       "path": "src/runs/open.rs",
-      "signature": "pub fn init_schema(conn: &Connection) -> Result<(), String>",
+      "signature": "pub fn init_schema(conn: &Connection) -> Result<(), RunsError>",
       "source_class": "handwritten"
     },
     {

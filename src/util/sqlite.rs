@@ -26,6 +26,22 @@ pub fn is_lock_contention(error: &rusqlite::Error) -> bool {
     )
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum WalOpenError {
+    #[error("{operation}: {source}")]
+    Filesystem {
+        operation: String,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("{operation}: {source}")]
+    Sqlite {
+        operation: String,
+        #[source]
+        source: rusqlite::Error,
+    },
+}
+
 /// How one workspace database is opened in WAL mode.
 pub struct WalDatabase {
     /// Lowercase name used in error messages, e.g. `runs`.
@@ -38,24 +54,39 @@ pub struct WalDatabase {
 
 impl WalDatabase {
     /// Open `path`, creating its parent directory, and switch it to WAL.
-    pub fn open(&self, path: &Path) -> Result<Connection, String> {
+    pub fn open(&self, path: &Path) -> Result<Connection, WalOpenError> {
         let name = self.name;
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|err| format!("Create {name} db folder failed: {err}"))?;
+            fs::create_dir_all(parent).map_err(|source| WalOpenError::Filesystem {
+                operation: format!("Create {name} db folder failed"),
+                source,
+            })?;
         }
-        let conn = Connection::open(path).map_err(|err| format!("Open {name} db failed: {err}"))?;
+        let conn = Connection::open(path).map_err(|source| WalOpenError::Sqlite {
+            operation: format!("Open {name} db failed"),
+            source,
+        })?;
         conn.busy_timeout(self.busy_timeout)
-            .map_err(|err| format!("{} db busy timeout failed: {err}", capitalized(name)))?;
+            .map_err(|source| WalOpenError::Sqlite {
+                operation: format!("{} db busy timeout failed", capitalized(name)),
+                source,
+            })?;
         let mut delays = self.wal_retry_delays.iter();
         let _journal_mode: String = loop {
             match conn.query_row("PRAGMA journal_mode = WAL", [], |row| row.get(0)) {
                 Ok(mode) => break mode,
-                Err(err) if is_lock_contention(&err) => match delays.next() {
-                    Some(delay) => std::thread::sleep(*delay),
-                    None => return Err(format!("Enable WAL failed: {err}")),
-                },
-                Err(err) => return Err(format!("Enable WAL failed: {err}")),
+                Err(source) => {
+                    if is_lock_contention(&source) {
+                        if let Some(delay) = delays.next() {
+                            std::thread::sleep(*delay);
+                            continue;
+                        }
+                    }
+                    return Err(WalOpenError::Sqlite {
+                        operation: "Enable WAL failed".to_string(),
+                        source,
+                    });
+                }
             }
         };
         Ok(conn)
@@ -90,6 +121,28 @@ mod tests {
             .query_row("PRAGMA journal_mode", [], |row| row.get(0))
             .unwrap();
         assert_eq!(mode, "wal");
+    }
+
+    #[test]
+    fn open_preserves_filesystem_error_for_invalid_parent() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let blocked = dir.path().join("blocked");
+        fs::write(&blocked, "file").unwrap();
+        let database = WalDatabase {
+            name: "test",
+            busy_timeout: Duration::from_millis(100),
+            wal_retry_delays: &[],
+        };
+
+        let error = database.open(&blocked.join("test.sqlite")).unwrap_err();
+        match &error {
+            WalOpenError::Filesystem { operation, source } => {
+                assert_eq!(operation, "Create test db folder failed");
+                assert_eq!(source.kind(), std::io::ErrorKind::AlreadyExists);
+                assert_eq!(error.to_string(), format!("{operation}: {source}"));
+            }
+            other => panic!("expected filesystem error, got {other:?}"),
+        }
     }
 
     #[test]

@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "d37c9e3517219dcf5c2c67bbeb75e14ea70a200e8cbcc536002a785e7f947663",
+  "canonical_sha256": "247bf91025121fcb3417cc740400cfd2e202d0d253193c8cdd755421182a0548",
   "config_identity": "no-config",
   "files": [
     {
@@ -1226,12 +1226,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 10,
+        "invocations": 8,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 22,
-        "cyclomatic": 30
+        "cognitive": 17,
+        "cyclomatic": 33
       },
       "path": "src/cli/run/mod.rs",
       "source_class": "handwritten"
@@ -31843,8 +31843,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 21,
-      "cyclomatic": 21,
+      "cognitive": 7,
+      "cyclomatic": 8,
       "derived": {
         "identity": "crate::cli::run::run",
         "macro_expansion": "not_measured",
@@ -31858,8 +31858,8 @@
       "name": "run",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 21,
-        "cyclomatic": 21,
+        "cognitive": 7,
+        "cyclomatic": 8,
         "kind": "function",
         "line": 21,
         "name": "run"
@@ -31880,14 +31880,14 @@
       },
       "identity": "crate::cli::run::run::<closure>",
       "kind": "closure",
-      "line": 86,
+      "line": 42,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 86,
+        "line": 42,
         "name": "<closure>"
       },
       "path": "src/cli/run/mod.rs",
@@ -31898,22 +31898,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::run::run::<closure>@88#2",
+        "identity": "crate::cli::run::run::<closure>@44#2",
         "macro_expansion": "not_measured",
         "path": "src/cli/run/mod.rs",
         "signature": "let conn = runs::open(&workspace).map_err(|err| -> Box<dyn Error> { err.into() })?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::run::run::<closure>@88#2",
+      "identity": "crate::cli::run::run::<closure>@44#2",
       "kind": "closure",
-      "line": 88,
+      "line": 44,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 88,
+        "line": 44,
         "name": "<closure>"
       },
       "path": "src/cli/run/mod.rs",
@@ -31924,22 +31924,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::run::run::<closure>@110#3",
+        "identity": "crate::cli::run::run::<closure>@66#3",
         "macro_expansion": "not_measured",
         "path": "src/cli/run/mod.rs",
         "signature": ".map_err(|err| -> Box<dyn Error> { err.into() })?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::run::run::<closure>@110#3",
+      "identity": "crate::cli::run::run::<closure>@66#3",
       "kind": "closure",
-      "line": 110,
+      "line": 66,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 110,
+        "line": 66,
         "name": "<closure>"
       },
       "path": "src/cli/run/mod.rs",
@@ -31950,26 +31950,260 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::cli::run::run::<closure>@114#4",
+        "identity": "crate::cli::run::run::<closure>@70#4",
         "macro_expansion": "not_measured",
         "path": "src/cli/run/mod.rs",
         "signature": ".unwrap_or_else(|_| row.args_json.clone());",
         "source_class": "handwritten"
       },
-      "identity": "crate::cli::run::run::<closure>@114#4",
+      "identity": "crate::cli::run::run::<closure>@70#4",
       "kind": "closure",
-      "line": 114,
+      "line": 70,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 114,
+        "line": 70,
         "name": "<closure>"
       },
       "path": "src/cli/run/mod.rs",
       "signature": ".unwrap_or_else(|_| row.args_json.clone());",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::cli::run::prepare_run_inputs",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/run/mod.rs",
+        "signature": "fn prepare_run_inputs( workspace: &Workspace, script_path: &std::path::Path, options: &RunArgs, json_output: bool, ) -> Result<PreparedRunInputs, (&'static str, String)>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::run::prepare_run_inputs",
+      "kind": "function",
+      "line": 93,
+      "name": "prepare_run_inputs",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 3,
+        "kind": "function",
+        "line": 93,
+        "name": "prepare_run_inputs"
+      },
+      "path": "src/cli/run/mod.rs",
+      "signature": "fn prepare_run_inputs( workspace: &Workspace, script_path: &std::path::Path, options: &RunArgs, json_output: bool, ) -> Result<PreparedRunInputs, (&'static str, String)>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli::run::prepare_run_inputs::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/run/mod.rs",
+        "signature": ".map_err(|error| (codes::INVALID_ARGUMENT, error.to_string()))?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::run::prepare_run_inputs::<closure>",
+      "kind": "closure",
+      "line": 111,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 111,
+        "name": "<closure>"
+      },
+      "path": "src/cli/run/mod.rs",
+      "signature": ".map_err(|error| (codes::INVALID_ARGUMENT, error.to_string()))?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli::run::prepare_run_inputs::<closure>@113#2",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/run/mod.rs",
+        "signature": ".map_err(|error| (codes::INVALID_ARGUMENT, error))?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::run::prepare_run_inputs::<closure>@113#2",
+      "kind": "closure",
+      "line": 113,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 113,
+        "name": "<closure>"
+      },
+      "path": "src/cli/run/mod.rs",
+      "signature": ".map_err(|error| (codes::INVALID_ARGUMENT, error))?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli::run::prepare_run_inputs::<closure>@121#3",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/run/mod.rs",
+        "signature": ".map_err(|(field, message)| missing_required_field_error(&field, &message))?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::run::prepare_run_inputs::<closure>@121#3",
+      "kind": "closure",
+      "line": 121,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 121,
+        "name": "<closure>"
+      },
+      "path": "src/cli/run/mod.rs",
+      "signature": ".map_err(|(field, message)| missing_required_field_error(&field, &message))?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli::run::prepare_run_inputs::<closure>@125#4",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/run/mod.rs",
+        "signature": ".map_err(|(field, message)| missing_required_field_error(&field, &message))?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::run::prepare_run_inputs::<closure>@125#4",
+      "kind": "closure",
+      "line": 125,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 125,
+        "name": "<closure>"
+      },
+      "path": "src/cli/run/mod.rs",
+      "signature": ".map_err(|(field, message)| missing_required_field_error(&field, &message))?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli::run::missing_required_field_error",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/run/mod.rs",
+        "signature": "fn missing_required_field_error(field: &str, message: &str) -> (&'static str, String)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::run::missing_required_field_error",
+      "kind": "function",
+      "line": 133,
+      "name": "missing_required_field_error",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 133,
+        "name": "missing_required_field_error"
+      },
+      "path": "src/cli/run/mod.rs",
+      "signature": "fn missing_required_field_error(field: &str, message: &str) -> (&'static str, String)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 7,
+      "cyclomatic": 6,
+      "derived": {
+        "identity": "crate::cli::run::print_human_run_output",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/run/mod.rs",
+        "signature": "fn print_human_run_output(result: &ExecutionResult)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::run::print_human_run_output",
+      "kind": "function",
+      "line": 140,
+      "name": "print_human_run_output",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 7,
+        "cyclomatic": 6,
+        "kind": "function",
+        "line": 140,
+        "name": "print_human_run_output"
+      },
+      "path": "src/cli/run/mod.rs",
+      "signature": "fn print_human_run_output(result: &ExecutionResult)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli::run::failure_exit_code",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/run/mod.rs",
+        "signature": "fn failure_exit_code(result: &ExecutionResult) -> Option<i32>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::run::failure_exit_code",
+      "kind": "function",
+      "line": 158,
+      "name": "failure_exit_code",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 158,
+        "name": "failure_exit_code"
+      },
+      "path": "src/cli/run/mod.rs",
+      "signature": "fn failure_exit_code(result: &ExecutionResult) -> Option<i32>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli::run::failure_exit_code::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/run/mod.rs",
+        "signature": ".then(|| result.completion.exit_code.unwrap_or(1))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::run::failure_exit_code::<closure>",
+      "kind": "closure",
+      "line": 166,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 166,
+        "name": "<closure>"
+      },
+      "path": "src/cli/run/mod.rs",
+      "signature": ".then(|| result.completion.exit_code.unwrap_or(1))",
       "source_class": "handwritten"
     },
     {
@@ -31984,14 +32218,14 @@
       },
       "identity": "crate::cli::run::finalize_run",
       "kind": "function",
-      "line": 165,
+      "line": 169,
       "name": "finalize_run",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 5,
         "kind": "function",
-        "line": 165,
+        "line": 169,
         "name": "finalize_run"
       },
       "path": "src/cli/run/mod.rs",

@@ -12,7 +12,7 @@ use crate::cli::emit::emit_error;
 use crate::cli::json::{self, codes};
 use crate::operations::core::check_required_fields;
 use crate::operations::core::resolve_script_path;
-use crate::run_executor::{execute_with_heartbeat, ExecutionTerminal};
+use crate::run_executor::{execute_with_heartbeat, ExecutionResult, ExecutionTerminal};
 use crate::runs::{self, EnqueueOptions};
 use crate::workspace::Workspace;
 use std::error::Error;
@@ -31,57 +31,13 @@ pub fn run(
         Err(err) => return emit_error(json_output, err.code.as_str(), err.to_string()),
     };
 
-    // Layers 2 + 3 of the env-injection precedence table
-    // (`docs/internal/env-injection-spec.md` §1): the active managed env, with the
-    // optional CLI `--env-file` folded on top (env-file wins per key). The
-    // reserved vars `OMAKURE_RUN_ID` / `OMAKURE_SCRIPTS_DIR` (layer 4) are
-    // pushed after this inside `execute_with_heartbeat`, stay
-    // non-overridable, and are therefore not visible to `$VAR` expansion in
-    // `.conf` / `--env-file` values. A missing/unreadable `--env-file` is a
-    // hard error.
-    let extra_env = match crate::adapters::environments::resolve_run_env(
-        workspace.envs_dir(),
-        options.env_file.as_deref(),
-    ) {
-        Ok(env) => env,
-        Err(err) => return emit_error(json_output, codes::INVALID_ARGUMENT, err.to_string()),
+    let PreparedRunInputs {
+        extra_env,
+        resolved_args,
+    } = match prepare_run_inputs(&workspace, &script_path, &options, json_output) {
+        Ok(inputs) => inputs,
+        Err((code, message)) => return emit_error(json_output, code, message),
     };
-
-    let direct_secrets = match crate::secrets::parse_direct_secrets(&options.secrets) {
-        Ok(secrets) => secrets,
-        Err(err) => return emit_error(json_output, codes::INVALID_ARGUMENT, err),
-    };
-
-    let resolved_args = match crate::secrets::resolve_args_with_direct_secrets(
-        &workspace,
-        &script_path,
-        &options.args,
-        &extra_env,
-        &direct_secrets,
-    ) {
-        Ok(resolved) => resolved,
-        Err((field, message)) => {
-            return emit_error(
-                json_output,
-                codes::MISSING_REQUIRED_FIELD,
-                format!("required field `{}` is missing: {}", field, message),
-            );
-        }
-    };
-
-    // `--json` implies `--no-prompt`: agents must never block on a TTY.
-    let no_prompt = options.no_prompt || json_output;
-    if no_prompt {
-        if let Err((field, message)) =
-            check_required_fields(&workspace, &script_path, &resolved_args.persisted_args)
-        {
-            return emit_error(
-                json_output,
-                codes::MISSING_REQUIRED_FIELD,
-                format!("required field `{}` is missing: {}", field, message),
-            );
-        }
-    }
 
     let canonical = std::fs::canonicalize(&script_path).unwrap_or_else(|_| script_path.clone());
     let canonical_str = canonical.to_string_lossy().to_string();
@@ -120,21 +76,68 @@ pub fn run(
         if let Some(row) = final_row {
             json::print_ok(row);
         }
-        // Match the previous PR #8 surface: a failing script propagates
-        // its exit code so the caller's CI/agent loop sees the right
-        // signal even under --json.
-        if matches!(
-            result.terminal,
-            ExecutionTerminal::Failed
-                | ExecutionTerminal::TimedOut
-                | ExecutionTerminal::Errored
-                | ExecutionTerminal::Cancelled
-        ) {
-            std::process::exit(result.completion.exit_code.unwrap_or(1));
-        }
-        return Ok(());
+    } else {
+        print_human_run_output(&result);
     }
+    if let Some(code) = failure_exit_code(&result) {
+        std::process::exit(code);
+    }
+    Ok(())
+}
 
+struct PreparedRunInputs {
+    extra_env: Vec<(String, String)>,
+    resolved_args: crate::secrets::ResolvedArgs,
+}
+
+fn prepare_run_inputs(
+    workspace: &Workspace,
+    script_path: &std::path::Path,
+    options: &RunArgs,
+    json_output: bool,
+) -> Result<PreparedRunInputs, (&'static str, String)> {
+    // Layers 2 + 3 of the env-injection precedence table
+    // (`docs/internal/env-injection-spec.md` §1): the active managed env, with the
+    // optional CLI `--env-file` folded on top (env-file wins per key). The
+    // reserved vars `OMAKURE_RUN_ID` / `OMAKURE_SCRIPTS_DIR` (layer 4) are
+    // pushed after this inside `execute_with_heartbeat`, stay
+    // non-overridable, and are therefore not visible to `$VAR` expansion in
+    // `.conf` / `--env-file` values. A missing/unreadable `--env-file` is a
+    // hard error.
+    let extra_env = crate::adapters::environments::resolve_run_env(
+        workspace.envs_dir(),
+        options.env_file.as_deref(),
+    )
+    .map_err(|error| (codes::INVALID_ARGUMENT, error.to_string()))?;
+    let direct_secrets = crate::secrets::parse_direct_secrets(&options.secrets)
+        .map_err(|error| (codes::INVALID_ARGUMENT, error))?;
+    let resolved_args = crate::secrets::resolve_args_with_direct_secrets(
+        workspace,
+        script_path,
+        &options.args,
+        &extra_env,
+        &direct_secrets,
+    )
+    .map_err(|(field, message)| missing_required_field_error(&field, &message))?;
+    // `--json` implies `--no-prompt`: agents must never block on a TTY.
+    if options.no_prompt || json_output {
+        check_required_fields(workspace, script_path, &resolved_args.persisted_args)
+            .map_err(|(field, message)| missing_required_field_error(&field, &message))?;
+    }
+    Ok(PreparedRunInputs {
+        extra_env,
+        resolved_args,
+    })
+}
+
+fn missing_required_field_error(field: &str, message: &str) -> (&'static str, String) {
+    (
+        codes::MISSING_REQUIRED_FIELD,
+        format!("required field `{field}` is missing: {message}"),
+    )
+}
+
+fn print_human_run_output(result: &ExecutionResult) {
     if !result.completion.stdout.trim().is_empty() {
         print!("{}", result.completion.stdout);
         if !result.completion.stdout.ends_with('\n') {
@@ -150,16 +153,17 @@ pub fn run(
     if let Some(err) = &result.completion.error {
         eprintln!("error: {}", err);
     }
-    if matches!(
+}
+
+fn failure_exit_code(result: &ExecutionResult) -> Option<i32> {
+    matches!(
         result.terminal,
         ExecutionTerminal::Failed
             | ExecutionTerminal::TimedOut
             | ExecutionTerminal::Errored
             | ExecutionTerminal::Cancelled
-    ) {
-        std::process::exit(result.completion.exit_code.unwrap_or(1));
-    }
-    Ok(())
+    )
+    .then(|| result.completion.exit_code.unwrap_or(1))
 }
 
 fn finalize_run(

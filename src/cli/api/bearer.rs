@@ -1,5 +1,5 @@
 use super::audit::{
-    emit_http_audit, mutation_path_run_id, safe_audit_run_id, AuditRunId, HttpAuditEvent,
+    emit_http_audit_async, mutation_path_run_id, safe_audit_run_id, AuditRunId, HttpAuditEvent,
 };
 use super::respond::error_response;
 use super::router::HealthPlaneAuthState;
@@ -91,15 +91,18 @@ async fn finish_bearer_auth(
     match authenticated {
         AuthAttempt::Accepted(ctx) => {
             if let Some(message) = deploy.deny_reason(&method, &path) {
-                emit_http_audit(HttpAuditEvent {
-                    token_id: Some(ctx.token_id),
-                    run_id: mutation_path_run_id(&method, &path),
-                    method,
-                    path,
-                    outcome: "forbidden".to_string(),
-                    status: StatusCode::FORBIDDEN.as_u16(),
-                });
-                return error_response(StatusCode::FORBIDDEN, "forbidden", message);
+                return audited_response(
+                    HttpAuditEvent {
+                        token_id: Some(ctx.token_id),
+                        run_id: mutation_path_run_id(&method, &path),
+                        method,
+                        path,
+                        outcome: "forbidden".to_string(),
+                        status: StatusCode::FORBIDDEN.as_u16(),
+                    },
+                    error_response(StatusCode::FORBIDDEN, "forbidden", message),
+                )
+                .await;
             }
             let token_id = ctx.token_id.clone();
             request.extensions_mut().insert(ctx);
@@ -119,46 +122,66 @@ async fn finish_bearer_auth(
             } else {
                 "error"
             };
-            emit_http_audit(HttpAuditEvent {
-                token_id: Some(token_id),
-                run_id,
-                method,
-                path,
-                outcome: outcome.to_string(),
-                status,
-            });
-            response
+            audited_response(
+                HttpAuditEvent {
+                    token_id: Some(token_id),
+                    run_id,
+                    method,
+                    path,
+                    outcome: outcome.to_string(),
+                    status,
+                },
+                response,
+            )
+            .await
         }
         AuthAttempt::Rejected => {
-            emit_http_audit(HttpAuditEvent {
-                token_id: None,
-                run_id: None,
-                method,
-                path,
-                outcome: "unauthorized".to_string(),
-                status: StatusCode::UNAUTHORIZED.as_u16(),
-            });
-            error_response(
-                StatusCode::UNAUTHORIZED,
-                "unauthorized",
-                "bearer token required",
+            audited_response(
+                HttpAuditEvent {
+                    token_id: None,
+                    run_id: None,
+                    method,
+                    path,
+                    outcome: "unauthorized".to_string(),
+                    status: StatusCode::UNAUTHORIZED.as_u16(),
+                },
+                error_response(
+                    StatusCode::UNAUTHORIZED,
+                    "unauthorized",
+                    "bearer token required",
+                ),
             )
+            .await
         }
         AuthAttempt::Busy => {
-            emit_http_audit(HttpAuditEvent {
-                token_id: None,
-                run_id: None,
-                method,
-                path,
-                outcome: "unavailable".to_string(),
-                status: StatusCode::SERVICE_UNAVAILABLE.as_u16(),
-            });
-            error_response(
-                StatusCode::SERVICE_UNAVAILABLE,
-                "auth_busy",
-                "authentication capacity is temporarily exhausted",
+            audited_response(
+                HttpAuditEvent {
+                    token_id: None,
+                    run_id: None,
+                    method,
+                    path,
+                    outcome: "unavailable".to_string(),
+                    status: StatusCode::SERVICE_UNAVAILABLE.as_u16(),
+                },
+                error_response(
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "auth_busy",
+                    "authentication capacity is temporarily exhausted",
+                ),
             )
+            .await
         }
+    }
+}
+
+async fn audited_response(event: HttpAuditEvent, response: Response) -> Response {
+    match emit_http_audit_async(event).await {
+        Ok(()) => response,
+        Err(_) => error_response(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "audit_unavailable",
+            "HTTP audit is unavailable",
+        ),
     }
 }
 

@@ -1,5 +1,63 @@
 use super::*;
 
+#[tokio::test(flavor = "current_thread")]
+async fn slow_audit_output_does_not_block_health() {
+    let dir = TempDir::new().unwrap();
+    let workspace = crate::test_support::workspace_in(&dir);
+    let _capture = AuditCapture::install().await;
+    let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+    let started_tx = Arc::new(Mutex::new(Some(started_tx)));
+    let released = Arc::new((Mutex::new(false), std::sync::Condvar::new()));
+    let release_for_hook = Arc::clone(&released);
+    install_audit_hook(Arc::new(move |event| {
+        if event.path == "/v1/audit-blocking-probe" {
+            if let Some(tx) = started_tx.lock().unwrap().take() {
+                let _ = tx.send(());
+            }
+            let (lock, ready) = &*release_for_hook;
+            let mut released = lock.lock().unwrap();
+            while !*released {
+                released = ready.wait(released).unwrap();
+            }
+        }
+    }));
+
+    let release_for_watchdog = Arc::clone(&released);
+    let (watchdog_tx, watchdog_rx) = std::sync::mpsc::channel::<()>();
+    let watchdog = std::thread::spawn(move || {
+        let _ = watchdog_rx.recv_timeout(std::time::Duration::from_secs(3));
+        let (lock, ready) = &*release_for_watchdog;
+        *lock.lock().unwrap() = true;
+        ready.notify_all();
+    });
+
+    let app = router(workspace);
+    let probe_app = app.clone();
+    let probe = tokio::spawn(async move {
+        probe_app
+            .oneshot(authed_request("/v1/audit-blocking-probe"))
+            .await
+            .unwrap()
+    });
+    tokio::time::timeout(std::time::Duration::from_secs(2), started_rx)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let health = tokio::time::timeout(
+        std::time::Duration::from_secs(1),
+        app.oneshot(authed_request("/v1/health")),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(health.status(), StatusCode::OK);
+
+    watchdog_tx.send(()).unwrap();
+    watchdog.join().unwrap();
+    assert_eq!(probe.await.unwrap().status(), StatusCode::NOT_FOUND);
+}
+
 #[tokio::test]
 async fn authenticated_mutating_request_emits_audit_with_token_id_redacted_auth() {
     let dir = TempDir::new().unwrap();

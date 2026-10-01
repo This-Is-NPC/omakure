@@ -36,6 +36,18 @@ pub(super) fn emit_http_audit(event: HttpAuditEvent) {
     }
 }
 
+pub(super) async fn emit_http_audit_async(
+    event: HttpAuditEvent,
+) -> Result<(), crate::operations::OperationError> {
+    static GATE: OnceLock<Arc<tokio::sync::Semaphore>> = OnceLock::new();
+    let gate = Arc::clone(GATE.get_or_init(|| {
+        Arc::new(tokio::sync::Semaphore::new(
+            super::state::MAX_CONCURRENT_BLOCKING_OPERATIONS,
+        ))
+    }));
+    super::blocking::run_bounded("http audit", gate, move || emit_http_audit(event)).await
+}
+
 #[cfg(test)]
 pub(super) fn install_audit_hook(hook: AuditHook) {
     *audit_hook_slot().write().expect("audit hook lock") = Some(hook);

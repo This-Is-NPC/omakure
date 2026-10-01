@@ -266,13 +266,12 @@ pub fn resolve_args_with_access(
         };
 
         let persisted_value = value.provider_ref.as_deref().unwrap_or(REDACTED);
-        if let Some(provider_ref) = &value.provider_ref {
-            if !provider_refs
+        if let Some(provider_ref) = value.provider_ref.as_ref().filter(|provider_ref| {
+            !provider_refs
                 .iter()
-                .any(|existing| existing == provider_ref)
-            {
-                provider_refs.push(provider_ref.clone());
-            }
+                .any(|existing| existing == *provider_ref)
+        }) {
+            provider_refs.push(provider_ref.clone());
         }
         // Replace any existing occurrence of the flag (e.g. a literal
         // `secret://` ref passed on the command line) with the resolved value —
@@ -315,13 +314,11 @@ pub fn validate_queued_secret_args_reconstructable(
             .arg
             .clone()
             .unwrap_or_else(|| format!("--{}", field.name));
-        if let Some(value) = find_arg_value(args, &flag) {
-            if !value.starts_with("secret://") {
-                return Err((
-                    field.name.clone(),
-                    "queued secret args must use secret:// refs so workers can reconstruct them without persisted plaintext".to_string(),
-                ));
-            }
+        if find_arg_value(args, &flag).is_some_and(|value| !value.starts_with("secret://")) {
+            return Err((
+                field.name.clone(),
+                "queued secret args must use secret:// refs so workers can reconstruct them without persisted plaintext".to_string(),
+            ));
         }
     }
     Ok(())
@@ -383,10 +380,11 @@ fn find_arg_value(args: &[String], flag: &str) -> Option<String> {
                 .filter(|value| value.as_str() != REDACTED)
                 .cloned();
         }
-        if let Some(value) = arg.strip_prefix(&format!("{}=", flag)) {
-            if value != REDACTED {
-                return Some(value.to_string());
-            }
+        if let Some(value) = arg
+            .strip_prefix(&format!("{}=", flag))
+            .filter(|value| *value != REDACTED)
+        {
+            return Some(value.to_string());
         }
     }
     None
@@ -489,15 +487,15 @@ pub fn list_secret_metadata(workspace: &Workspace, access: &SecretAccess) -> Vec
     let mut out = Vec::new();
     // Env provider: only list refs explicitly allowed (never dump process env).
     for allowed in &access.allowed_refs {
-        if let Some(secret_ref) = SecretRef::parse(allowed) {
-            if secret_ref.provider == "env" && access.can_list_metadata(&secret_ref).is_ok() {
-                out.push(SecretMetadata {
-                    id: secret_ref.canonical(),
-                    source: "env".to_string(),
-                    delivery: "process-env".to_string(),
-                    allowed_targets: vec!["run".to_string(), "battery".to_string()],
-                });
-            }
+        if let Some(secret_ref) = SecretRef::parse(allowed).filter(|secret_ref| {
+            secret_ref.provider == "env" && access.can_list_metadata(secret_ref).is_ok()
+        }) {
+            out.push(SecretMetadata {
+                id: secret_ref.canonical(),
+                source: "env".to_string(),
+                delivery: "process-env".to_string(),
+                allowed_targets: vec!["run".to_string(), "battery".to_string()],
+            });
         }
     }
     // File providers: list keys from managed env files when provider wildcard or

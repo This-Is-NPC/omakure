@@ -11,7 +11,11 @@
 //! buffer, the rate windows, and the 7-day retention - is exercised at its
 //! exact frozen boundary second.
 
+#[path = "support/health_ids.rs"]
+mod health_ids;
 mod support;
+
+use health_ids::{hex16, peer_identity};
 
 use omakure::direct_health::{HealthOutcome, HealthSession};
 use omakure::direct_transport::{envelope_kind_hint, envelope_view, sign_health_envelope};
@@ -30,7 +34,6 @@ use omakure::node_identity::NodeIdentity;
 use omakure::node_registry::NodeRegistry;
 use rusqlite::Connection;
 use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
@@ -135,22 +138,6 @@ fn open_plane<'a>(node: &Node, registry: &'a NodeRegistry) -> HealthPlane<'a> {
     HealthPlane::with_clock(registry, Box::new(SharedClock(Arc::clone(&node.clock))))
 }
 
-/// The frozen node identifier construction, reused verbatim.
-fn node_id_for_x_only_public_key(public_key: &[u8]) -> String {
-    let mut digest = Sha256::new();
-    digest.update(b"omakure/node-id/v1\0");
-    digest.update(public_key);
-    let hash: [u8; 32] = digest.finalize().into();
-    format!("omk1_{}", omakure::hex::encode(&hash))
-}
-
-fn peer_identity(seed: u8) -> (String, String) {
-    let key = k256::schnorr::SigningKey::from_slice(&[seed; 32]).expect("test scalar");
-    let xonly = key.verifying_key().to_bytes();
-    let public_key = omakure::hex::encode(&xonly);
-    (node_id_for_x_only_public_key(&xonly), public_key)
-}
-
 fn trust_peer(node: &Node, seed: u8, role: &str, capabilities: &[&str]) -> String {
     let (node_id, public_key) = peer_identity(seed);
     let mut args = vec![
@@ -216,10 +203,6 @@ fn revoke_peer(node: &Node, node_id: &str) {
             "--confirmed".to_string(),
         ],
     ));
-}
-
-fn hex16(seed: u64) -> String {
-    format!("{seed:032x}")
 }
 
 fn signal_payload(

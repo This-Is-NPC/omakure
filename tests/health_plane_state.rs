@@ -12,7 +12,11 @@
 //! application dispatcher, or any CLI/HTTP adapter: those are covered by the
 //! corresponding transport and adapter integration suites.
 
+#[path = "support/health_ids.rs"]
+mod health_ids;
 mod support;
+
+use health_ids::{hex16, peer_identity};
 
 use omakure::health_plane::bounds::{PRESENCE_ONLINE_SECONDS, STORAGE_CEILING_BYTES};
 use omakure::health_plane::model::{HealthCode, HealthDecision, Presence};
@@ -21,7 +25,6 @@ use omakure::node::{NodeContext, NodePathOverrides, NodePlatform};
 use omakure::node_identity::NodeIdentity;
 use omakure::node_registry::{NodeRegistry, PeerState};
 use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
@@ -45,16 +48,6 @@ impl HealthClock for SharedClock {
     fn monotonic_millis(&self) -> u64 {
         0
     }
-}
-
-/// The frozen node identifier construction, reused verbatim so the test can
-/// name a synthetic peer without touching the identity module.
-fn node_id_for_x_only_public_key(public_key: &[u8]) -> String {
-    let mut digest = Sha256::new();
-    digest.update(b"omakure/node-id/v1\0");
-    digest.update(public_key);
-    let hash: [u8; 32] = digest.finalize().into();
-    format!("omk1_{}", omakure::hex::encode(&hash))
 }
 
 struct Node {
@@ -108,13 +101,6 @@ impl Node {
     }
 }
 
-fn peer_identity(seed: u8) -> (String, String) {
-    let key = k256::schnorr::SigningKey::from_slice(&[seed; 32]).expect("test scalar");
-    let xonly = key.verifying_key().to_bytes();
-    let public_key = omakure::hex::encode(&xonly);
-    (node_id_for_x_only_public_key(&xonly), public_key)
-}
-
 fn trust_peer(node: &Node, seed: u8, role: &str, capabilities: &[&str]) -> String {
     let (node_id, public_key) = peer_identity(seed);
     let mut args = vec![
@@ -153,10 +139,6 @@ fn revoke_peer(node: &Node, node_id: &str) {
             "--confirmed".to_string(),
         ],
     ));
-}
-
-fn hex16(seed: u64) -> String {
-    format!("{seed:032x}")
 }
 
 fn profile_payload(target: &str, message_seed: u64, revision: u64) -> Value {

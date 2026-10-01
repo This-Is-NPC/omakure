@@ -514,35 +514,36 @@ fn container_ip(guard: &ComposeGuard, service: &str) -> String {
     String::from_utf8_lossy(&output.stdout).trim().to_string()
 }
 
-#[allow(clippy::too_many_arguments)]
-fn bundle(
-    private_key: &[u8; 32],
+struct BundleCase<'a> {
     bundle_id: [u8; 16],
-    organization: &str,
-    audience: &str,
-    subject: (&str, &str),
-    certificate: &[u8],
+    organization: &'a str,
+    audience_node_id: &'a str,
+    subject_node_id: &'a str,
+    subject_public_key: &'a str,
+    subject_certificate: &'a [u8],
     issued_at: u64,
     expires_at: u64,
-) -> Vec<u8> {
+}
+
+fn bundle(private_key: &[u8; 32], case: BundleCase<'_>) -> Vec<u8> {
     SignedEnrollmentBundle::sign_with_material(
         private_key,
         [8; 16],
         omakure::enrollment::BundleMaterial {
-            bundle_id,
-            organization: organization.into(),
-            audience_node_id: audience.into(),
-            subject_node_id: subject.0.into(),
-            subject_xonly: enrollment::parse_hex(subject.1, 32)
+            bundle_id: case.bundle_id,
+            organization: case.organization.into(),
+            audience_node_id: case.audience_node_id.into(),
+            subject_node_id: case.subject_node_id.into(),
+            subject_xonly: enrollment::parse_hex(case.subject_public_key, 32)
                 .unwrap()
                 .try_into()
                 .unwrap(),
-            subject_transport_x25519: certificate[109..141].try_into().unwrap(),
-            subject_certificate: certificate.try_into().unwrap(),
+            subject_transport_x25519: case.subject_certificate[109..141].try_into().unwrap(),
+            subject_certificate: case.subject_certificate.try_into().unwrap(),
             role: EnrollmentRole::Conductor,
             capabilities: vec!["remote-run".into()],
-            issued_at,
-            expires_at,
+            issued_at: case.issued_at,
+            expires_at: case.expires_at,
         },
     )
     .unwrap()
@@ -597,63 +598,81 @@ fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
     let now = omakure::direct_transport::unix_seconds();
     let target_a_bundle = bundle(
         &private_key,
-        [1; 16],
-        "omakure",
-        target_a_id,
-        (authority_id, authority_key),
-        &authority_cert,
-        now,
-        now + 600,
+        BundleCase {
+            bundle_id: [1; 16],
+            organization: "omakure",
+            audience_node_id: target_a_id,
+            subject_node_id: authority_id,
+            subject_public_key: authority_key,
+            subject_certificate: &authority_cert,
+            issued_at: now,
+            expires_at: now + 600,
+        },
     );
     let target_b_bundle = bundle(
         &private_key,
-        [2; 16],
-        "omakure",
-        target_b_id,
-        (authority_id, authority_key),
-        &authority_cert,
-        now,
-        now + 600,
+        BundleCase {
+            bundle_id: [2; 16],
+            organization: "omakure",
+            audience_node_id: target_b_id,
+            subject_node_id: authority_id,
+            subject_public_key: authority_key,
+            subject_certificate: &authority_cert,
+            issued_at: now,
+            expires_at: now + 600,
+        },
     );
     let authority_a_bundle = bundle(
         &private_key,
-        [3; 16],
-        "omakure",
-        authority_id,
-        (target_a_id, target_a_key),
-        &target_a_cert,
-        now,
-        now + 600,
+        BundleCase {
+            bundle_id: [3; 16],
+            organization: "omakure",
+            audience_node_id: authority_id,
+            subject_node_id: target_a_id,
+            subject_public_key: target_a_key,
+            subject_certificate: &target_a_cert,
+            issued_at: now,
+            expires_at: now + 600,
+        },
     );
     let target_b_second_manager_bundle = bundle(
         &private_key,
-        [4; 16],
-        "omakure",
-        target_b_id,
-        (target_a_id, target_a_key),
-        &target_a_cert,
-        now,
-        now + 600,
+        BundleCase {
+            bundle_id: [4; 16],
+            organization: "omakure",
+            audience_node_id: target_b_id,
+            subject_node_id: target_a_id,
+            subject_public_key: target_a_key,
+            subject_certificate: &target_a_cert,
+            issued_at: now,
+            expires_at: now + 600,
+        },
     );
     let wrong_org_bundle = bundle(
         &private_key,
-        [5; 16],
-        "other-org",
-        target_a_id,
-        (authority_id, authority_key),
-        &authority_cert,
-        now,
-        now + 600,
+        BundleCase {
+            bundle_id: [5; 16],
+            organization: "other-org",
+            audience_node_id: target_a_id,
+            subject_node_id: authority_id,
+            subject_public_key: authority_key,
+            subject_certificate: &authority_cert,
+            issued_at: now,
+            expires_at: now + 600,
+        },
     );
     let expired_bundle = bundle(
         &private_key,
-        [6; 16],
-        "omakure",
-        target_a_id,
-        (authority_id, authority_key),
-        &authority_cert,
-        now.saturating_sub(2_000),
-        now.saturating_sub(1_000),
+        BundleCase {
+            bundle_id: [6; 16],
+            organization: "omakure",
+            audience_node_id: target_a_id,
+            subject_node_id: authority_id,
+            subject_public_key: authority_key,
+            subject_certificate: &authority_cert,
+            issued_at: now.saturating_sub(2_000),
+            expires_at: now.saturating_sub(1_000),
+        },
     );
     fs::write(files.join("target-a.bundle"), &target_a_bundle).unwrap();
     fs::write(files.join("target-b.bundle"), &target_b_bundle).unwrap();
@@ -967,13 +986,16 @@ fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
     let before = status(&compose_guard, "signed-target-a")["data"]["trust"].clone();
     let revoked_bundle = bundle(
         &private_key,
-        [7; 16],
-        "omakure",
-        target_a_id,
-        (authority_id, authority_key),
-        &authority_cert,
-        now,
-        now + 600,
+        BundleCase {
+            bundle_id: [7; 16],
+            organization: "omakure",
+            audience_node_id: target_a_id,
+            subject_node_id: authority_id,
+            subject_public_key: authority_key,
+            subject_certificate: &authority_cert,
+            issued_at: now,
+            expires_at: now + 600,
+        },
     );
     let revoked_bundle_path = files.join("revoked.bundle");
     fs::write(&revoked_bundle_path, revoked_bundle).unwrap();

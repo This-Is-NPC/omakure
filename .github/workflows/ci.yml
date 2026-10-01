@@ -124,7 +124,7 @@ jobs:
           ./scripts/tasks/atomic/generated-exec-contract
 
   usage-artifacts:
-    name: Usage documentation and KDL artifact contract
+    name: CLI reference, Usage, and operation catalog artifact contract
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -133,6 +133,10 @@ jobs:
         with:
           toolchain: 1.97.1
       - uses: Swatinem/rust-cache@v2.9.2
+      - name: Check generated CLI reference
+        run: |
+          scripts/tasks/cli-reference --check
+          git diff --exit-code -- docs/cli-reference.md
       - name: Check generated Usage artifacts and reviewed losses
         run: cargo run --quiet --locked --features usage-generator --bin usage-kdl -- --check
       - name: Check generated Usage documentation

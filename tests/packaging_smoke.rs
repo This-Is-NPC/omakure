@@ -739,7 +739,6 @@ fn docs_index_preserves_canonical_manual_ownership() {
 fn generated_documentation_checks_are_read_only_and_fresh() {
     let root = repo_root();
     let artifacts = [
-        "docs/cli-reference.md",
         "docs/usage/omakure.md",
         "docs/usage/omakure.1",
         "docs/usage/omakure.kdl",
@@ -760,11 +759,6 @@ fn generated_documentation_checks_are_read_only_and_fresh() {
         })
         .collect::<Vec<_>>();
     for (label, script, args) in [
-        (
-            "cli-reference",
-            "scripts/tasks/cli-reference",
-            &["--check"][..],
-        ),
         (
             "usage-kdl",
             "scripts/tasks/atomic/run-bounded",

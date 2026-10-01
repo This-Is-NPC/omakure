@@ -1,5 +1,5 @@
+use super::EnvironmentError;
 use super::validate_env_key;
-use crate::error::{AppResult, EnvironmentError};
 use std::fs;
 use std::io::Write;
 use std::path::Path;
@@ -12,7 +12,7 @@ pub(super) fn ensure_env_path_safe(
     envs_dir: &Path,
     path: &Path,
     must_exist: bool,
-) -> AppResult<()> {
+) -> Result<(), EnvironmentError> {
     let envs = envs_dir.canonicalize().map_err(|err| {
         EnvironmentError::ReadFailed(format!(
             "Failed to resolve environments dir {}: {}",
@@ -24,15 +24,13 @@ pub(super) fn ensure_env_path_safe(
     if must_exist && !path.is_file() {
         return Err(EnvironmentError::NotFound {
             name: path.display().to_string(),
-        }
-        .into());
+        });
     }
 
     if fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
         return Err(EnvironmentError::UnsafePath {
             path: path.display().to_string(),
-        }
-        .into());
+        });
     }
 
     let parent = path
@@ -49,22 +47,23 @@ pub(super) fn ensure_env_path_safe(
     if parent != envs {
         return Err(EnvironmentError::UnsafePath {
             path: path.display().to_string(),
-        }
-        .into());
+        });
     }
 
     Ok(())
 }
 
-pub(super) fn write_env_params_atomic(path: &Path, params: &[(&str, &str)]) -> AppResult<()> {
+pub(super) fn write_env_params_atomic(
+    path: &Path,
+    params: &[(&str, &str)],
+) -> Result<(), EnvironmentError> {
     let mut contents = String::new();
     for (key, value) in params {
         validate_env_key(key)?;
         if value.contains('\n') || value.contains('\r') {
             return Err(EnvironmentError::WriteFailed(format!(
                 "Environment value for {key} must be single-line"
-            ))
-            .into());
+            )));
         }
         contents.push_str(key);
         contents.push('=');
@@ -74,11 +73,11 @@ pub(super) fn write_env_params_atomic(path: &Path, params: &[(&str, &str)]) -> A
     write_file_atomic(path, contents.as_bytes())
 }
 
-pub(super) fn write_active_atomic(path: &Path, name: &str) -> AppResult<()> {
+pub(super) fn write_active_atomic(path: &Path, name: &str) -> Result<(), EnvironmentError> {
     write_file_atomic(path, format!("{name}\n").as_bytes())
 }
 
-pub(super) fn write_file_atomic(path: &Path, contents: &[u8]) -> AppResult<()> {
+pub(super) fn write_file_atomic(path: &Path, contents: &[u8]) -> Result<(), EnvironmentError> {
     let parent = path.parent().ok_or_else(|| EnvironmentError::UnsafePath {
         path: path.display().to_string(),
     })?;

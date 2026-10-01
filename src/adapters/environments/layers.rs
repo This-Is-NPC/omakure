@@ -1,6 +1,6 @@
+use super::EnvironmentError;
 use super::values::{expand_env_value, should_mask_env_value, strip_quotes};
 use super::{FsEnvironmentRepository, MASKED_ENV_VALUE, load_active_env_name};
-use crate::error::{AppResult, EnvironmentError};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
@@ -170,7 +170,7 @@ fn active_env_raw(envs_dir: &Path) -> Vec<(String, String)> {
 pub(crate) fn read_managed_env_defaults(
     envs_dir: &Path,
     name: &str,
-) -> AppResult<HashMap<String, String>> {
+) -> Result<HashMap<String, String>, EnvironmentError> {
     let repo = FsEnvironmentRepository::new(envs_dir.to_path_buf());
     let path = repo.env_path_for_name(name, true)?;
     repo.read_env_defaults(&path)

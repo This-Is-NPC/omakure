@@ -1,5 +1,4 @@
-use crate::adapters::environments::FsEnvironmentRepository;
-use crate::error::{AppError, EnvironmentError};
+use crate::adapters::environments::{EnvironmentError, FsEnvironmentRepository};
 use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -111,26 +110,25 @@ fn param_refs(params: &[EnvParam]) -> Vec<(&str, &str)> {
         .collect()
 }
 
-fn map_env_error(err: AppError) -> OperationError {
+fn map_env_error(err: EnvironmentError) -> OperationError {
     match err {
-        AppError::Environment(EnvironmentError::NotFound { name }) => {
+        EnvironmentError::NotFound { name } => {
             OperationError::new(OperationErrorCode::NotFound, name)
         }
-        AppError::Environment(EnvironmentError::InvalidName { name }) => OperationError::new(
+        EnvironmentError::InvalidName { name } => OperationError::new(
             OperationErrorCode::InvalidInput,
             format!("Invalid environment name: {name}"),
         ),
-        AppError::Environment(EnvironmentError::UnsafePath { path }) => OperationError::new(
+        EnvironmentError::UnsafePath { path } => OperationError::new(
             OperationErrorCode::UnsafePath,
             format!("Unsafe environment path: {path}"),
         ),
-        AppError::Environment(EnvironmentError::ReadFailed(message)) => {
+        EnvironmentError::ReadFailed(message) => {
             OperationError::new(OperationErrorCode::IoFailed, message)
         }
-        AppError::Environment(EnvironmentError::WriteFailed(message)) => {
+        EnvironmentError::WriteFailed(message) => {
             OperationError::new(OperationErrorCode::IoFailed, message)
         }
-        other => OperationError::new(OperationErrorCode::IoFailed, other.to_string()),
     }
 }
 

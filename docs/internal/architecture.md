@@ -177,11 +177,12 @@ src/
 │   ├── baseline/            baseline delivery, install, status, and rollback
 │   └── worker.rs            queue worker lifecycle, Cue recovery, preflight, and finalization
 ├── adapters/                filesystem, process, environment, and checks
+│   ├── environments/        managed environment files, parsing, and adapter errors
 │   ├── git.rs               isolated Git process execution and bounded probes
 │   ├── system_checks.rs     interpreter checks and bounded runtime version probes
 │   ├── fs/                  no-follow Unix file operations for Battery installs
 │   └── signals.rs           process shutdown signal registration
-├── error.rs                 schema and environment application errors
+├── error.rs                 shared script and schema adapter errors
 ├── util/                    shared filesystem, process, path, encoding, and OS entropy helpers
 ├── app_meta.rs              package version constant
 ├── inventory/               pure Clap-tree inventory conversion, CLI reference rendering, and HTTP routes

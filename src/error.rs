@@ -1,7 +1,7 @@
 use std::io;
 use thiserror::Error;
 
-/// Application error type covering all error categories.
+/// Shared adapter error for script and schema operations.
 #[derive(Debug, Error)]
 pub enum AppError {
     #[error("IO error: {0}")]
@@ -12,9 +12,6 @@ pub enum AppError {
 
     #[error("Script error: {0}")]
     Script(#[from] ScriptError),
-
-    #[error("Environment error: {0}")]
-    Environment(#[from] EnvironmentError),
 }
 
 /// Errors related to schema parsing.
@@ -64,25 +61,6 @@ pub enum ScriptError {
     /// broken script, and the two must not be confused at the exit code.
     #[error("the running omakure binary could not be resolved to execute Lua: {reason}")]
     HostBinaryUnavailable { reason: String },
-}
-
-/// Errors related to environment configuration.
-#[derive(Debug, Error)]
-pub enum EnvironmentError {
-    #[error("Environment not found: {name}")]
-    NotFound { name: String },
-
-    #[error("Invalid environment name: {name}")]
-    InvalidName { name: String },
-
-    #[error("Unsafe environment path: {path}")]
-    UnsafePath { path: String },
-
-    #[error("Failed to read environment: {0}")]
-    ReadFailed(String),
-
-    #[error("Failed to write environment: {0}")]
-    WriteFailed(String),
 }
 
 /// Result type alias using AppError.

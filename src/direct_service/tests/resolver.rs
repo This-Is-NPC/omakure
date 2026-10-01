@@ -71,6 +71,89 @@ fn repeated_direct_service_start_stop_does_not_accumulate_resolver_workers() {
     }
 }
 
+#[test]
+fn static_peer_resolution_observes_an_address_change_on_the_next_attempt() {
+    use hickory_resolver::config::NameServerConfig;
+    use hickory_resolver::proto::op::{Message, MessageType, ResponseCode};
+    use hickory_resolver::proto::rr::{rdata::A, RData, Record, RecordType};
+    use hickory_resolver::proto::xfer::Protocol;
+    use std::net::{Ipv4Addr, UdpSocket};
+
+    let _test_lock = RESOLVER_TEST_LOCK.lock().unwrap();
+    let dns = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+    dns.set_read_timeout(Some(Duration::from_millis(100)))
+        .unwrap();
+    let dns_address = dns.local_addr().unwrap();
+    let address = Arc::new(Mutex::new(Ipv4Addr::new(127, 0, 0, 1)));
+    let answer_address = Arc::clone(&address);
+    let done = Arc::new(AtomicBool::new(false));
+    let stop_dns = Arc::clone(&done);
+    let server = thread::spawn(move || {
+        let mut buffer = [0u8; 512];
+        while !stop_dns.load(Ordering::SeqCst) {
+            let (length, client) = match dns.recv_from(&mut buffer) {
+                Ok(request) => request,
+                Err(error) if error.kind() == io::ErrorKind::WouldBlock => continue,
+                Err(error) if error.kind() == io::ErrorKind::TimedOut => continue,
+                Err(error) => panic!("DNS test server failed: {error}"),
+            };
+            let request = Message::from_vec(&buffer[..length]).unwrap();
+            let mut response = Message::new();
+            response
+                .set_id(request.id())
+                .set_message_type(MessageType::Response)
+                .set_response_code(ResponseCode::NoError)
+                .add_queries(request.queries().to_vec());
+            for query in request.queries() {
+                if query.query_type() == RecordType::A {
+                    let ip = *answer_address.lock().unwrap();
+                    response.add_answer(Record::from_rdata(
+                        query.name().clone(),
+                        600,
+                        RData::A(A::from(ip)),
+                    ));
+                }
+            }
+            dns.send_to(&response.to_vec().unwrap(), client).unwrap();
+        }
+    });
+
+    let config = ResolverConfig::from_parts(
+        None,
+        Vec::new(),
+        vec![NameServerConfig::new(dns_address, Protocol::Udp)],
+    );
+    let resolver = Resolver::start_with_config(Some(config)).unwrap();
+    let stop = AtomicBool::new(false);
+    let endpoint = "moving.test.:7879";
+    let first = resolver
+        .resolve(endpoint, Instant::now() + Duration::from_secs(2), &stop)
+        .unwrap();
+    assert_eq!(
+        first,
+        vec![SocketAddr::new(
+            IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+            7879
+        )]
+    );
+
+    *address.lock().unwrap() = Ipv4Addr::new(127, 0, 0, 2);
+    let second = resolver
+        .resolve(endpoint, Instant::now() + Duration::from_secs(2), &stop)
+        .unwrap();
+    assert_eq!(
+        second,
+        vec![SocketAddr::new(
+            IpAddr::V4(Ipv4Addr::new(127, 0, 0, 2)),
+            7879
+        )]
+    );
+
+    resolver.shutdown();
+    done.store(true, Ordering::SeqCst);
+    server.join().unwrap();
+}
+
 fn blackhole_resolver_config() -> ResolverConfig {
     use hickory_resolver::config::NameServerConfig;
     use hickory_resolver::proto::xfer::Protocol;

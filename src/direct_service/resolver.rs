@@ -189,7 +189,7 @@ impl Drop for ResolverTaskGuard {
 }
 
 fn build_resolver(config: Option<ResolverConfig>) -> io::Result<TokioResolver> {
-    let builder = match config {
+    let mut builder = match config {
         Some(config) => {
             TokioResolver::builder_with_config(config, TokioConnectionProvider::default())
         }
@@ -208,6 +208,10 @@ fn build_resolver(config: Option<ResolverConfig>) -> io::Result<TokioResolver> {
             }
         }
     };
+    // Static peers can move to a new address while this service stays up.
+    // Each reconnect attempt must observe DNS again, regardless of the TTL
+    // returned before the peer restarted.
+    builder.options_mut().cache_size = 0;
     Ok(builder.build())
 }
 

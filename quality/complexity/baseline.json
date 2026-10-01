@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "1597cbca03b330970f49e1c2e5aef9402e3edbbf35f9714ee7f719611e41b1a5",
+  "canonical_sha256": "3cb2e2412c7e4d89adc8748d7b7e8699485c3346e3b3627306c88a7ce42fc406",
   "config_identity": "no-config",
   "files": [
     {
@@ -2883,7 +2883,7 @@
       },
       "native": {
         "cognitive": 19,
-        "cyclomatic": 67
+        "cyclomatic": 66
       },
       "path": "src/node_registry/bundle.rs",
       "source_class": "handwritten"
@@ -64846,6 +64846,58 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
+        "identity": "crate::node_registry::bundle::enrollment_timestamp",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/bundle.rs",
+        "signature": "fn enrollment_timestamp(now: u64) -> Result<i64, RegistryError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::bundle::enrollment_timestamp",
+      "kind": "function",
+      "line": 28,
+      "name": "enrollment_timestamp",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 28,
+        "name": "enrollment_timestamp"
+      },
+      "path": "src/node_registry/bundle.rs",
+      "signature": "fn enrollment_timestamp(now: u64) -> Result<i64, RegistryError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::bundle::enrollment_timestamp::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/bundle.rs",
+        "signature": ".map_err(|_| RegistryError::InvalidInput(\"enrollment timestamp is too large\".into()))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::bundle::enrollment_timestamp::<closure>",
+      "kind": "closure",
+      "line": 30,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 30,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/bundle.rs",
+      "signature": ".map_err(|_| RegistryError::InvalidInput(\"enrollment timestamp is too large\".into()))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
         "identity": "crate::node_registry::bundle::bootstrap_proof_consumed",
         "macro_expansion": "not_measured",
         "path": "src/node_registry/bundle.rs",
@@ -64854,14 +64906,14 @@
       },
       "identity": "crate::node_registry::bundle::bootstrap_proof_consumed",
       "kind": "method",
-      "line": 24,
+      "line": 34,
       "name": "bootstrap_proof_consumed",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 24,
+        "line": 34,
         "name": "bootstrap_proof_consumed"
       },
       "path": "src/node_registry/bundle.rs",
@@ -64880,14 +64932,14 @@
       },
       "identity": "crate::node_registry::bundle::bootstrap_proof_consumed::<closure>",
       "kind": "closure",
-      "line": 28,
+      "line": 38,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 28,
+        "line": 38,
         "name": "<closure>"
       },
       "path": "src/node_registry/bundle.rs",
@@ -64906,14 +64958,14 @@
       },
       "identity": "crate::node_registry::bundle::bootstrap_proof_consumed::<closure>::<closure>",
       "kind": "closure",
-      "line": 36,
+      "line": 46,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 36,
+        "line": 46,
         "name": "<closure>"
       },
       "path": "src/node_registry/bundle.rs",
@@ -64924,22 +64976,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node_registry::bundle::bootstrap_proof_consumed::<closure>::<closure>@38#2",
+        "identity": "crate::node_registry::bundle::bootstrap_proof_consumed::<closure>::<closure>@48#2",
         "macro_expansion": "not_measured",
         "path": "src/node_registry/bundle.rs",
         "signature": ".map(|value| value != 0)",
         "source_class": "handwritten"
       },
-      "identity": "crate::node_registry::bundle::bootstrap_proof_consumed::<closure>::<closure>@38#2",
+      "identity": "crate::node_registry::bundle::bootstrap_proof_consumed::<closure>::<closure>@48#2",
       "kind": "closure",
-      "line": 38,
+      "line": 48,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 38,
+        "line": 48,
         "name": "<closure>"
       },
       "path": "src/node_registry/bundle.rs",
@@ -64958,14 +65010,14 @@
       },
       "identity": "crate::node_registry::bundle::pending_bootstrap_cleanups",
       "kind": "method",
-      "line": 43,
+      "line": 53,
       "name": "pending_bootstrap_cleanups",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 43,
+        "line": 53,
         "name": "pending_bootstrap_cleanups"
       },
       "path": "src/node_registry/bundle.rs",
@@ -64984,18 +65036,44 @@
       },
       "identity": "crate::node_registry::bundle::pending_bootstrap_cleanups::<closure>",
       "kind": "closure",
-      "line": 49,
+      "line": 59,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 49,
+        "line": 59,
         "name": "<closure>"
       },
       "path": "src/node_registry/bundle.rs",
       "signature": ".map_err(|_| RegistryError::InvalidInput(\"cleanup limit is too large\".to_string()))?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::node_registry::bundle::pending_bootstrap_cleanups::<closure>@60#2",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/bundle.rs",
+        "signature": "self.with_connection(|connection| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::bundle::pending_bootstrap_cleanups::<closure>@60#2",
+      "kind": "closure",
+      "line": 60,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "closure",
+        "line": 60,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/bundle.rs",
+      "signature": "self.with_connection(|connection| {",
       "source_class": "handwritten"
     },
     {
@@ -65010,14 +65088,14 @@
       },
       "identity": "crate::node_registry::bundle::pending_bootstrap_cleanups::<closure>::<closure>",
       "kind": "closure",
-      "line": 62,
+      "line": 72,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 62,
+        "line": 72,
         "name": "<closure>"
       },
       "path": "src/node_registry/bundle.rs",
@@ -65028,22 +65106,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node_registry::bundle::pending_bootstrap_cleanups::<closure>::<closure>@74#2",
+        "identity": "crate::node_registry::bundle::pending_bootstrap_cleanups::<closure>::<closure>@84#2",
         "macro_expansion": "not_measured",
         "path": "src/node_registry/bundle.rs",
         "signature": ".map(|(organization, token_hash, nonce_hash, bundle_id)| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::node_registry::bundle::pending_bootstrap_cleanups::<closure>::<closure>@74#2",
+      "identity": "crate::node_registry::bundle::pending_bootstrap_cleanups::<closure>::<closure>@84#2",
       "kind": "closure",
-      "line": 74,
+      "line": 84,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 74,
+        "line": 84,
         "name": "<closure>"
       },
       "path": "src/node_registry/bundle.rs",
@@ -65062,14 +65140,14 @@
       },
       "identity": "crate::node_registry::bundle::pending_bootstrap_cleanups::<closure>::<closure>::<closure>",
       "kind": "closure",
-      "line": 77,
+      "line": 87,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 77,
+        "line": 87,
         "name": "<closure>"
       },
       "path": "src/node_registry/bundle.rs",
@@ -65080,22 +65158,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node_registry::bundle::pending_bootstrap_cleanups::<closure>::<closure>::<closure>@82#2",
+        "identity": "crate::node_registry::bundle::pending_bootstrap_cleanups::<closure>::<closure>::<closure>@92#2",
         "macro_expansion": "not_measured",
         "path": "src/node_registry/bundle.rs",
         "signature": "nonce_hash: nonce_hash.try_into().map_err(|_| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::node_registry::bundle::pending_bootstrap_cleanups::<closure>::<closure>::<closure>@82#2",
+      "identity": "crate::node_registry::bundle::pending_bootstrap_cleanups::<closure>::<closure>::<closure>@92#2",
       "kind": "closure",
-      "line": 82,
+      "line": 92,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 82,
+        "line": 92,
         "name": "<closure>"
       },
       "path": "src/node_registry/bundle.rs",
@@ -65106,22 +65184,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node_registry::bundle::pending_bootstrap_cleanups::<closure>::<closure>::<closure>@87#3",
+        "identity": "crate::node_registry::bundle::pending_bootstrap_cleanups::<closure>::<closure>::<closure>@97#3",
         "macro_expansion": "not_measured",
         "path": "src/node_registry/bundle.rs",
         "signature": "bundle_id: bundle_id.try_into().map_err(|_| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::node_registry::bundle::pending_bootstrap_cleanups::<closure>::<closure>::<closure>@87#3",
+      "identity": "crate::node_registry::bundle::pending_bootstrap_cleanups::<closure>::<closure>::<closure>@97#3",
       "kind": "closure",
-      "line": 87,
+      "line": 97,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 87,
+        "line": 97,
         "name": "<closure>"
       },
       "path": "src/node_registry/bundle.rs",
@@ -65140,18 +65218,564 @@
       },
       "identity": "crate::node_registry::bundle::complete_bootstrap_cleanup",
       "kind": "method",
-      "line": 104,
+      "line": 114,
       "name": "complete_bootstrap_cleanup",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 104,
+        "line": 114,
         "name": "complete_bootstrap_cleanup"
       },
       "path": "src/node_registry/bundle.rs",
       "signature": "pub(crate) fn complete_bootstrap_cleanup( &self, cleanup: &PendingBootstrapCleanup, bundle_digest: Option<&[u8",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::node_registry::bundle::complete_bootstrap_cleanup::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/bundle.rs",
+        "signature": "self.with_mutating_connection(|connection| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::bundle::complete_bootstrap_cleanup::<closure>",
+      "kind": "closure",
+      "line": 119,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "closure",
+        "line": 119,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/bundle.rs",
+      "signature": "self.with_mutating_connection(|connection| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 3,
+      "cyclomatic": 5,
+      "derived": {
+        "identity": "crate::node_registry::bundle::activate_signed_bundle",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/bundle.rs",
+        "signature": "pub fn activate_signed_bundle( &self, bundle: &SignedEnrollmentBundle, actor: &str, reason: &str, now: u64, token_hash: &[u8",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::bundle::activate_signed_bundle",
+      "kind": "method",
+      "line": 156,
+      "name": "activate_signed_bundle",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 3,
+        "cyclomatic": 5,
+        "kind": "method",
+        "line": 156,
+        "name": "activate_signed_bundle"
+      },
+      "path": "src/node_registry/bundle.rs",
+      "signature": "pub fn activate_signed_bundle( &self, bundle: &SignedEnrollmentBundle, actor: &str, reason: &str, now: u64, token_hash: &[u8",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::node_registry::bundle::activate_signed_bundle_transaction",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/bundle.rs",
+        "signature": "fn activate_signed_bundle_transaction( &self, bundle: &SignedEnrollmentBundle, actor: &str, reason: &str, now: u64, proof: BootstrapProof<'_>, bundle_digest: &[u8",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::bundle::activate_signed_bundle_transaction",
+      "kind": "method",
+      "line": 194,
+      "name": "activate_signed_bundle_transaction",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "method",
+        "line": 194,
+        "name": "activate_signed_bundle_transaction"
+      },
+      "path": "src/node_registry/bundle.rs",
+      "signature": "fn activate_signed_bundle_transaction( &self, bundle: &SignedEnrollmentBundle, actor: &str, reason: &str, now: u64, proof: BootstrapProof<'_>, bundle_digest: &[u8",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::bundle::activate_signed_bundle_transaction::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/bundle.rs",
+        "signature": ".map_err(|_| RegistryError::InvalidInput(\"enrollment expiry is too large\".into()))?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::bundle::activate_signed_bundle_transaction::<closure>",
+      "kind": "closure",
+      "line": 219,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 219,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/bundle.rs",
+      "signature": ".map_err(|_| RegistryError::InvalidInput(\"enrollment expiry is too large\".into()))?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::bundle::activate_signed_bundle_transaction::<closure>@220#2",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/bundle.rs",
+        "signature": "self.with_mutating_connection(|connection| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::bundle::activate_signed_bundle_transaction::<closure>@220#2",
+      "kind": "closure",
+      "line": 220,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 220,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/bundle.rs",
+      "signature": "self.with_mutating_connection(|connection| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::bundle::activate_signed_bundle_transaction::<closure>::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/bundle.rs",
+        "signature": "let peer = load_peer(&transaction, &registration.node_id)?.ok_or_else(|| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::bundle::activate_signed_bundle_transaction::<closure>::<closure>",
+      "kind": "closure",
+      "line": 293,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 293,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/bundle.rs",
+      "signature": "let peer = load_peer(&transaction, &registration.node_id)?.ok_or_else(|| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 6,
+      "derived": {
+        "identity": "crate::node_registry::bundle::bundle_failure_code",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/bundle.rs",
+        "signature": "fn bundle_failure_code(error: &RegistryError) -> &'static str",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::bundle::bundle_failure_code",
+      "kind": "function",
+      "line": 302,
+      "name": "bundle_failure_code",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 6,
+        "kind": "function",
+        "line": 302,
+        "name": "bundle_failure_code"
+      },
+      "path": "src/node_registry/bundle.rs",
+      "signature": "fn bundle_failure_code(error: &RegistryError) -> &'static str",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 9,
+      "derived": {
+        "identity": "crate::node_registry::bundle::bundle_failure_detail",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/bundle.rs",
+        "signature": "fn bundle_failure_detail(error: &RegistryError) -> &'static str",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::bundle::bundle_failure_detail",
+      "kind": "function",
+      "line": 313,
+      "name": "bundle_failure_detail",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 9,
+        "kind": "function",
+        "line": 313,
+        "name": "bundle_failure_detail"
+      },
+      "path": "src/node_registry/bundle.rs",
+      "signature": "fn bundle_failure_detail(error: &RegistryError) -> &'static str",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 4,
+      "cyclomatic": 4,
+      "derived": {
+        "identity": "crate::node_registry::bundle::ensure_bundle_bootstrap_proof",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/bundle.rs",
+        "signature": "fn ensure_bundle_bootstrap_proof( transaction: &Transaction<'_>, local_node_id: &str, organization: &str, proof: &BootstrapProof<'_>, replay_expiry: i64, ) -> Result<(), RegistryError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::bundle::ensure_bundle_bootstrap_proof",
+      "kind": "function",
+      "line": 329,
+      "name": "ensure_bundle_bootstrap_proof",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 4,
+        "cyclomatic": 4,
+        "kind": "function",
+        "line": 329,
+        "name": "ensure_bundle_bootstrap_proof"
+      },
+      "path": "src/node_registry/bundle.rs",
+      "signature": "fn ensure_bundle_bootstrap_proof( transaction: &Transaction<'_>, local_node_id: &str, organization: &str, proof: &BootstrapProof<'_>, replay_expiry: i64, ) -> Result<(), RegistryError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::bundle::ensure_bundle_bootstrap_proof::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/bundle.rs",
+        "signature": "|row| Ok((row.get(0)?, row.get(1)?)),",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::bundle::ensure_bundle_bootstrap_proof::<closure>",
+      "kind": "closure",
+      "line": 347,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 347,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/bundle.rs",
+      "signature": "|row| Ok((row.get(0)?, row.get(1)?)),",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::bundle::ensure_bundle_bootstrap_proof::<closure>@352#2",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/bundle.rs",
+        "signature": ".is_some_and(|(consumed_at, _)| consumed_at.is_some())",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::bundle::ensure_bundle_bootstrap_proof::<closure>@352#2",
+      "kind": "closure",
+      "line": 352,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 352,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/bundle.rs",
+      "signature": ".is_some_and(|(consumed_at, _)| consumed_at.is_some())",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::bundle::ensure_bundle_bootstrap_proof::<closure>@358#3",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/bundle.rs",
+        "signature": "transaction.query_row(\"SELECT COUNT(*) FROM bootstrap_proofs\", [], |row| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::bundle::ensure_bundle_bootstrap_proof::<closure>@358#3",
+      "kind": "closure",
+      "line": 358,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 358,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/bundle.rs",
+      "signature": "transaction.query_row(\"SELECT COUNT(*) FROM bootstrap_proofs\", [], |row| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::node_registry::bundle::ensure_bundle_replay_available",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/bundle.rs",
+        "signature": "fn ensure_bundle_replay_available( transaction: &Transaction<'_>, bundle_id: &[u8",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::bundle::ensure_bundle_replay_available",
+      "kind": "function",
+      "line": 380,
+      "name": "ensure_bundle_replay_available",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 3,
+        "kind": "function",
+        "line": 380,
+        "name": "ensure_bundle_replay_available"
+      },
+      "path": "src/node_registry/bundle.rs",
+      "signature": "fn ensure_bundle_replay_available( transaction: &Transaction<'_>, bundle_id: &[u8",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::bundle::ensure_bundle_replay_available::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/bundle.rs",
+        "signature": "|row| row.get::<_, i64>(0),",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::bundle::ensure_bundle_replay_available::<closure>",
+      "kind": "closure",
+      "line": 388,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 388,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/bundle.rs",
+      "signature": "|row| row.get::<_, i64>(0),",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::bundle::ensure_bundle_replay_available::<closure>@394#2",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/bundle.rs",
+        "signature": "transaction.query_row(\"SELECT COUNT(*) FROM enrollment_replays\", [], |row| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::bundle::ensure_bundle_replay_available::<closure>@394#2",
+      "kind": "closure",
+      "line": 394,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 394,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/bundle.rs",
+      "signature": "transaction.query_row(\"SELECT COUNT(*) FROM enrollment_replays\", [], |row| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::node_registry::bundle::ensure_bundle_rate_limit",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/bundle.rs",
+        "signature": "fn ensure_bundle_rate_limit( transaction: &Transaction<'_>, first_seen: i64, ) -> Result<(), RegistryError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::bundle::ensure_bundle_rate_limit",
+      "kind": "function",
+      "line": 403,
+      "name": "ensure_bundle_rate_limit",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 403,
+        "name": "ensure_bundle_rate_limit"
+      },
+      "path": "src/node_registry/bundle.rs",
+      "signature": "fn ensure_bundle_rate_limit( transaction: &Transaction<'_>, first_seen: i64, ) -> Result<(), RegistryError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::bundle::ensure_bundle_rate_limit::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/bundle.rs",
+        "signature": "|row| row.get(0),",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::bundle::ensure_bundle_rate_limit::<closure>",
+      "kind": "closure",
+      "line": 413,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 413,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/bundle.rs",
+      "signature": "|row| row.get(0),",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 4,
+      "cyclomatic": 5,
+      "derived": {
+        "identity": "crate::node_registry::bundle::ensure_bundle_peer_available",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/bundle.rs",
+        "signature": "fn ensure_bundle_peer_available( registry: &NodeRegistry, transaction: &Transaction<'_>, registration: &PeerRegistration, ) -> Result<(), RegistryError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::bundle::ensure_bundle_peer_available",
+      "kind": "function",
+      "line": 421,
+      "name": "ensure_bundle_peer_available",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 4,
+        "cyclomatic": 5,
+        "kind": "function",
+        "line": 421,
+        "name": "ensure_bundle_peer_available"
+      },
+      "path": "src/node_registry/bundle.rs",
+      "signature": "fn ensure_bundle_peer_available( registry: &NodeRegistry, transaction: &Transaction<'_>, registration: &PeerRegistration, ) -> Result<(), RegistryError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::bundle::ensure_bundle_peer_available::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/bundle.rs",
+        "signature": "|row| row.get::<_, i64>(0),",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::bundle::ensure_bundle_peer_available::<closure>",
+      "kind": "closure",
+      "line": 437,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 437,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/bundle.rs",
+      "signature": "|row| row.get::<_, i64>(0),",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::bundle::cleanup_enrollment_replays",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/bundle.rs",
+        "signature": "pub(super) fn cleanup_enrollment_replays( transaction: &Transaction<'_>, now: u64, ) -> Result<(), RegistryError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::bundle::cleanup_enrollment_replays",
+      "kind": "function",
+      "line": 445,
+      "name": "cleanup_enrollment_replays",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 445,
+        "name": "cleanup_enrollment_replays"
+      },
+      "path": "src/node_registry/bundle.rs",
+      "signature": "pub(super) fn cleanup_enrollment_replays( transaction: &Transaction<'_>, now: u64, ) -> Result<(), RegistryError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::bundle::cleanup_bootstrap_proofs",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/bundle.rs",
+        "signature": "fn cleanup_bootstrap_proofs(transaction: &Transaction<'_>, now: u64) -> Result<(), RegistryError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::bundle::cleanup_bootstrap_proofs",
+      "kind": "function",
+      "line": 462,
+      "name": "cleanup_bootstrap_proofs",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 462,
+        "name": "cleanup_bootstrap_proofs"
+      },
+      "path": "src/node_registry/bundle.rs",
+      "signature": "fn cleanup_bootstrap_proofs(transaction: &Transaction<'_>, now: u64) -> Result<(), RegistryError>",
       "source_class": "handwritten"
     },
     {
@@ -65441,84 +66065,6 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 3,
-      "cyclomatic": 5,
-      "derived": {
-        "identity": "crate::node_registry::bundle::activate_signed_bundle",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/bundle.rs",
-        "signature": "pub fn activate_signed_bundle( &self, bundle: &SignedEnrollmentBundle, actor: &str, reason: &str, now: u64, token_hash: &[u8",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::bundle::activate_signed_bundle",
-      "kind": "method",
-      "line": 146,
-      "name": "activate_signed_bundle",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 3,
-        "cyclomatic": 5,
-        "kind": "method",
-        "line": 146,
-        "name": "activate_signed_bundle"
-      },
-      "path": "src/node_registry/bundle.rs",
-      "signature": "pub fn activate_signed_bundle( &self, bundle: &SignedEnrollmentBundle, actor: &str, reason: &str, now: u64, token_hash: &[u8",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 2,
-      "cyclomatic": 4,
-      "derived": {
-        "identity": "crate::node_registry::bundle::activate_signed_bundle_transaction",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/bundle.rs",
-        "signature": "fn activate_signed_bundle_transaction( &self, bundle: &SignedEnrollmentBundle, actor: &str, reason: &str, now: u64, token_hash: &[u8",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::bundle::activate_signed_bundle_transaction",
-      "kind": "method",
-      "line": 183,
-      "name": "activate_signed_bundle_transaction",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 2,
-        "cyclomatic": 4,
-        "kind": "method",
-        "line": 183,
-        "name": "activate_signed_bundle_transaction"
-      },
-      "path": "src/node_registry/bundle.rs",
-      "signature": "fn activate_signed_bundle_transaction( &self, bundle: &SignedEnrollmentBundle, actor: &str, reason: &str, now: u64, token_hash: &[u8",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::node_registry::bundle::activate_signed_bundle_transaction::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/bundle.rs",
-        "signature": ".map_err(|_| RegistryError::InvalidInput(\"enrollment timestamp is too large\".into()))?;",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::bundle::activate_signed_bundle_transaction::<closure>",
-      "kind": "closure",
-      "line": 208,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 208,
-        "name": "<closure>"
-      },
-      "path": "src/node_registry/bundle.rs",
-      "signature": ".map_err(|_| RegistryError::InvalidInput(\"enrollment timestamp is too large\".into()))?;",
-      "source_class": "handwritten"
-    },
-    {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
@@ -65542,32 +66088,6 @@
       },
       "path": "src/node_registry/manual_enrollment.rs",
       "signature": "|row| Ok((row.get(0)?, row.get(1)?)),",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::node_registry::bundle::activate_signed_bundle_transaction::<closure>::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/bundle.rs",
-        "signature": "let peer = load_peer(&transaction, &registration.node_id)?.ok_or_else(|| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::bundle::activate_signed_bundle_transaction::<closure>::<closure>",
-      "kind": "closure",
-      "line": 285,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 285,
-        "name": "<closure>"
-      },
-      "path": "src/node_registry/bundle.rs",
-      "signature": "let peer = load_peer(&transaction, &registration.node_id)?.ok_or_else(|| {",
       "source_class": "handwritten"
     },
     {
@@ -68194,162 +68714,6 @@
       },
       "path": "src/node_registry/fields.rs",
       "signature": "pub(super) fn digest(bytes: &[u8]) -> [u8",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 6,
-      "derived": {
-        "identity": "crate::node_registry::bundle::bundle_failure_code",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/bundle.rs",
-        "signature": "fn bundle_failure_code(error: &RegistryError) -> &'static str",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::bundle::bundle_failure_code",
-      "kind": "function",
-      "line": 294,
-      "name": "bundle_failure_code",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 6,
-        "kind": "function",
-        "line": 294,
-        "name": "bundle_failure_code"
-      },
-      "path": "src/node_registry/bundle.rs",
-      "signature": "fn bundle_failure_code(error: &RegistryError) -> &'static str",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 9,
-      "derived": {
-        "identity": "crate::node_registry::bundle::bundle_failure_detail",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/bundle.rs",
-        "signature": "fn bundle_failure_detail(error: &RegistryError) -> &'static str",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::bundle::bundle_failure_detail",
-      "kind": "function",
-      "line": 305,
-      "name": "bundle_failure_detail",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 9,
-        "kind": "function",
-        "line": 305,
-        "name": "bundle_failure_detail"
-      },
-      "path": "src/node_registry/bundle.rs",
-      "signature": "fn bundle_failure_detail(error: &RegistryError) -> &'static str",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::node_registry::bundle::cleanup_enrollment_replays",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/bundle.rs",
-        "signature": "pub(super) fn cleanup_enrollment_replays( transaction: &Transaction<'_>, now: u64, ) -> Result<(), RegistryError>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::bundle::cleanup_enrollment_replays",
-      "kind": "function",
-      "line": 438,
-      "name": "cleanup_enrollment_replays",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 438,
-        "name": "cleanup_enrollment_replays"
-      },
-      "path": "src/node_registry/bundle.rs",
-      "signature": "pub(super) fn cleanup_enrollment_replays( transaction: &Transaction<'_>, now: u64, ) -> Result<(), RegistryError>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::node_registry::bundle::cleanup_enrollment_replays::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/bundle.rs",
-        "signature": ".map_err(|_| RegistryError::InvalidInput(\"enrollment timestamp is too large\".into()))?;",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::bundle::cleanup_enrollment_replays::<closure>",
-      "kind": "closure",
-      "line": 443,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 443,
-        "name": "<closure>"
-      },
-      "path": "src/node_registry/bundle.rs",
-      "signature": ".map_err(|_| RegistryError::InvalidInput(\"enrollment timestamp is too large\".into()))?;",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::node_registry::bundle::cleanup_bootstrap_proofs",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/bundle.rs",
-        "signature": "fn cleanup_bootstrap_proofs(transaction: &Transaction<'_>, now: u64) -> Result<(), RegistryError>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::bundle::cleanup_bootstrap_proofs",
-      "kind": "function",
-      "line": 456,
-      "name": "cleanup_bootstrap_proofs",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 456,
-        "name": "cleanup_bootstrap_proofs"
-      },
-      "path": "src/node_registry/bundle.rs",
-      "signature": "fn cleanup_bootstrap_proofs(transaction: &Transaction<'_>, now: u64) -> Result<(), RegistryError>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::node_registry::bundle::cleanup_bootstrap_proofs::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/bundle.rs",
-        "signature": ".map_err(|_| RegistryError::InvalidInput(\"enrollment timestamp is too large\".into()))?;",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::bundle::cleanup_bootstrap_proofs::<closure>",
-      "kind": "closure",
-      "line": 458,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 458,
-        "name": "<closure>"
-      },
-      "path": "src/node_registry/bundle.rs",
-      "signature": ".map_err(|_| RegistryError::InvalidInput(\"enrollment timestamp is too large\".into()))?;",
       "source_class": "handwritten"
     },
     {

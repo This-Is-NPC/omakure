@@ -20,6 +20,16 @@ pub(crate) struct PendingBootstrapCleanup {
     pub bundle_id: [u8; 16],
 }
 
+struct BootstrapProof<'a> {
+    token_hash: &'a [u8; 32],
+    nonce_hash: &'a [u8; 32],
+}
+
+fn enrollment_timestamp(now: u64) -> Result<i64, RegistryError> {
+    i64::try_from(now)
+        .map_err(|_| RegistryError::InvalidInput("enrollment timestamp is too large".into()))
+}
+
 impl NodeRegistry {
     pub(crate) fn bootstrap_proof_consumed(
         &self,
@@ -159,8 +169,10 @@ impl NodeRegistry {
             actor,
             reason,
             now,
-            token_hash,
-            nonce_hash,
+            BootstrapProof {
+                token_hash,
+                nonce_hash,
+            },
             &bundle_digest,
         );
         match result {
@@ -179,15 +191,13 @@ impl NodeRegistry {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn activate_signed_bundle_transaction(
         &self,
         bundle: &SignedEnrollmentBundle,
         actor: &str,
         reason: &str,
         now: u64,
-        token_hash: &[u8; 32],
-        nonce_hash: &[u8; 32],
+        proof: BootstrapProof<'_>,
         bundle_digest: &[u8; 32],
     ) -> Result<PeerRecord, RegistryError> {
         if bundle.subject_node_id == self.local_node_id {
@@ -204,8 +214,7 @@ impl NodeRegistry {
             actor: actor.to_string(),
             reason: reason.to_string(),
         };
-        let first_seen = i64::try_from(now)
-            .map_err(|_| RegistryError::InvalidInput("enrollment timestamp is too large".into()))?;
+        let first_seen = enrollment_timestamp(now)?;
         let replay_expiry = i64::try_from(bundle.replay_expiry())
             .map_err(|_| RegistryError::InvalidInput("enrollment expiry is too large".into()))?;
         self.with_mutating_connection(|connection| {
@@ -217,8 +226,7 @@ impl NodeRegistry {
                 &transaction,
                 &self.local_node_id,
                 &bundle.organization,
-                token_hash,
-                nonce_hash,
+                &proof,
                 replay_expiry,
             )?;
             ensure_bundle_replay_available(&transaction, &bundle.bundle_id)?;
@@ -257,8 +265,8 @@ impl NodeRegistry {
                     &bundle.bundle_id[..],
                     &self.local_node_id,
                     &bundle.organization,
-                    token_hash.as_slice(),
-                    nonce_hash.as_slice(),
+                    proof.token_hash.as_slice(),
+                    proof.nonce_hash.as_slice(),
                 ],
             )?;
             record_audit(
@@ -322,8 +330,7 @@ fn ensure_bundle_bootstrap_proof(
     transaction: &Transaction<'_>,
     local_node_id: &str,
     organization: &str,
-    token_hash: &[u8; 32],
-    nonce_hash: &[u8; 32],
+    proof: &BootstrapProof<'_>,
     replay_expiry: i64,
 ) -> Result<(), RegistryError> {
     let proof_exists: Option<(Option<i64>, Option<Vec<u8>>)> = transaction
@@ -334,8 +341,8 @@ fn ensure_bundle_bootstrap_proof(
             params![
                 local_node_id,
                 organization,
-                token_hash.as_slice(),
-                nonce_hash.as_slice(),
+                proof.token_hash.as_slice(),
+                proof.nonce_hash.as_slice(),
             ],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
@@ -361,8 +368,8 @@ fn ensure_bundle_bootstrap_proof(
             params![
                 local_node_id,
                 organization,
-                token_hash.as_slice(),
-                nonce_hash.as_slice(),
+                proof.token_hash.as_slice(),
+                proof.nonce_hash.as_slice(),
                 replay_expiry,
             ],
         )?;
@@ -439,8 +446,7 @@ pub(super) fn cleanup_enrollment_replays(
     transaction: &Transaction<'_>,
     now: u64,
 ) -> Result<(), RegistryError> {
-    let now = i64::try_from(now)
-        .map_err(|_| RegistryError::InvalidInput("enrollment timestamp is too large".into()))?;
+    let now = enrollment_timestamp(now)?;
     transaction.execute(
         "DELETE FROM enrollment_replays
          WHERE rowid IN (
@@ -454,8 +460,7 @@ pub(super) fn cleanup_enrollment_replays(
 }
 
 fn cleanup_bootstrap_proofs(transaction: &Transaction<'_>, now: u64) -> Result<(), RegistryError> {
-    let now = i64::try_from(now)
-        .map_err(|_| RegistryError::InvalidInput("enrollment timestamp is too large".into()))?;
+    let now = enrollment_timestamp(now)?;
     transaction.execute(
         "DELETE FROM bootstrap_proofs
          WHERE rowid IN (

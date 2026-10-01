@@ -1,4 +1,4 @@
-use super::respond::operation_response;
+use super::respond::{operation_error_response, operation_response};
 use crate::operations::{OperationError, OperationErrorCode, OperationResult};
 use axum::response::Response;
 use serde::Serialize;
@@ -9,10 +9,10 @@ pub(super) async fn operation_response_bounded<T: Serialize + Send + 'static>(
     gate: Arc<tokio::sync::Semaphore>,
     task: impl FnOnce() -> OperationResult<T> + Send + 'static,
 ) -> Response {
-    let result = run_bounded(operation, gate, task)
-        .await
-        .and_then(std::convert::identity);
-    operation_response(result)
+    match run_bounded(operation, gate, move || operation_response(task())).await {
+        Ok(response) => response,
+        Err(error) => operation_error_response(error),
+    }
 }
 
 pub(super) async fn run_bounded<T: Send + 'static>(

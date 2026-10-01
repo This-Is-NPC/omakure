@@ -191,6 +191,35 @@ basename exactly once. Platform matrix jobs use
 `scripts/tasks/check/platform/{linux-gnu,linux-musl,macos,windows}` instead of
 embedding test or build commands in workflow YAML.
 
+## Dependency review
+
+Run `cargo tree -d --locked --offline` after dependency changes. The current
+`Cargo.lock` contains these distinct-version families, including packages for
+other targets:
+
+| Family | Locked versions |
+|---|---|
+| Crypto | `block-buffer` 0.10.4/0.12.1; `cpufeatures` 0.2.17/0.3.0; `crypto-common` 0.1.7/0.2.2; `digest` 0.10.7/0.11.3; `getrandom` 0.2.17/0.3.4/0.4.2; `rand_core` 0.6.4/0.9.5/0.10.1; `sha2` 0.10.9/0.11.0 |
+| Collections and macros | `foldhash` 0.1.5/0.2.0; `hashbrown` 0.15.5/0.16.1/0.17.1; `syn` 2.0.112/3.0.4 |
+| Platform support | `r-efi` 5.3.0/6.0.0; `windows-link` 0.1.3/0.2.1; `windows-result` 0.3.4/0.4.1; `windows-strings` 0.4.2/0.5.1; `windows-sys` 0.52.0/0.61.2 |
+
+The `sha2` split comes from Omakure and `snow` using 0.10 while `k256`
+uses 0.11. The `getrandom` and `rand_core` versions follow separate
+transitive dependency lines. Review each root with `cargo tree -i
+<name>@<version> --locked`; keep the lockfile and platform checks aligned
+when upgrading a dependency.
+
+The optional Usage generator pins both `clap_usage` and `usage-lib` to the
+same `jdx/usage` revision in `Cargo.toml`. To review that pin, inspect the
+full commit recorded in `Cargo.lock` and `docs/usage/fidelity.json` against
+the candidate upstream commit. Update both manifest revisions together,
+regenerate `Cargo.lock` with `cargo update clap_usage usage-lib`, and review
+the lockfile diff. Then run `mise run usage:kdl -- --review`, approve any
+fidelity-allowlist change explicitly, run the Usage KDL and docs write/check
+commands described above, and finish with `mise run check:full`. Confirm
+that `docs/usage/fidelity.json` records the requested revision and resolved
+commit.
+
 ## Certification toolchain
 
 The certification gate requires Linux, Docker Engine 27 or newer, Docker

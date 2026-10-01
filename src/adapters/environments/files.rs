@@ -28,13 +28,11 @@ pub(super) fn ensure_env_path_safe(
         .into());
     }
 
-    if let Ok(metadata) = fs::symlink_metadata(path) {
-        if metadata.file_type().is_symlink() {
-            return Err(EnvironmentError::UnsafePath {
-                path: path.display().to_string(),
-            }
-            .into());
+    if fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
+        return Err(EnvironmentError::UnsafePath {
+            path: path.display().to_string(),
         }
+        .into());
     }
 
     let parent = path

@@ -453,8 +453,8 @@ fn production_architecture_boundaries_are_clean() {
 
     let direct = parse_contract(
         Rule::Executor,
-        "src/cli/run.rs",
-        &fs::read_to_string(src.join("cli/run.rs")).unwrap(),
+        "src/cli/run/mod.rs",
+        &fs::read_to_string(src.join("cli/run/mod.rs")).unwrap(),
     );
     assert!(direct
         .findings

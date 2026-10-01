@@ -157,7 +157,7 @@ fn the_host_does_not_depend_on_a_system_lua() {
 ///
 /// It goes through the queue because that is where per-job timeouts live.
 /// `--timeout` belongs to `queue add`, and the inline `run` path hardcodes
-/// `timeout_ms: None` (`src/cli/run.rs`), so `omakure run x.lua --timeout 2s`
+/// `timeout_ms: None` (`src/cli/run/mod.rs`), so `omakure run x.lua --timeout 2s`
 /// would prove nothing for any script kind.
 #[test]
 fn a_per_job_timeout_kills_a_running_lua_script() {

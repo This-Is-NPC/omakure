@@ -147,7 +147,7 @@ src/
 │   ├── api/                 authenticated Axum management server (boot, router,
 │   │                        bearer auth, audit, and one module per route group)
 │   ├── node_service.rs      HTTP + workers + scheduler lifecycle
-│   ├── run.rs               synchronous execution entry point
+│   ├── run/                synchronous execution entry point and tests
 │   ├── queue/               queue dispatch, producers, worker, and tests
 │   ├── history.rs           run and trace queries
 │   ├── serve.rs             standalone cron scheduler
@@ -282,7 +282,7 @@ src/
   set of scripts under a publisher key held in `src/baseline_publisher.rs`, and
   `src/baseline_push/` will install one only for an active Conductor holding
   `baseline-push` *and* a publisher the receiver's own config names.
-  `src/operations/baseline.rs` makes the install all-or-nothing on the
+  `src/operations/baseline/` makes the install all-or-nothing on the
   filesystem, retains exactly one previous version, and re-runs the same
   verification when a node is rolled back onto it. `node_registry` refuses to
   let one node hold a publisher key and record a Performer, so authoring code

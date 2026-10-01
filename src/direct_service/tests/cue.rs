@@ -65,13 +65,15 @@ fn a_local_cue_enqueue_failure_is_visible_in_transport_status() {
         context,
         &identity,
         &[],
-        Arc::new(AtomicBool::new(false)),
-        true,
-        Arc::new(AdmissionController {
-            state: Mutex::new(AdmissionState::default()),
-        }),
-        None,
-        None,
+        ConnectionOptions {
+            stop: Arc::new(AtomicBool::new(false)),
+            listening: true,
+            admission: Arc::new(AdmissionController {
+                state: Mutex::new(AdmissionState::default()),
+            }),
+            reporter: None,
+            workspace_root: None,
+        },
     );
     let error = DirectServiceError::CueEnqueueFailed {
         error: crate::remote_cue::CueEnqueueError::Failed(

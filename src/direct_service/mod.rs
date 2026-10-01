@@ -5,7 +5,7 @@ use crate::health_plane::report::HealthReporter;
 use crate::node::NodeContext;
 use crate::node_identity::NodeIdentity;
 use admission::{AdmissionController, AdmissionState};
-use connection::ConnectionState;
+use connection::{ConnectionOptions, ConnectionState};
 use dial::dialer_loop;
 use resolver::Resolver;
 use status::validate_static_peers;
@@ -131,11 +131,13 @@ impl DirectService {
             context.clone(),
             &identity,
             &static_peers,
-            Arc::clone(&stop),
-            bind.is_some(),
-            Arc::clone(&admission),
-            reporter,
-            workspace_root,
+            ConnectionOptions {
+                stop: Arc::clone(&stop),
+                listening: bind.is_some(),
+                admission: Arc::clone(&admission),
+                reporter,
+                workspace_root,
+            },
         );
         let listener = bind
             .map(|bind| DirectListener::start_with_state(bind, context.clone(), Arc::clone(&state)))

@@ -1,5 +1,5 @@
 use super::admission::{AdmissionController, AdmissionReservation, AdmissionState};
-use super::connection::{ConnectionDirection, ConnectionState};
+use super::connection::{ConnectionDirection, ConnectionOptions, ConnectionState};
 use super::enrollment::serve_enrollment_request;
 use super::error::DirectServiceError;
 use super::session::{SessionInputs, drain_until_hangup, hold_session, peer_authorization};
@@ -48,11 +48,13 @@ impl DirectListener {
             context.clone(),
             &identity,
             &[],
-            Arc::clone(&stop),
-            true,
-            admission,
-            None,
-            None,
+            ConnectionOptions {
+                stop: Arc::clone(&stop),
+                listening: true,
+                admission,
+                reporter: None,
+                workspace_root: None,
+            },
         );
         Self::start_with_state_and_stop(bind, context, state, stop)
     }

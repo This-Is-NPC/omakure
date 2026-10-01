@@ -197,7 +197,7 @@ impl OutboundBaseline {
         ) else {
             return BaselineAckMatch::Other;
         };
-        let accepted = ack.accepted;
+        let accepted = ack.accepted.unwrap_or(false);
         let code = if accepted {
             0
         } else {

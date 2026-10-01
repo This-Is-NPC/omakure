@@ -2,7 +2,7 @@ use super::admission::{AdmissionController, AdmissionState};
 use super::baseline::{
     BaselineAckMatch, BaselineDispatcher, BaselinePushOutcome, OutboundBaseline, PendingBaseline,
 };
-use super::connection::{ConnectionDirection, ConnectionState};
+use super::connection::{ConnectionDirection, ConnectionOptions, ConnectionState};
 use super::cue::{
     CueAckMatch, CueDispatchOutcome, CueDispatcher, OutboundCue, PendingCue, resolve_cue_id,
 };
@@ -139,13 +139,15 @@ fn revoked_peer_with_a_standing_session(
         context,
         &identity,
         &[],
-        Arc::new(AtomicBool::new(false)),
-        true,
-        Arc::new(AdmissionController {
-            state: Mutex::new(AdmissionState::default()),
-        }),
-        None,
-        None,
+        ConnectionOptions {
+            stop: Arc::new(AtomicBool::new(false)),
+            listening: true,
+            admission: Arc::new(AdmissionController {
+                state: Mutex::new(AdmissionState::default()),
+            }),
+            reporter: None,
+            workspace_root: None,
+        },
     );
 
     // A live session with the peer, exactly as the running service holds

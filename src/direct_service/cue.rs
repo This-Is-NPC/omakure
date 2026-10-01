@@ -7,7 +7,7 @@ use super::session::{Readiness, peer_authorization, wait_readable};
 use super::stream::{initiator_deadline, read_frame, set_stream_timeouts, time_until, write_bytes};
 use crate::direct_health::HealthSession;
 use crate::direct_transport::{
-    ENVELOPE_KIND, HandshakeRole, TransportError, TransportSession, authorize_peer, envelope_nonce,
+    ENVELOPE_KIND, HandshakeRole, SignedEnvelope, TransportError, TransportSession, authorize_peer,
     sign_probe, unix_seconds, verify_envelope,
 };
 use crate::node::NodeContext;
@@ -160,7 +160,7 @@ impl OutboundCue {
         ) else {
             return CueAckMatch::Other;
         };
-        let accepted = ack.accepted;
+        let accepted = ack.accepted.unwrap_or(false);
         if accepted {
             self.code = Some(0);
             return CueAckMatch::Accepted;
@@ -231,25 +231,41 @@ pub(super) fn sign_pending_cue(
     session_id: &[u8; 32],
     pending: &PendingCue,
 ) -> Result<Vec<u8>, TransportError> {
+    Ok(sign_cue_dispatch(
+        identity,
+        session_id,
+        &pending.cue_id,
+        &pending.script,
+        &pending.reason,
+    )?
+    .encoded())
+}
+
+fn sign_cue_dispatch(
+    identity: &NodeIdentity,
+    session_id: &[u8; 32],
+    cue_id: &str,
+    script: &str,
+    reason: &str,
+) -> Result<SignedEnvelope, TransportError> {
     let now = unix_seconds();
     let mut nonce = [0u8; 16];
     entropy::fill_bytes(&mut nonce);
-    Ok(crate::direct_transport::sign_cue_envelope(
+    crate::direct_transport::sign_cue_envelope(
         identity,
         crate::remote_cue::KIND_DISPATCH,
         session_id,
         nonce,
         serde_json::json!({
             "version": 1,
-            "cue_id": pending.cue_id,
-            "script": pending.script,
+            "cue_id": cue_id,
+            "script": script,
             "not_before": now,
             "expires_at": now + crate::remote_cue::MAX_LIFETIME_SECONDS as u64,
-            "reason": pending.reason,
+            "reason": reason,
         }),
         now,
-    )?
-    .encoded())
+    )
 }
 
 /// Ask one trusted Performer to run a script it has already declared.
@@ -274,7 +290,7 @@ pub fn dispatch_cue(
     if !crate::remote_cue::is_well_formed_script_name(script) {
         return Err(TransportError::InvalidFrame.into());
     }
-    if reason.is_empty() || reason.len() > 128 {
+    if reason.is_empty() || reason.len() > crate::remote_cue::MAX_REASON_BYTES {
         return Err(TransportError::InvalidFrame.into());
     }
 
@@ -333,24 +349,7 @@ pub fn dispatch_cue(
     )?;
 
     let cue_id = resolve_cue_id(cue_id)?;
-    let now = unix_seconds();
-    let mut nonce = [0u8; 16];
-    entropy::fill_bytes(&mut nonce);
-    let dispatch = crate::direct_transport::sign_cue_envelope(
-        &identity,
-        crate::remote_cue::KIND_DISPATCH,
-        session.session_id(),
-        nonce,
-        serde_json::json!({
-            "version": 1,
-            "cue_id": cue_id,
-            "script": script,
-            "not_before": now,
-            "expires_at": now + crate::remote_cue::MAX_LIFETIME_SECONDS as u64,
-            "reason": reason,
-        }),
-        now,
-    )?;
+    let dispatch = sign_cue_dispatch(&identity, session.session_id(), &cue_id, script, reason)?;
     write_bytes(
         &mut stream,
         &session.write(ENVELOPE_KIND, &dispatch.encoded())?,
@@ -419,7 +418,6 @@ pub fn dispatch_cue(
 /// service would, so nothing here is a second, looser path into the Health
 /// Plane. The stop condition is read back from the registry after the session
 /// recorded it, never from an unverified payload.
-#[allow(clippy::too_many_arguments)]
 fn await_cue_outcome(
     stream: &mut TcpStream,
     session: &mut TransportSession,
@@ -553,31 +551,20 @@ fn read_cue_ack(
         {
             continue;
         }
-        let nonce = envelope_nonce(&message.body).ok()?;
-        verify_envelope(
+        let ack = verified_ack(
             &message.body,
             remote.node_id(),
             remote.identity_key(),
-            crate::remote_cue::KIND_ACK,
             session.session_id(),
-            &nonce,
-        )
-        .ok()?;
-        let view = crate::direct_transport::envelope_view(&message.body).ok()?;
-        let ack = view.payload.as_object()?;
-        // An ack for a different cue id is not an answer to this dispatch.
-        if ack.get("cue_id").and_then(serde_json::Value::as_str) != Some(cue_id) {
-            return None;
-        }
-        if ack.get("accepted").and_then(serde_json::Value::as_bool)? {
+            crate::remote_cue::KIND_ACK,
+            "cue_id",
+            cue_id,
+        )?;
+        if ack.accepted? {
             return Some(0);
         }
-        let code = ack
-            .get("error")?
-            .get("code")
-            .and_then(serde_json::Value::as_u64)?;
         // Zero is how acceptance is spelled, so a refusal must never land on it.
-        return u16::try_from(code).ok().filter(|code| *code != 0);
+        return ack.error_code.filter(|code| *code != 0);
     }
     None
 }

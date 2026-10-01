@@ -2,7 +2,7 @@ use crate::direct_transport::{envelope_kind_hint, envelope_nonce, envelope_view,
 use serde_json::Value;
 
 pub(super) struct VerifiedAck {
-    pub(super) accepted: bool,
+    pub(super) accepted: Option<bool>,
     pub(super) error_code: Option<u16>,
 }
 
@@ -34,10 +34,7 @@ pub(super) fn verified_ack(
         return None;
     }
     Some(VerifiedAck {
-        accepted: ack
-            .get("accepted")
-            .and_then(Value::as_bool)
-            .unwrap_or(false),
+        accepted: ack.get("accepted").and_then(Value::as_bool),
         error_code: ack
             .get("error")
             .and_then(|error| error.get("code"))

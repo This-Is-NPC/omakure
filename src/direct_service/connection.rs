@@ -79,17 +79,20 @@ pub(super) struct ConnectionState {
     pub(super) baseline_outbox: Outbox<PendingBaseline>,
 }
 
+pub(super) struct ConnectionOptions {
+    pub(super) stop: Arc<AtomicBool>,
+    pub(super) listening: bool,
+    pub(super) admission: Arc<AdmissionController>,
+    pub(super) reporter: Option<Arc<HealthReporter>>,
+    pub(super) workspace_root: Option<std::path::PathBuf>,
+}
+
 impl ConnectionState {
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn new(
         context: NodeContext,
         identity: &NodeIdentity,
         static_peers: &[StaticPeer],
-        stop: Arc<AtomicBool>,
-        listening: bool,
-        admission: Arc<AdmissionController>,
-        reporter: Option<Arc<HealthReporter>>,
-        workspace_root: Option<std::path::PathBuf>,
+        options: ConnectionOptions,
     ) -> Arc<Self> {
         let expected = static_peers
             .iter()
@@ -97,7 +100,7 @@ impl ConnectionState {
             .collect::<HashSet<_>>();
         let status = Arc::new(Mutex::new(TransportStatus {
             enabled: true,
-            listening,
+            listening: options.listening,
             expected_peer_count: expected.len(),
             connected_peer_count: 0,
             expected_connected_peer_count: 0,
@@ -116,14 +119,14 @@ impl ConnectionState {
             context,
             identity_status: identity.public_status().clone(),
             expected,
-            stop,
+            stop: options.stop,
             active: Mutex::new(HashMap::new()),
             outbox: Mutex::new(HashMap::new()),
             baseline_outbox: Mutex::new(HashMap::new()),
             status,
-            admission,
-            reporter,
-            workspace_root,
+            admission: options.admission,
+            reporter: options.reporter,
+            workspace_root: options.workspace_root,
         })
     }
 

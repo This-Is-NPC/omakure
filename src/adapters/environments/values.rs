@@ -36,61 +36,58 @@ pub(super) fn expand_env_value(input: &str, vars: &HashMap<String, String>) -> S
     let mut i = 0;
 
     while i < chars.len() {
-        let c = chars[i];
-
-        if c == '\\' {
-            // `\$` is the only escape unit; anything else is a literal `\`.
-            if i + 1 < chars.len() && chars[i + 1] == '$' {
+        match chars[i] {
+            '\\' if chars.get(i + 1) == Some(&'$') => {
                 out.push('$');
                 i += 2;
-            } else {
-                out.push('\\');
-                i += 1;
             }
-            continue;
-        }
-
-        if c == '$' {
-            // Braced form `${...}`.
-            if i + 1 < chars.len() && chars[i + 1] == '{' {
-                if let Some(close) = (i + 2..chars.len()).find(|&j| chars[j] == '}') {
-                    let name: String = chars[i + 2..close].iter().collect();
-                    if is_valid_var_name(&name) {
-                        out.push_str(vars.get(&name).map(String::as_str).unwrap_or(""));
-                    }
-                    // Invalid name -> undefined -> empty string (push nothing).
-                    i = close + 1;
-                } else {
-                    // Unterminated `${...` -> literal passthrough to end.
+            '$' => match append_reference(&chars, i, vars, &mut out) {
+                Some(next) => i = next,
+                None => {
                     out.extend(chars[i..].iter());
                     break;
                 }
-                continue;
+            },
+            c => {
+                out.push(c);
+                i += 1;
             }
-
-            // Bare form `$VAR`.
-            if i + 1 < chars.len() && is_name_start(chars[i + 1]) {
-                let mut j = i + 1;
-                while j < chars.len() && is_name_char(chars[j]) {
-                    j += 1;
-                }
-                let name: String = chars[i + 1..j].iter().collect();
-                out.push_str(vars.get(&name).map(String::as_str).unwrap_or(""));
-                i = j;
-                continue;
-            }
-
-            // `$` not followed by a name-start or `{` -> literal `$`.
-            out.push('$');
-            i += 1;
-            continue;
         }
-
-        out.push(c);
-        i += 1;
     }
 
     out
+}
+
+fn append_reference(
+    chars: &[char],
+    dollar: usize,
+    vars: &HashMap<String, String>,
+    out: &mut String,
+) -> Option<usize> {
+    let next = dollar + 1;
+    if chars.get(next) == Some(&'{') {
+        let close = (next + 1..chars.len()).find(|&index| chars[index] == '}')?;
+        let name: String = chars[next + 1..close].iter().collect();
+        if is_valid_var_name(&name) {
+            append_variable(&name, vars, out);
+        }
+        return Some(close + 1);
+    }
+    if chars.get(next).is_some_and(|&c| is_name_start(c)) {
+        let mut end = next + 1;
+        while end < chars.len() && is_name_char(chars[end]) {
+            end += 1;
+        }
+        let name: String = chars[next..end].iter().collect();
+        append_variable(&name, vars, out);
+        return Some(end);
+    }
+    out.push('$');
+    Some(next)
+}
+
+fn append_variable(name: &str, vars: &HashMap<String, String>, out: &mut String) {
+    out.push_str(vars.get(name).map(String::as_str).unwrap_or(""));
 }
 
 pub(super) fn strip_quotes(value: &str) -> &str {

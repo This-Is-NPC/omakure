@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "f67df90c87e5ebd2f334d3351c24f2a9a1cd4c7f728863f3d16156eb247d88c0",
+  "canonical_sha256": "766df4cfd0f0d67f4762abfd0d1d85fcf21dd2274bbcdccb2f1a269fe0f260eb",
   "config_identity": "no-config",
   "files": [
     {
@@ -96,8 +96,8 @@
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 46,
-        "cyclomatic": 35
+        "cognitive": 26,
+        "cyclomatic": 34
       },
       "path": "src/adapters/environments/values.rs",
       "source_class": "handwritten"
@@ -6435,8 +6435,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 33,
-      "cyclomatic": 14,
+      "cognitive": 6,
+      "cyclomatic": 5,
       "derived": {
         "identity": "crate::adapters::environments::values::expand_env_value",
         "macro_expansion": "not_measured",
@@ -6450,8 +6450,8 @@
       "name": "expand_env_value",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 33,
-        "cyclomatic": 14,
+        "cognitive": 6,
+        "cyclomatic": 5,
         "kind": "function",
         "line": 33,
         "name": "expand_env_value"
@@ -6461,29 +6461,107 @@
       "source_class": "handwritten"
     },
     {
+      "cognitive": 7,
+      "cyclomatic": 6,
+      "derived": {
+        "identity": "crate::adapters::environments::values::append_reference",
+        "macro_expansion": "not_measured",
+        "path": "src/adapters/environments/values.rs",
+        "signature": "fn append_reference( chars: &[char], dollar: usize, vars: &HashMap<String, String>, out: &mut String, ) -> Option<usize>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::adapters::environments::values::append_reference",
+      "kind": "function",
+      "line": 61,
+      "name": "append_reference",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 7,
+        "cyclomatic": 6,
+        "kind": "function",
+        "line": 61,
+        "name": "append_reference"
+      },
+      "path": "src/adapters/environments/values.rs",
+      "signature": "fn append_reference( chars: &[char], dollar: usize, vars: &HashMap<String, String>, out: &mut String, ) -> Option<usize>",
+      "source_class": "handwritten"
+    },
+    {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::adapters::environments::values::expand_env_value::<closure>",
+        "identity": "crate::adapters::environments::values::append_reference::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/adapters/environments/values.rs",
-        "signature": "if let Some(close) = (i + 2..chars.len()).find(|&j| chars[j] == '}') {",
+        "signature": "let close = (next + 1..chars.len()).find(|&index| chars[index] == '}')?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::adapters::environments::values::expand_env_value::<closure>",
+      "identity": "crate::adapters::environments::values::append_reference::<closure>",
       "kind": "closure",
-      "line": 56,
+      "line": 69,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 56,
+        "line": 69,
         "name": "<closure>"
       },
       "path": "src/adapters/environments/values.rs",
-      "signature": "if let Some(close) = (i + 2..chars.len()).find(|&j| chars[j] == '}') {",
+      "signature": "let close = (next + 1..chars.len()).find(|&index| chars[index] == '}')?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::adapters::environments::values::append_reference::<closure>@76#2",
+        "macro_expansion": "not_measured",
+        "path": "src/adapters/environments/values.rs",
+        "signature": "if chars.get(next).is_some_and(|&c| is_name_start(c)) {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::adapters::environments::values::append_reference::<closure>@76#2",
+      "kind": "closure",
+      "line": 76,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 76,
+        "name": "<closure>"
+      },
+      "path": "src/adapters/environments/values.rs",
+      "signature": "if chars.get(next).is_some_and(|&c| is_name_start(c)) {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::adapters::environments::values::append_variable",
+        "macro_expansion": "not_measured",
+        "path": "src/adapters/environments/values.rs",
+        "signature": "fn append_variable(name: &str, vars: &HashMap<String, String>, out: &mut String)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::adapters::environments::values::append_variable",
+      "kind": "function",
+      "line": 89,
+      "name": "append_variable",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 89,
+        "name": "append_variable"
+      },
+      "path": "src/adapters/environments/values.rs",
+      "signature": "fn append_variable(name: &str, vars: &HashMap<String, String>, out: &mut String)",
       "source_class": "handwritten"
     },
     {
@@ -6498,14 +6576,14 @@
       },
       "identity": "crate::adapters::environments::values::strip_quotes",
       "kind": "function",
-      "line": 96,
+      "line": 93,
       "name": "strip_quotes",
       "native": {
         "analyzer": "cccc",
         "cognitive": 6,
         "cyclomatic": 6,
         "kind": "function",
-        "line": 96,
+        "line": 93,
         "name": "strip_quotes"
       },
       "path": "src/adapters/environments/values.rs",
@@ -6524,14 +6602,14 @@
       },
       "identity": "crate::adapters::environments::values::is_sensitive_key",
       "kind": "function",
-      "line": 108,
+      "line": 105,
       "name": "is_sensitive_key",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 108,
+        "line": 105,
         "name": "is_sensitive_key"
       },
       "path": "src/adapters/environments/values.rs",
@@ -6550,14 +6628,14 @@
       },
       "identity": "crate::adapters::environments::values::is_sensitive_key::<closure>",
       "kind": "closure",
-      "line": 124,
+      "line": 121,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 124,
+        "line": 121,
         "name": "<closure>"
       },
       "path": "src/adapters/environments/values.rs",
@@ -6576,14 +6654,14 @@
       },
       "identity": "crate::adapters::environments::values::value_contains_credentials",
       "kind": "function",
-      "line": 127,
+      "line": 124,
       "name": "value_contains_credentials",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 127,
+        "line": 124,
         "name": "value_contains_credentials"
       },
       "path": "src/adapters/environments/values.rs",
@@ -6602,14 +6680,14 @@
       },
       "identity": "crate::adapters::environments::values::should_mask_env_value",
       "kind": "function",
-      "line": 160,
+      "line": 157,
       "name": "should_mask_env_value",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 160,
+        "line": 157,
         "name": "should_mask_env_value"
       },
       "path": "src/adapters/environments/values.rs",

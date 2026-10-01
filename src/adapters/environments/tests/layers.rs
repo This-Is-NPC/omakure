@@ -263,6 +263,11 @@ fn vars(pairs: &[(&str, &str)]) -> HashMap<String, String> {
 #[case::unterminated_brace("${FOO", "${FOO")]
 #[case::bare_no_name("$ ", "$ ")]
 #[case::backslash_literal("a\\b", "a\\b")]
+#[case::adjacent_forms("$FOO${FOO}", "barbar")]
+#[case::escaped_then_expanded("\\$FOO$FOO", "$FOObar")]
+#[case::unterminated_after_expansion("$FOO${BAZ", "bar${BAZ")]
+#[case::invalid_empty_braces("a${}b", "ab")]
+#[case::unicode_surrounding_reference("λ$FOO🙂", "λbar🙂")]
 fn test_expand_env_value_grammar(#[case] input: &str, #[case] expected: &str) {
     let env = vars(&[("FOO", "bar"), ("OMAKURE_RUN_ID", "r-1")]);
     assert_eq!(expand_env_value(input, &env), expected);

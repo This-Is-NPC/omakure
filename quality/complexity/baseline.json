@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "cace9a686cd4c963860b2141caf782a57def535e5e09bcce5530227ef03569e5",
+  "canonical_sha256": "f09309fe684e937c6cb4918dccee6a886102d5797028105114f34bb13a1dd367",
   "config_identity": "no-config",
   "files": [
     {
@@ -3298,12 +3298,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 13,
+        "invocations": 15,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 3,
-        "cyclomatic": 5
+        "cognitive": 4,
+        "cyclomatic": 7
       },
       "path": "src/node_registry/tests/validate.rs",
       "source_class": "handwritten"
@@ -3330,8 +3330,8 @@
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 28,
-        "cyclomatic": 53
+        "cognitive": 29,
+        "cyclomatic": 56
       },
       "path": "src/node_registry/validate.rs",
       "source_class": "handwritten"
@@ -66019,6 +66019,292 @@
       "source_class": "handwritten"
     },
     {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::node_registry::validate::validate_schema",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/validate.rs",
+        "signature": "pub(super) fn validate_schema( connection: &Connection, registry: &NodeRegistry, ) -> Result<(), RegistryError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::validate::validate_schema",
+      "kind": "function",
+      "line": 8,
+      "name": "validate_schema",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 8,
+        "name": "validate_schema"
+      },
+      "path": "src/node_registry/validate.rs",
+      "signature": "pub(super) fn validate_schema( connection: &Connection, registry: &NodeRegistry, ) -> Result<(), RegistryError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::validate::validate_schema::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/validate.rs",
+        "signature": "let version: i64 = connection.query_row(\"PRAGMA user_version\", [], |row| row.get(0))?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::validate::validate_schema::<closure>",
+      "kind": "closure",
+      "line": 12,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 12,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/validate.rs",
+      "signature": "let version: i64 = connection.query_row(\"PRAGMA user_version\", [], |row| row.get(0))?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::node_registry::validate::validate_core_columns",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/validate.rs",
+        "signature": "fn validate_core_columns(connection: &Connection) -> Result<(), RegistryError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::validate::validate_core_columns",
+      "kind": "function",
+      "line": 202,
+      "name": "validate_core_columns",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 202,
+        "name": "validate_core_columns"
+      },
+      "path": "src/node_registry/validate.rs",
+      "signature": "fn validate_core_columns(connection: &Connection) -> Result<(), RegistryError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 4,
+      "cyclomatic": 4,
+      "derived": {
+        "identity": "crate::node_registry::validate::validate_metadata",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/validate.rs",
+        "signature": "fn validate_metadata( connection: &Connection, registry: &NodeRegistry, ) -> Result<(), RegistryError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::validate::validate_metadata",
+      "kind": "function",
+      "line": 209,
+      "name": "validate_metadata",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 4,
+        "cyclomatic": 4,
+        "kind": "function",
+        "line": 209,
+        "name": "validate_metadata"
+      },
+      "path": "src/node_registry/validate.rs",
+      "signature": "fn validate_metadata( connection: &Connection, registry: &NodeRegistry, ) -> Result<(), RegistryError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::validate::validate_metadata::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/validate.rs",
+        "signature": ".query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::validate::validate_metadata::<closure>",
+      "kind": "closure",
+      "line": 215,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 215,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/validate.rs",
+      "signature": ".query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::node_registry::validate::validate_metadata::<closure>@230#2",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/validate.rs",
+        "signature": "if !metadata.iter().any(|item| item.0 == key && item.1 == value) {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::validate::validate_metadata::<closure>@230#2",
+      "kind": "closure",
+      "line": 230,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "closure",
+        "line": 230,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/validate.rs",
+      "signature": "if !metadata.iter().any(|item| item.0 == key && item.1 == value) {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::node_registry::validate::validate_objects",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/validate.rs",
+        "signature": "fn validate_objects(connection: &Connection) -> Result<(), RegistryError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::validate::validate_objects",
+      "kind": "function",
+      "line": 239,
+      "name": "validate_objects",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 239,
+        "name": "validate_objects"
+      },
+      "path": "src/node_registry/validate.rs",
+      "signature": "fn validate_objects(connection: &Connection) -> Result<(), RegistryError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::validate::validate_objects::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/validate.rs",
+        "signature": ".query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::validate::validate_objects::<closure>",
+      "kind": "closure",
+      "line": 245,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 245,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/validate.rs",
+      "signature": ".query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::validate::validate_objects::<closure>@388#2",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/validate.rs",
+        "signature": ".map(|(object_type, name)| ((*object_type).to_string(), (*name).to_string())),",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::validate::validate_objects::<closure>@388#2",
+      "kind": "closure",
+      "line": 388,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 388,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/validate.rs",
+      "signature": ".map(|(object_type, name)| ((*object_type).to_string(), (*name).to_string())),",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::validate::validate_health_plane_columns",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/validate.rs",
+        "signature": "fn validate_health_plane_columns(connection: &Connection) -> Result<(), RegistryError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::validate::validate_health_plane_columns",
+      "kind": "function",
+      "line": 399,
+      "name": "validate_health_plane_columns",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 399,
+        "name": "validate_health_plane_columns"
+      },
+      "path": "src/node_registry/validate.rs",
+      "signature": "fn validate_health_plane_columns(connection: &Connection) -> Result<(), RegistryError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::node_registry::validate::validate_columns",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/validate.rs",
+        "signature": "fn validate_columns( connection: &Connection, table: &str, expected: &[&str], ) -> Result<(), RegistryError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::validate::validate_columns",
+      "kind": "function",
+      "line": 539,
+      "name": "validate_columns",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 539,
+        "name": "validate_columns"
+      },
+      "path": "src/node_registry/validate.rs",
+      "signature": "fn validate_columns( connection: &Connection, table: &str, expected: &[&str], ) -> Result<(), RegistryError>",
+      "source_class": "handwritten"
+    },
+    {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
@@ -66030,18 +66316,434 @@
       },
       "identity": "crate::node_registry::validate::validate_columns::<closure>",
       "kind": "closure",
-      "line": 548,
+      "line": 546,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 548,
+        "line": 546,
         "name": "<closure>"
       },
       "path": "src/node_registry/validate.rs",
       "signature": ".query_map([], |row| row.get::<_, String>(1))?",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 20,
+      "cyclomatic": 21,
+      "derived": {
+        "identity": "crate::node_registry::validate::validate_all_rows",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/validate.rs",
+        "signature": "fn validate_all_rows(connection: &Connection) -> Result<(), RegistryError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::validate::validate_all_rows",
+      "kind": "function",
+      "line": 556,
+      "name": "validate_all_rows",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 20,
+        "cyclomatic": 21,
+        "kind": "function",
+        "line": 556,
+        "name": "validate_all_rows"
+      },
+      "path": "src/node_registry/validate.rs",
+      "signature": "fn validate_all_rows(connection: &Connection) -> Result<(), RegistryError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::validate::validate_all_rows::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/validate.rs",
+        "signature": "for row in replay.query_map([], |row| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::validate::validate_all_rows::<closure>",
+      "kind": "closure",
+      "line": 576,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 576,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/validate.rs",
+      "signature": "for row in replay.query_map([], |row| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::validate::validate_all_rows::<closure>@584#2",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/validate.rs",
+        "signature": ".map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::validate::validate_all_rows::<closure>@584#2",
+      "kind": "closure",
+      "line": 584,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 584,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/validate.rs",
+      "signature": ".map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::validate::validate_all_rows::<closure>@586#3",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/validate.rs",
+        "signature": ".map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::validate::validate_all_rows::<closure>@586#3",
+      "kind": "closure",
+      "line": 586,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 586,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/validate.rs",
+      "signature": ".map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::validate::validate_all_rows::<closure>@588#4",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/validate.rs",
+        "signature": ".map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::validate::validate_all_rows::<closure>@588#4",
+      "kind": "closure",
+      "line": 588,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 588,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/validate.rs",
+      "signature": ".map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::validate::validate_all_rows::<closure>@593#5",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/validate.rs",
+        "signature": "for row in inbox.query_map([], |row| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::validate::validate_all_rows::<closure>@593#5",
+      "kind": "closure",
+      "line": 593,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 593,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/validate.rs",
+      "signature": "for row in inbox.query_map([], |row| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::validate::validate_all_rows::<closure>@611#6",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/validate.rs",
+        "signature": ".map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::validate::validate_all_rows::<closure>@611#6",
+      "kind": "closure",
+      "line": 611,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 611,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/validate.rs",
+      "signature": ".map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::validate::validate_all_rows::<closure>@632#7",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/validate.rs",
+        "signature": ".map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::validate::validate_all_rows::<closure>@632#7",
+      "kind": "closure",
+      "line": 632,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 632,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/validate.rs",
+      "signature": ".map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::validate::validate_all_rows::<closure>@638#8",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/validate.rs",
+        "signature": "|row| row.get::<_, i64>(0),",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::validate::validate_all_rows::<closure>@638#8",
+      "kind": "closure",
+      "line": 638,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 638,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/validate.rs",
+      "signature": "|row| row.get::<_, i64>(0),",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::validate::validate_all_rows::<closure>@646#9",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/validate.rs",
+        "signature": "for row in proofs.query_map([], |row| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::validate::validate_all_rows::<closure>@646#9",
+      "kind": "closure",
+      "line": 646,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 646,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/validate.rs",
+      "signature": "for row in proofs.query_map([], |row| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::validate::validate_all_rows::<closure>@669#10",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/validate.rs",
+        "signature": ".map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::validate::validate_all_rows::<closure>@669#10",
+      "kind": "closure",
+      "line": 669,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 669,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/validate.rs",
+      "signature": ".map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::validate::validate_all_rows::<closure>@671#11",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/validate.rs",
+        "signature": ".map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::validate::validate_all_rows::<closure>@671#11",
+      "kind": "closure",
+      "line": 671,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 671,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/validate.rs",
+      "signature": ".map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::validate::validate_all_rows::<closure>@675#12",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/validate.rs",
+        "signature": "|| consumed_at.is_some_and(|value| value <= 0)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::validate::validate_all_rows::<closure>@675#12",
+      "kind": "closure",
+      "line": 675,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 675,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/validate.rs",
+      "signature": "|| consumed_at.is_some_and(|value| value <= 0)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::validate::validate_all_rows::<closure>@676#13",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/validate.rs",
+        "signature": "|| bundle_id.as_ref().is_some_and(|value| value.len() != 16)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::validate::validate_all_rows::<closure>@676#13",
+      "kind": "closure",
+      "line": 676,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 676,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/validate.rs",
+      "signature": "|| bundle_id.as_ref().is_some_and(|value| value.len() != 16)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::validate::validate_all_rows::<closure>@679#14",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/validate.rs",
+        "signature": ".is_some_and(|value| !matches!(value, \"pending\" | \"complete\"))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::validate::validate_all_rows::<closure>@679#14",
+      "kind": "closure",
+      "line": 679,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 679,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/validate.rs",
+      "signature": ".is_some_and(|value| !matches!(value, \"pending\" | \"complete\"))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::validate::sqlite_validation_error",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/validate.rs",
+        "signature": "pub(super) fn sqlite_validation_error(error: RegistryError) -> rusqlite::Error",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::validate::sqlite_validation_error",
+      "kind": "function",
+      "line": 692,
+      "name": "sqlite_validation_error",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 692,
+        "name": "sqlite_validation_error"
+      },
+      "path": "src/node_registry/validate.rs",
+      "signature": "pub(super) fn sqlite_validation_error(error: RegistryError) -> rusqlite::Error",
       "source_class": "handwritten"
     },
     {
@@ -66253,32 +66955,6 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::node_registry::validate::validate_schema::<closure>@217#2",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/validate.rs",
-        "signature": ".query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::validate::validate_schema::<closure>@217#2",
-      "kind": "closure",
-      "line": 217,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 217,
-        "name": "<closure>"
-      },
-      "path": "src/node_registry/validate.rs",
-      "signature": ".query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?",
-      "source_class": "handwritten"
-    },
-    {
       "cognitive": 2,
       "cyclomatic": 3,
       "derived": {
@@ -66484,396 +67160,6 @@
       },
       "path": "src/node_registry/bundle.rs",
       "signature": ".map_err(|_| RegistryError::InvalidInput(\"enrollment timestamp is too large\".into()))?;",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 10,
-      "cyclomatic": 9,
-      "derived": {
-        "identity": "crate::node_registry::validate::validate_schema",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/validate.rs",
-        "signature": "pub(super) fn validate_schema( connection: &Connection, registry: &NodeRegistry, ) -> Result<(), RegistryError>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::validate::validate_schema",
-      "kind": "function",
-      "line": 8,
-      "name": "validate_schema",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 10,
-        "cyclomatic": 9,
-        "kind": "function",
-        "line": 8,
-        "name": "validate_schema"
-      },
-      "path": "src/node_registry/validate.rs",
-      "signature": "pub(super) fn validate_schema( connection: &Connection, registry: &NodeRegistry, ) -> Result<(), RegistryError>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::node_registry::validate::validate_schema::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/validate.rs",
-        "signature": "let version: i64 = connection.query_row(\"PRAGMA user_version\", [], |row| row.get(0))?;",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::validate::validate_schema::<closure>",
-      "kind": "closure",
-      "line": 12,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 12,
-        "name": "<closure>"
-      },
-      "path": "src/node_registry/validate.rs",
-      "signature": "let version: i64 = connection.query_row(\"PRAGMA user_version\", [], |row| row.get(0))?;",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 2,
-      "derived": {
-        "identity": "crate::node_registry::validate::validate_schema::<closure>@232#3",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/validate.rs",
-        "signature": "if !metadata.iter().any(|item| item.0 == key && item.1 == value) {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::validate::validate_schema::<closure>@232#3",
-      "kind": "closure",
-      "line": 232,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 2,
-        "kind": "closure",
-        "line": 232,
-        "name": "<closure>"
-      },
-      "path": "src/node_registry/validate.rs",
-      "signature": "if !metadata.iter().any(|item| item.0 == key && item.1 == value) {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::node_registry::validate::validate_objects::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/validate.rs",
-        "signature": ".query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::validate::validate_objects::<closure>",
-      "kind": "closure",
-      "line": 247,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 247,
-        "name": "<closure>"
-      },
-      "path": "src/node_registry/validate.rs",
-      "signature": ".query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::node_registry::validate::validate_objects::<closure>@390#2",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/validate.rs",
-        "signature": ".map(|(object_type, name)| ((*object_type).to_string(), (*name).to_string())),",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::validate::validate_objects::<closure>@390#2",
-      "kind": "closure",
-      "line": 390,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 390,
-        "name": "<closure>"
-      },
-      "path": "src/node_registry/validate.rs",
-      "signature": ".map(|(object_type, name)| ((*object_type).to_string(), (*name).to_string())),",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::node_registry::validate::validate_health_plane_columns",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/validate.rs",
-        "signature": "fn validate_health_plane_columns(connection: &Connection) -> Result<(), RegistryError>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::validate::validate_health_plane_columns",
-      "kind": "function",
-      "line": 401,
-      "name": "validate_health_plane_columns",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 401,
-        "name": "validate_health_plane_columns"
-      },
-      "path": "src/node_registry/validate.rs",
-      "signature": "fn validate_health_plane_columns(connection: &Connection) -> Result<(), RegistryError>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 2,
-      "derived": {
-        "identity": "crate::node_registry::validate::validate_columns",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/validate.rs",
-        "signature": "fn validate_columns( connection: &Connection, table: &str, expected: &[&str], ) -> Result<(), RegistryError>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::validate::validate_columns",
-      "kind": "function",
-      "line": 541,
-      "name": "validate_columns",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 2,
-        "kind": "function",
-        "line": 541,
-        "name": "validate_columns"
-      },
-      "path": "src/node_registry/validate.rs",
-      "signature": "fn validate_columns( connection: &Connection, table: &str, expected: &[&str], ) -> Result<(), RegistryError>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 20,
-      "cyclomatic": 21,
-      "derived": {
-        "identity": "crate::node_registry::validate::validate_all_rows",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/validate.rs",
-        "signature": "fn validate_all_rows(connection: &Connection) -> Result<(), RegistryError>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::validate::validate_all_rows",
-      "kind": "function",
-      "line": 558,
-      "name": "validate_all_rows",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 20,
-        "cyclomatic": 21,
-        "kind": "function",
-        "line": 558,
-        "name": "validate_all_rows"
-      },
-      "path": "src/node_registry/validate.rs",
-      "signature": "fn validate_all_rows(connection: &Connection) -> Result<(), RegistryError>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::node_registry::validate::validate_all_rows::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/validate.rs",
-        "signature": "for row in replay.query_map([], |row| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::validate::validate_all_rows::<closure>",
-      "kind": "closure",
-      "line": 578,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 578,
-        "name": "<closure>"
-      },
-      "path": "src/node_registry/validate.rs",
-      "signature": "for row in replay.query_map([], |row| {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::node_registry::validate::validate_all_rows::<closure>@586#2",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/validate.rs",
-        "signature": ".map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::validate::validate_all_rows::<closure>@586#2",
-      "kind": "closure",
-      "line": 586,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 586,
-        "name": "<closure>"
-      },
-      "path": "src/node_registry/validate.rs",
-      "signature": ".map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::node_registry::validate::validate_all_rows::<closure>@595#5",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/validate.rs",
-        "signature": "for row in inbox.query_map([], |row| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::validate::validate_all_rows::<closure>@595#5",
-      "kind": "closure",
-      "line": 595,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 595,
-        "name": "<closure>"
-      },
-      "path": "src/node_registry/validate.rs",
-      "signature": "for row in inbox.query_map([], |row| {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::node_registry::validate::validate_all_rows::<closure>@648#9",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/validate.rs",
-        "signature": "for row in proofs.query_map([], |row| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::validate::validate_all_rows::<closure>@648#9",
-      "kind": "closure",
-      "line": 648,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 648,
-        "name": "<closure>"
-      },
-      "path": "src/node_registry/validate.rs",
-      "signature": "for row in proofs.query_map([], |row| {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::node_registry::validate::validate_all_rows::<closure>@677#12",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/validate.rs",
-        "signature": "|| consumed_at.is_some_and(|value| value <= 0)",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::validate::validate_all_rows::<closure>@677#12",
-      "kind": "closure",
-      "line": 677,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 677,
-        "name": "<closure>"
-      },
-      "path": "src/node_registry/validate.rs",
-      "signature": "|| consumed_at.is_some_and(|value| value <= 0)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::node_registry::validate::validate_all_rows::<closure>@678#13",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/validate.rs",
-        "signature": "|| bundle_id.as_ref().is_some_and(|value| value.len() != 16)",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::validate::validate_all_rows::<closure>@678#13",
-      "kind": "closure",
-      "line": 678,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 678,
-        "name": "<closure>"
-      },
-      "path": "src/node_registry/validate.rs",
-      "signature": "|| bundle_id.as_ref().is_some_and(|value| value.len() != 16)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::node_registry::validate::validate_all_rows::<closure>@681#14",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/validate.rs",
-        "signature": ".is_some_and(|value| !matches!(value, \"pending\" | \"complete\"))",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::validate::validate_all_rows::<closure>@681#14",
-      "kind": "closure",
-      "line": 681,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 681,
-        "name": "<closure>"
-      },
-      "path": "src/node_registry/validate.rs",
-      "signature": ".is_some_and(|value| !matches!(value, \"pending\" | \"complete\"))",
       "source_class": "handwritten"
     },
     {
@@ -67891,32 +68177,6 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::node_registry::validate::sqlite_validation_error",
-        "macro_expansion": "not_measured",
-        "path": "src/node_registry/validate.rs",
-        "signature": "pub(super) fn sqlite_validation_error(error: RegistryError) -> rusqlite::Error",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node_registry::validate::sqlite_validation_error",
-      "kind": "function",
-      "line": 694,
-      "name": "sqlite_validation_error",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 694,
-        "name": "sqlite_validation_error"
-      },
-      "path": "src/node_registry/validate.rs",
-      "signature": "pub(super) fn sqlite_validation_error(error: RegistryError) -> rusqlite::Error",
-      "source_class": "handwritten"
-    },
-    {
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
@@ -68359,6 +68619,32 @@
       "source_class": "handwritten"
     },
     {
+      "cognitive": 3,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::node_registry::tests::validate::older_schema_versions_fail_closed_without_mutation",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/tests/validate.rs",
+        "signature": "fn older_schema_versions_fail_closed_without_mutation()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::tests::validate::older_schema_versions_fail_closed_without_mutation",
+      "kind": "function",
+      "line": 4,
+      "name": "older_schema_versions_fail_closed_without_mutation",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 3,
+        "cyclomatic": 3,
+        "kind": "function",
+        "line": 4,
+        "name": "older_schema_versions_fail_closed_without_mutation"
+      },
+      "path": "src/node_registry/tests/validate.rs",
+      "signature": "fn older_schema_versions_fail_closed_without_mutation()",
+      "source_class": "handwritten"
+    },
+    {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
@@ -68408,6 +68694,32 @@
       },
       "path": "src/node_registry/tests/validate.rs",
       "signature": "fn future_schema_corruption_and_metadata_downgrade_fail_closed()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::node_registry::tests::validate::schema_column_checks_precede_metadata_values_in_table_order",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/tests/validate.rs",
+        "signature": "fn schema_column_checks_precede_metadata_values_in_table_order()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::tests::validate::schema_column_checks_precede_metadata_values_in_table_order",
+      "kind": "function",
+      "line": 78,
+      "name": "schema_column_checks_precede_metadata_values_in_table_order",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 78,
+        "name": "schema_column_checks_precede_metadata_values_in_table_order"
+      },
+      "path": "src/node_registry/tests/validate.rs",
+      "signature": "fn schema_column_checks_precede_metadata_values_in_table_order()",
       "source_class": "handwritten"
     },
     {

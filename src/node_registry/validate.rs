@@ -16,9 +16,15 @@ pub(super) fn validate_schema(
         )));
     }
     validate_objects(connection)?;
-    validate_columns(connection, "metadata", &["key", "value"])?;
-    validate_columns(
-        connection,
+    validate_core_columns(connection)?;
+    validate_health_plane_columns(connection)?;
+    validate_metadata(connection, registry)?;
+    validate_all_rows(connection)
+}
+
+const CORE_TABLE_COLUMNS: &[(&str, &[&str])] = &[
+    ("metadata", &["key", "value"]),
+    (
         "peers",
         &[
             "node_id",
@@ -31,9 +37,8 @@ pub(super) fn validate_schema(
             "last_seen",
             "source",
         ],
-    )?;
-    validate_columns(
-        connection,
+    ),
+    (
         "revocations",
         &[
             "id",
@@ -43,9 +48,8 @@ pub(super) fn validate_schema(
             "reason",
             "replacement_node_id",
         ],
-    )?;
-    validate_columns(
-        connection,
+    ),
+    (
         "audit_events",
         &[
             "id",
@@ -57,14 +61,9 @@ pub(super) fn validate_schema(
             "reason",
             "occurred_at",
         ],
-    )?;
-    validate_columns(
-        connection,
-        "replay_keys",
-        &["key", "first_seen", "expires_at"],
-    )?;
-    validate_columns(
-        connection,
+    ),
+    ("replay_keys", &["key", "first_seen", "expires_at"]),
+    (
         "inbox",
         &[
             "cue_id",
@@ -74,9 +73,8 @@ pub(super) fn validate_schema(
             "expires_at",
             "outcome_hash",
         ],
-    )?;
-    validate_columns(
-        connection,
+    ),
+    (
         "remote_identities",
         &[
             "node_id",
@@ -85,9 +83,8 @@ pub(super) fn validate_schema(
             "first_seen",
             "revoked_at",
         ],
-    )?;
-    validate_columns(
-        connection,
+    ),
+    (
         "trusted_peers",
         &[
             "node_id",
@@ -97,9 +94,8 @@ pub(super) fn validate_schema(
             "added_at",
             "updated_at",
         ],
-    )?;
-    validate_columns(
-        connection,
+    ),
+    (
         "transport_key_epochs",
         &[
             "node_id",
@@ -110,9 +106,8 @@ pub(super) fn validate_schema(
             "added_at",
             "retired_at",
         ],
-    )?;
-    validate_columns(
-        connection,
+    ),
+    (
         "channel_sessions",
         &[
             "session_id",
@@ -125,14 +120,12 @@ pub(super) fn validate_schema(
             "last_seen",
             "expires_at",
         ],
-    )?;
-    validate_columns(
-        connection,
+    ),
+    (
         "enrollment_replays",
         &["replay_kind", "replay_id", "expires_at", "first_seen"],
-    )?;
-    validate_columns(
-        connection,
+    ),
+    (
         "transport_audit",
         &[
             "id",
@@ -149,14 +142,9 @@ pub(super) fn validate_schema(
             "cue_reason",
             "occurred_at",
         ],
-    )?;
-    validate_columns(
-        connection,
-        "cue_rate_limits",
-        &["node_id", "window_start", "count"],
-    )?;
-    validate_columns(
-        connection,
+    ),
+    ("cue_rate_limits", &["node_id", "window_start", "count"]),
+    (
         "manual_enrollment_requests",
         &[
             "request_id",
@@ -182,9 +170,8 @@ pub(super) fn validate_schema(
             "resolved_at",
             "pairing_id",
         ],
-    )?;
-    validate_columns(
-        connection,
+    ),
+    (
         "enrollment_audits",
         &[
             "id",
@@ -196,9 +183,8 @@ pub(super) fn validate_schema(
             "detail",
             "occurred_at",
         ],
-    )?;
-    validate_columns(
-        connection,
+    ),
+    (
         "bootstrap_proofs",
         &[
             "target_node_id",
@@ -210,8 +196,20 @@ pub(super) fn validate_schema(
             "bundle_id",
             "cleanup_state",
         ],
-    )?;
-    validate_health_plane_columns(connection)?;
+    ),
+];
+
+fn validate_core_columns(connection: &Connection) -> Result<(), RegistryError> {
+    for (table, columns) in CORE_TABLE_COLUMNS {
+        validate_columns(connection, table, columns)?;
+    }
+    Ok(())
+}
+
+fn validate_metadata(
+    connection: &Connection,
+    registry: &NodeRegistry,
+) -> Result<(), RegistryError> {
     let metadata: Vec<(String, String)> = connection
         .prepare("SELECT key, value FROM metadata ORDER BY key")?
         .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
@@ -235,7 +233,7 @@ pub(super) fn validate_schema(
             )));
         }
     }
-    validate_all_rows(connection)
+    Ok(())
 }
 
 fn validate_objects(connection: &Connection) -> Result<(), RegistryError> {

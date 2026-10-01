@@ -73,3 +73,28 @@ fn future_schema_corruption_and_metadata_downgrade_fail_closed() {
         Err(RegistryError::InvalidSchema(_))
     ));
 }
+
+#[test]
+fn schema_column_checks_precede_metadata_values_in_table_order() {
+    let temp = TempDir::new().unwrap();
+    let context = node_context(temp.path());
+    let identity = NodeIdentity::load_or_initialize(&context).unwrap();
+    drop(NodeRegistry::open(&context, identity.public_status()).unwrap());
+    let connection = Connection::open(context.database_path()).unwrap();
+    connection
+        .execute_batch(
+            "ALTER TABLE metadata ADD COLUMN unexpected TEXT;
+             ALTER TABLE peers ADD COLUMN unexpected TEXT;
+             UPDATE metadata SET value = 'wrong' WHERE key = 'schema_version';",
+        )
+        .unwrap();
+    drop(connection);
+
+    let error = NodeRegistry::open_existing(&context, identity.public_status()).unwrap_err();
+    match error {
+        RegistryError::InvalidSchema(message) => {
+            assert_eq!(message, "table \"metadata\" has unexpected columns");
+        }
+        other => panic!("unexpected schema error: {other:?}"),
+    }
+}

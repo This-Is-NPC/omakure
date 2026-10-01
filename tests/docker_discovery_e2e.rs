@@ -14,15 +14,13 @@ use tempfile::TempDir;
 
 #[path = "support/compose_env.rs"]
 mod compose_env;
-use compose_env::ComposeEnv;
+use compose_env::{ComposeEnv, ComposePorts};
 #[path = "support/docker.rs"]
 mod docker;
 #[path = "support/docker_output.rs"]
 mod docker_output;
 use docker::{bounded_command, safe_generation_stderr};
 use docker_output::{json_output, output_text};
-
-const TARGET_API: &str = "http://127.0.0.1:17878";
 
 fn compose_project() -> &'static str {
     static PROJECT: OnceLock<String> = OnceLock::new();
@@ -59,6 +57,7 @@ impl ComposeGuard {
                 target_client,
                 candidate_tokens,
                 candidate_client,
+                ComposePorts::from_environment(),
             ),
             finalized: false,
         }
@@ -328,8 +327,9 @@ fn wait_for_service_ready(guard: &ComposeGuard, service: &str, port: u16) {
 }
 
 fn wait_for_health(guard: &ComposeGuard) {
-    wait_for_service_ready(guard, "enrollment-target", 17878);
-    wait_for_service_ready(guard, "enrollment-candidate", 17879);
+    let ports = guard.env.ports();
+    wait_for_service_ready(guard, "enrollment-target", ports.target);
+    wait_for_service_ready(guard, "enrollment-candidate", ports.candidate);
 }
 
 fn wait_for_stopped(guard: &ComposeGuard, service: &str) {
@@ -494,6 +494,8 @@ fn copy_from_container(guard: &ComposeGuard, service: &str, source: &str, destin
 #[ignore = "requires Docker/Linux bridge broadcast or multicast"]
 fn docker_discovery_finds_nodes_without_creating_trust_or_sessions() {
     let compose_guard = ComposeGuard::new();
+    let target_api = compose_guard.env.target_api();
+    let candidate_api = compose_guard.env.candidate_api();
     wait_for_health(&compose_guard);
     let candidate_status = json_output(&exec(
         &compose_guard,
@@ -520,7 +522,7 @@ fn docker_discovery_finds_nodes_without_creating_trust_or_sessions() {
         let output = curl(
             &compose_guard,
             "GET",
-            &format!("{TARGET_API}/v1/node/discovery?include_addresses=true"),
+            &format!("{target_api}/v1/node/discovery?include_addresses=true"),
             true,
         );
         if output["data"]["candidates"]
@@ -540,7 +542,7 @@ fn docker_discovery_finds_nodes_without_creating_trust_or_sessions() {
     let status = curl(
         &compose_guard,
         "GET",
-        &format!("{TARGET_API}/v1/node/status"),
+        &format!("{target_api}/v1/node/status"),
         false,
     );
     assert!(
@@ -609,7 +611,7 @@ fn docker_discovery_finds_nodes_without_creating_trust_or_sessions() {
     let pending = curl(
         &compose_guard,
         "GET",
-        &format!("{TARGET_API}/v1/node/enrollments"),
+        &format!("{target_api}/v1/node/enrollments"),
         false,
     );
     assert_eq!(pending["data"].as_array().unwrap().len(), 1);
@@ -636,7 +638,7 @@ fn docker_discovery_finds_nodes_without_creating_trust_or_sessions() {
     let approved = curl_json(
         &compose_guard,
         "POST",
-        &format!("{TARGET_API}/v1/node/enrollments/{pending_node_id}/approve"),
+        &format!("{target_api}/v1/node/enrollments/{pending_node_id}/approve"),
         false,
         Some(&approval_body.to_string()),
     );
@@ -661,7 +663,7 @@ fn docker_discovery_finds_nodes_without_creating_trust_or_sessions() {
     let reciprocal = curl_json(
         &compose_guard,
         "POST",
-        &format!("http://127.0.0.1:17879/v1/node/enrollments/{target_node_id}/approve"),
+        &format!("{candidate_api}/v1/node/enrollments/{target_node_id}/approve"),
         false,
         Some(&reciprocal_body.to_string()),
     );
@@ -715,11 +717,15 @@ fn docker_discovery_finds_nodes_without_creating_trust_or_sessions() {
         .status
         .success()
     );
-    wait_for_service_ready(&compose_guard, "enrollment-target", 17878);
+    wait_for_service_ready(
+        &compose_guard,
+        "enrollment-target",
+        compose_guard.env.ports().target,
+    );
     let empty_after_restart = curl(
         &compose_guard,
         "GET",
-        &format!("{TARGET_API}/v1/node/discovery"),
+        &format!("{target_api}/v1/node/discovery"),
         false,
     );
     assert!(
@@ -744,7 +750,7 @@ fn docker_discovery_finds_nodes_without_creating_trust_or_sessions() {
         let output = curl(
             &compose_guard,
             "GET",
-            &format!("{TARGET_API}/v1/node/discovery"),
+            &format!("{target_api}/v1/node/discovery"),
             false,
         );
         if output["data"]["candidates"]

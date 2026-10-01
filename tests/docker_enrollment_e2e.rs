@@ -15,15 +15,13 @@ use tempfile::TempDir;
 
 #[path = "support/compose_env.rs"]
 mod compose_env;
-use compose_env::ComposeEnv;
+use compose_env::{ComposeEnv, ComposePorts};
 #[path = "support/docker.rs"]
 mod docker;
 #[path = "support/docker_output.rs"]
 mod docker_output;
 use docker::{bounded_command, safe_generation_stderr};
 use docker_output::{json_output, output_text};
-
-const TARGET_API: &str = "http://127.0.0.1:17878";
 
 fn compose_project() -> &'static str {
     static PROJECT: OnceLock<String> = OnceLock::new();
@@ -60,6 +58,7 @@ impl ComposeGuard {
                 target_client,
                 candidate_tokens,
                 candidate_client,
+                ComposePorts::from_environment(),
             ),
             finalized: false,
         }
@@ -230,10 +229,11 @@ fn health(port: u16) -> bool {
 }
 
 fn wait_for_health(guard: &ComposeGuard) {
+    let ports = guard.env.ports();
     assert!(
         docker::wait_until(Duration::from_secs(30), Duration::from_millis(250), || {
-            health(17878)
-                && health(17879)
+            health(ports.target)
+                && health(ports.candidate)
                 && health(17988)
                 && health(17989)
                 && transport_ready(guard, "enrollment-target")
@@ -420,6 +420,8 @@ fn registry_snapshot(path: &Path) -> RegistrySnapshot {
 #[ignore = "requires Docker and intentionally runs the full two-container transaction"]
 fn docker_manual_enrollment_is_pending_blocked_approved_and_restart_stable() {
     let compose_guard = ComposeGuard::new();
+    let target_api = compose_guard.env.target_api();
+    let candidate_api = compose_guard.env.candidate_api();
     wait_for_health(&compose_guard);
     let target_endpoint = format!("{}:7988", container_ip(&compose_guard, "enrollment-target"));
 
@@ -479,7 +481,7 @@ fn docker_manual_enrollment_is_pending_blocked_approved_and_restart_stable() {
         let pending = curl(
             &compose_guard,
             "GET",
-            &format!("{TARGET_API}/v1/node/enrollments"),
+            &format!("{target_api}/v1/node/enrollments"),
             None,
         );
         panic!(
@@ -499,7 +501,7 @@ fn docker_manual_enrollment_is_pending_blocked_approved_and_restart_stable() {
     let pending = curl(
         &compose_guard,
         "GET",
-        &format!("{TARGET_API}/v1/node/enrollments"),
+        &format!("{target_api}/v1/node/enrollments"),
         None,
     );
     assert_eq!(pending["ok"], true);
@@ -526,7 +528,7 @@ fn docker_manual_enrollment_is_pending_blocked_approved_and_restart_stable() {
     let candidate_pending = curl(
         &compose_guard,
         "GET",
-        "http://127.0.0.1:17879/v1/node/enrollments",
+        &format!("{candidate_api}/v1/node/enrollments"),
         None,
     );
     assert_eq!(candidate_pending["ok"], true);
@@ -612,7 +614,7 @@ fn docker_manual_enrollment_is_pending_blocked_approved_and_restart_stable() {
     let approved = curl(
         &compose_guard,
         "POST",
-        &format!("{TARGET_API}/v1/node/enrollments/{pending_node_id}/approve"),
+        &format!("{target_api}/v1/node/enrollments/{pending_node_id}/approve"),
         Some(&approval_body.to_string()),
     );
     assert_eq!(approved["ok"], true);
@@ -621,21 +623,21 @@ fn docker_manual_enrollment_is_pending_blocked_approved_and_restart_stable() {
     let candidate_still_pending = curl(
         &compose_guard,
         "GET",
-        "http://127.0.0.1:17879/v1/node/enrollments",
+        &format!("{candidate_api}/v1/node/enrollments"),
         None,
     );
     assert_eq!(candidate_still_pending["data"].as_array().unwrap().len(), 1);
     let candidate_one_direction = curl(
         &compose_guard,
         "GET",
-        "http://127.0.0.1:17879/v1/node/peers",
+        &format!("{candidate_api}/v1/node/peers"),
         None,
     );
     assert_eq!(candidate_one_direction["data"][0]["state"], "pending");
     let target_one_direction = curl(
         &compose_guard,
         "GET",
-        &format!("{TARGET_API}/v1/node/peers"),
+        &format!("{target_api}/v1/node/peers"),
         None,
     );
     assert_eq!(target_one_direction["data"][0]["state"], "active");
@@ -659,7 +661,7 @@ fn docker_manual_enrollment_is_pending_blocked_approved_and_restart_stable() {
     let candidate_approved = curl(
         &compose_guard,
         "POST",
-        &format!("http://127.0.0.1:17879/v1/node/enrollments/{target_node_id}/approve"),
+        &format!("{candidate_api}/v1/node/enrollments/{target_node_id}/approve"),
         Some(&candidate_approval_body.to_string()),
     );
     assert_eq!(candidate_approved["ok"], true);
@@ -667,14 +669,14 @@ fn docker_manual_enrollment_is_pending_blocked_approved_and_restart_stable() {
     let candidate_both_directions = curl(
         &compose_guard,
         "GET",
-        "http://127.0.0.1:17879/v1/node/peers",
+        &format!("{candidate_api}/v1/node/peers"),
         None,
     );
     assert_eq!(candidate_both_directions["data"][0]["state"], "active");
     let active = curl(
         &compose_guard,
         "GET",
-        &format!("{TARGET_API}/v1/node/peers"),
+        &format!("{target_api}/v1/node/peers"),
         None,
     );
     assert_eq!(active["data"][0]["node_id"], pending_node_id);
@@ -699,7 +701,7 @@ fn docker_manual_enrollment_is_pending_blocked_approved_and_restart_stable() {
     let before_restart = curl(
         &compose_guard,
         "GET",
-        &format!("{TARGET_API}/v1/node/status"),
+        &format!("{target_api}/v1/node/status"),
         None,
     );
     let target_db = TempDir::new().unwrap();
@@ -758,7 +760,7 @@ fn docker_manual_enrollment_is_pending_blocked_approved_and_restart_stable() {
     let after_restart = curl(
         &compose_guard,
         "GET",
-        &format!("{TARGET_API}/v1/node/status"),
+        &format!("{target_api}/v1/node/status"),
         None,
     );
     assert_eq!(
@@ -768,7 +770,7 @@ fn docker_manual_enrollment_is_pending_blocked_approved_and_restart_stable() {
     let active_after_restart = curl(
         &compose_guard,
         "GET",
-        &format!("{TARGET_API}/v1/node/peers"),
+        &format!("{target_api}/v1/node/peers"),
         None,
     );
     assert_eq!(active_after_restart["data"][0]["state"], "active");

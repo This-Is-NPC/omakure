@@ -426,21 +426,19 @@ pub fn run(
     let readiness_for_http = Arc::clone(&readiness);
     let http_result = runtime.block_on(async move {
         api::serve_http(
-            boot.bind,
-            boot.auth,
+            boot,
             workspace,
-            boot.api_policy,
-            boot.deploy,
-            Some(readiness_for_http),
-            transport_readiness,
-            discovery_status,
-            cue_dispatcher,
-            baseline_dispatcher,
-            health_plane,
-            args.bootstrap_token_file,
+            api::ApiSurfaces {
+                readiness: Some(readiness_for_http),
+                transport: transport_readiness,
+                discovery: discovery_status,
+                cues: cue_dispatcher,
+                baselines: baseline_dispatcher,
+                health_plane,
+                bootstrap_token_path: args.bootstrap_token_file,
+            },
             auth_verification_gate,
             cancel_for_http,
-            None,
         )
         .await
     });

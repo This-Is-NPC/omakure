@@ -23,7 +23,7 @@ mod secrets;
 mod state;
 mod status;
 
-pub(crate) use boot::{auth_verification_gate, prepare_api_boot, serve_http};
+pub(crate) use boot::{ApiSurfaces, auth_verification_gate, prepare_api_boot, serve_http};
 pub(crate) use router::health_plane_router;
 pub(crate) use state::ReadinessGate;
 
@@ -42,23 +42,22 @@ pub fn run(scripts_dir: PathBuf, args: ApiArgs) -> Result<(), Box<dyn Error>> {
     let runtime = tokio::runtime::Runtime::new()?;
     runtime.block_on(async move {
         serve_http(
-            boot.bind,
-            boot.auth,
+            boot,
             workspace,
-            boot.api_policy,
-            boot.deploy,
-            None,
-            None,
-            None,
-            // API-only mode runs no direct transport, so there is no session a
-            // Cue or a baseline could travel on.
-            None,
-            None,
-            Router::new(),
-            std::env::var_os(crate::operations::node::BOOTSTRAP_TOKEN_FILE_ENV).map(PathBuf::from),
+            ApiSurfaces {
+                readiness: None,
+                transport: None,
+                discovery: None,
+                cues: None,
+                baselines: None,
+                health_plane: Router::new(),
+                bootstrap_token_path: std::env::var_os(
+                    crate::operations::node::BOOTSTRAP_TOKEN_FILE_ENV,
+                )
+                .map(PathBuf::from),
+            },
             auth_verification_gate,
             cancel_flag,
-            None,
         )
         .await
     })

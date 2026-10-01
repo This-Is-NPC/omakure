@@ -44,6 +44,16 @@ pub(crate) struct ApiBoot {
     pub deploy: DeployPolicy,
 }
 
+pub(crate) struct ApiSurfaces {
+    pub readiness: Option<Arc<ReadinessGate>>,
+    pub transport: Option<TransportStatusHandle>,
+    pub discovery: Option<crate::discovery::DiscoveryStatusHandle>,
+    pub cues: Option<crate::direct_service::CueDispatcher>,
+    pub baselines: Option<crate::direct_service::BaselineDispatcher>,
+    pub health_plane: Router,
+    pub bootstrap_token_path: Option<PathBuf>,
+}
+
 /// Load deploy policy, resolve auth, and validate bind — all before any socket.
 pub(crate) fn prepare_api_boot(args: &ApiArgs) -> Result<ApiBoot, ApiConfigError> {
     let env_policy = std::env::var("OMAKURE_POLICY_FILE").ok();
@@ -90,43 +100,27 @@ pub(crate) fn auth_verification_gate(deploy: &DeployPolicy) -> Arc<tokio::sync::
 
 /// Serve the HTTP management API until `cancel_flag` is set, then shut down
 /// gracefully. Used by `omakure api` and `omakure node serve`.
-// Audit note: keeping the independently configured security and lifecycle
-// controls explicit here is clearer than hiding them in a second config type.
-#[allow(clippy::too_many_arguments)]
 pub(crate) async fn serve_http(
-    bind: SocketAddr,
-    auth: Authenticator,
+    boot: ApiBoot,
     workspace: Workspace,
-    policy: ApiPolicy,
-    deploy: DeployPolicy,
-    readiness: Option<Arc<ReadinessGate>>,
-    transport: Option<TransportStatusHandle>,
-    discovery: Option<crate::discovery::DiscoveryStatusHandle>,
-    cues: Option<crate::direct_service::CueDispatcher>,
-    baselines: Option<crate::direct_service::BaselineDispatcher>,
-    health_plane: Router,
-    bootstrap_token_path: Option<PathBuf>,
+    surfaces: ApiSurfaces,
     auth_verification_gate: Arc<tokio::sync::Semaphore>,
     cancel_flag: Arc<AtomicBool>,
-    on_listening: Option<tokio::sync::oneshot::Sender<()>>,
 ) -> Result<(), Box<dyn Error>> {
-    let listener = tokio::net::TcpListener::bind(bind).await?;
-    if let Some(tx) = on_listening {
-        let _ = tx.send(());
-    }
-    let body_limit = deploy.http.body_limit_bytes.max(1);
+    let listener = tokio::net::TcpListener::bind(boot.bind).await?;
+    let body_limit = boot.deploy.http.body_limit_bytes.max(1);
     let app = router_with_state(
         ApiState {
-            auth,
+            auth: boot.auth,
             workspace,
-            policy,
-            deploy,
-            readiness,
-            transport,
-            discovery,
-            cues,
-            baselines,
-            bootstrap_token_path,
+            policy: boot.api_policy,
+            deploy: boot.deploy,
+            readiness: surfaces.readiness,
+            transport: surfaces.transport,
+            discovery: surfaces.discovery,
+            cues: surfaces.cues,
+            baselines: surfaces.baselines,
+            bootstrap_token_path: surfaces.bootstrap_token_path,
             auth_verification_gate,
             blocking_operation_gate: Arc::new(tokio::sync::Semaphore::new(
                 MAX_CONCURRENT_BLOCKING_OPERATIONS,
@@ -134,7 +128,7 @@ pub(crate) async fn serve_http(
         },
         body_limit,
     );
-    let app = app.nest("/v1/node", health_plane);
+    let app = app.nest("/v1/node", surfaces.health_plane);
     axum::serve(listener, app)
         .with_graceful_shutdown(wait_for_cancel(cancel_flag))
         .await?;

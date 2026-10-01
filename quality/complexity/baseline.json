@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "0cba01c51cdea4fd52076265c8e9c01b9c1b57a60d2050cb4e4202e75ce1ad41",
+  "canonical_sha256": "be7aa3febab89d1f2263e18a34b7b10ac41fce9e4763e7febde8eb104ed8f8eb",
   "config_identity": "no-config",
   "files": [
     {
@@ -4194,12 +4194,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 81,
+        "invocations": 84,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 56,
-        "cyclomatic": 100
+        "cognitive": 42,
+        "cyclomatic": 96
       },
       "path": "src/policy.rs",
       "source_class": "handwritten"
@@ -92159,8 +92159,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 6,
-      "cyclomatic": 8,
+      "cognitive": 1,
+      "cyclomatic": 4,
       "derived": {
         "identity": "crate::policy::allows_other_route",
         "macro_expansion": "not_measured",
@@ -92174,8 +92174,8 @@
       "name": "allows_other_route",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 6,
-        "cyclomatic": 8,
+        "cognitive": 1,
+        "cyclomatic": 4,
         "kind": "method",
         "line": 395,
         "name": "allows_other_route"

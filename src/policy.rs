@@ -393,13 +393,14 @@ impl RoutesPolicy {
     }
 
     fn allows_other_route(&self, path: &str) -> bool {
-        (self.config
-            || !(matches!(
-                path,
-                "/v1/config" | "/v1/workspace" | "/v1/search" | "/v1/tree"
-            ) || path.starts_with("/v1/tree/")))
-            && (self.doctor || path != "/v1/doctor")
-            && (self.envs || !(path == "/v1/envs" || path.starts_with("/v1/envs/")))
+        match path {
+            "/v1/config" | "/v1/workspace" | "/v1/search" | "/v1/tree" => self.config,
+            "/v1/doctor" => self.doctor,
+            "/v1/envs" => self.envs,
+            path if path.starts_with("/v1/tree/") => self.config,
+            path if path.starts_with("/v1/envs/") => self.envs,
+            _ => true,
+        }
     }
 
     fn allows_read_route(&self, path: &str, is_write: bool, is_battery: bool) -> bool {

@@ -467,8 +467,8 @@ fn production_architecture_boundaries_are_clean() {
 
     let worker = parse_contract(
         Rule::Executor,
-        "src/cli/queue.rs",
-        &fs::read_to_string(src.join("cli/queue.rs")).unwrap(),
+        "src/cli/queue/worker.rs",
+        &fs::read_to_string(src.join("cli/queue/worker.rs")).unwrap(),
     );
     assert!(worker
         .findings

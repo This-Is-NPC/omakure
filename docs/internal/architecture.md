@@ -148,7 +148,7 @@ src/
 │   │                        bearer auth, audit, and one module per route group)
 │   ├── node_service.rs      HTTP + workers + scheduler lifecycle
 │   ├── run.rs               synchronous execution entry point
-│   ├── queue.rs             queue producers and worker
+│   ├── queue/               queue dispatch, producers, worker, and tests
 │   ├── history.rs           run and trace queries
 │   ├── serve.rs             standalone cron scheduler
 │   ├── env.rs               managed environment commands

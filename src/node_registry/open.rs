@@ -167,7 +167,7 @@ impl NodeRegistry {
         if let Some(connection) = &self.read_connection {
             let mut guard = connection
                 .lock()
-                .expect("observational registry connection lock");
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             return operation(&mut guard);
         }
         let mut connection = self.open_configured()?;
@@ -206,7 +206,9 @@ impl NodeRegistry {
         let lock = write_lock_for(&self.path);
         // A writer that panicked mid-transaction rolled back when its
         // connection dropped; the poisoned flag says nothing about the file.
-        let _writer = lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _writer = lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut connection = self.open_configured()?;
         let result = operation(&mut connection)?;
         checkpoint_wal(&connection)?;
@@ -225,7 +227,7 @@ pub(super) fn is_transient_lock(error: &RegistryError) -> bool {
 fn write_lock_for(path: &Path) -> Arc<Mutex<()>> {
     let mut locks = WRITE_LOCKS
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     Arc::clone(locks.entry(path.to_path_buf()).or_default())
 }
 
@@ -246,12 +248,7 @@ pub(super) fn ignore_vanished_private_file(
 
 fn validate_database_security(context: &NodeContext, path: &Path) -> Result<(), RegistryError> {
     context.validate_private_file(path)?;
-    for suffix in ["-wal", "-shm"] {
-        let sidecar = path.with_file_name(format!(
-            "{}{}",
-            path.file_name().unwrap().to_string_lossy(),
-            suffix
-        ));
+    for sidecar in database_sidecar_paths(path) {
         match std::fs::symlink_metadata(&sidecar) {
             Ok(metadata)
                 if metadata.file_type().is_symlink() || !metadata.file_type().is_file() =>

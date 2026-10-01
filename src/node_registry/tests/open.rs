@@ -42,6 +42,28 @@ fn open_health_observational_tolerates_vanished_sqlite_sidecars() {
 }
 
 #[test]
+fn observational_connection_recovers_after_a_reader_panics() {
+    let temp = TempDir::new().unwrap();
+    let context = node_context(temp.path());
+    let identity = NodeIdentity::load_or_initialize(&context).unwrap();
+    NodeRegistry::open(&context, identity.public_status()).unwrap();
+    let registry =
+        NodeRegistry::open_health_observational(&context, identity.public_status()).unwrap();
+
+    let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _: Result<(), RegistryError> = registry.with_connection(|_| panic!("reader panic"));
+    }));
+    assert!(panic.is_err());
+    assert!(registry.peers().is_ok());
+    let query_only: i64 = registry
+        .with_connection(|connection| {
+            Ok(connection.query_row("PRAGMA query_only", [], |row| row.get(0))?)
+        })
+        .unwrap();
+    assert_eq!(query_only, 1);
+}
+
+#[test]
 fn initializes_reopens_and_keeps_runs_path_separate() {
     let temp = TempDir::new().unwrap();
     let context = node_context(temp.path());

@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "67c3c115ee31727b51c7e4ecf76ab98d26d2fbd421c3e52b7e6ac47bd3524911",
+  "canonical_sha256": "61d912f3f5c3e79c576b290dc584a22d24e1ea812c2c552adb5676523c819840",
   "config_identity": "no-config",
   "files": [
     {
@@ -3186,12 +3186,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 8,
+        "invocations": 7,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
         "cognitive": 39,
-        "cyclomatic": 81
+        "cyclomatic": 79
       },
       "path": "src/node_registry/open.rs",
       "source_class": "handwritten"
@@ -3284,12 +3284,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 26,
+        "invocations": 30,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
         "cognitive": 2,
-        "cyclomatic": 11
+        "cyclomatic": 16
       },
       "path": "src/node_registry/tests/open.rs",
       "source_class": "handwritten"
@@ -66016,14 +66016,14 @@
       },
       "identity": "crate::node_registry::open::validate_existing_database::<closure>",
       "kind": "closure",
-      "line": 302,
+      "line": 299,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 302,
+        "line": 299,
         "name": "<closure>"
       },
       "path": "src/node_registry/open.rs",
@@ -68876,14 +68876,14 @@
       },
       "identity": "crate::node_registry::open::validate_database_security",
       "kind": "function",
-      "line": 247,
+      "line": 249,
       "name": "validate_database_security",
       "native": {
         "analyzer": "cccc",
         "cognitive": 4,
         "cyclomatic": 7,
         "kind": "function",
-        "line": 247,
+        "line": 249,
         "name": "validate_database_security"
       },
       "path": "src/node_registry/open.rs",
@@ -68902,14 +68902,14 @@
       },
       "identity": "crate::node_registry::open::database_sidecar_paths",
       "kind": "function",
-      "line": 271,
+      "line": 268,
       "name": "database_sidecar_paths",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 271,
+        "line": 268,
         "name": "database_sidecar_paths"
       },
       "path": "src/node_registry/open.rs",
@@ -68928,14 +68928,14 @@
       },
       "identity": "crate::node_registry::open::database_sidecar_presence",
       "kind": "function",
-      "line": 284,
+      "line": 281,
       "name": "database_sidecar_presence",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 284,
+        "line": 281,
         "name": "database_sidecar_presence"
       },
       "path": "src/node_registry/open.rs",
@@ -68954,14 +68954,14 @@
       },
       "identity": "crate::node_registry::open::database_sidecar_presence::<closure>",
       "kind": "closure",
-      "line": 285,
+      "line": 282,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 285,
+        "line": 282,
         "name": "<closure>"
       },
       "path": "src/node_registry/open.rs",
@@ -68980,14 +68980,14 @@
       },
       "identity": "crate::node_registry::open::set_new_database_mode",
       "kind": "function",
-      "line": 288,
+      "line": 285,
       "name": "set_new_database_mode",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 288,
+        "line": 285,
         "name": "set_new_database_mode"
       },
       "path": "src/node_registry/open.rs",
@@ -69006,14 +69006,14 @@
       },
       "identity": "crate::node_registry::open::initialize_database",
       "kind": "function",
-      "line": 312,
+      "line": 309,
       "name": "initialize_database",
       "native": {
         "analyzer": "cccc",
         "cognitive": 12,
         "cyclomatic": 12,
         "kind": "function",
-        "line": 312,
+        "line": 309,
         "name": "initialize_database"
       },
       "path": "src/node_registry/open.rs",
@@ -69032,14 +69032,14 @@
       },
       "identity": "crate::node_registry::open::initialize_database::<closure>",
       "kind": "closure",
-      "line": 317,
+      "line": 314,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 317,
+        "line": 314,
         "name": "<closure>"
       },
       "path": "src/node_registry/open.rs",
@@ -69786,14 +69786,14 @@
       },
       "identity": "crate::node_registry::open::configure_connection",
       "kind": "function",
-      "line": 350,
+      "line": 347,
       "name": "configure_connection",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 4,
         "kind": "function",
-        "line": 350,
+        "line": 347,
         "name": "configure_connection"
       },
       "path": "src/node_registry/open.rs",
@@ -69812,14 +69812,14 @@
       },
       "identity": "crate::node_registry::open::configure_connection::<closure>",
       "kind": "closure",
-      "line": 353,
+      "line": 350,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 353,
+        "line": 350,
         "name": "<closure>"
       },
       "path": "src/node_registry/open.rs",
@@ -69830,22 +69830,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node_registry::open::configure_connection::<closure>@355#2",
+        "identity": "crate::node_registry::open::configure_connection::<closure>@352#2",
         "macro_expansion": "not_measured",
         "path": "src/node_registry/open.rs",
         "signature": "journal_mode = connection.query_row(\"PRAGMA journal_mode = WAL\", [], |row| row.get(0))?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::node_registry::open::configure_connection::<closure>@355#2",
+      "identity": "crate::node_registry::open::configure_connection::<closure>@352#2",
       "kind": "closure",
-      "line": 355,
+      "line": 352,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 355,
+        "line": 352,
         "name": "<closure>"
       },
       "path": "src/node_registry/open.rs",
@@ -69856,22 +69856,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::node_registry::open::configure_connection::<closure>@363#3",
+        "identity": "crate::node_registry::open::configure_connection::<closure>@360#3",
         "macro_expansion": "not_measured",
         "path": "src/node_registry/open.rs",
         "signature": "let foreign_keys: i64 = connection.query_row(\"PRAGMA foreign_keys\", [], |row| row.get(0))?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::node_registry::open::configure_connection::<closure>@363#3",
+      "identity": "crate::node_registry::open::configure_connection::<closure>@360#3",
       "kind": "closure",
-      "line": 363,
+      "line": 360,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 363,
+        "line": 360,
         "name": "<closure>"
       },
       "path": "src/node_registry/open.rs",
@@ -69890,14 +69890,14 @@
       },
       "identity": "crate::node_registry::open::integrity_check",
       "kind": "function",
-      "line": 402,
+      "line": 399,
       "name": "integrity_check",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 402,
+        "line": 399,
         "name": "integrity_check"
       },
       "path": "src/node_registry/open.rs",
@@ -69916,14 +69916,14 @@
       },
       "identity": "crate::node_registry::open::has_user_objects",
       "kind": "function",
-      "line": 410,
+      "line": 407,
       "name": "has_user_objects",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 410,
+        "line": 407,
         "name": "has_user_objects"
       },
       "path": "src/node_registry/open.rs",
@@ -69942,14 +69942,14 @@
       },
       "identity": "crate::node_registry::open::has_user_objects::<closure>",
       "kind": "closure",
-      "line": 414,
+      "line": 411,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 414,
+        "line": 411,
         "name": "<closure>"
       },
       "path": "src/node_registry/open.rs",
@@ -71216,14 +71216,14 @@
       },
       "identity": "crate::node_registry::tests::open::initializes_reopens_and_keeps_runs_path_separate",
       "kind": "function",
-      "line": 45,
+      "line": 67,
       "name": "initializes_reopens_and_keeps_runs_path_separate",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 45,
+        "line": 67,
         "name": "initializes_reopens_and_keeps_runs_path_separate"
       },
       "path": "src/node_registry/tests/open.rs",
@@ -114180,6 +114180,136 @@
       },
       "path": "src/adapters/fs/windows.rs",
       "signature": "fn drop(&mut self)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::tests::open::observational_connection_recovers_after_a_reader_panics",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/tests/open.rs",
+        "signature": "fn observational_connection_recovers_after_a_reader_panics()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::tests::open::observational_connection_recovers_after_a_reader_panics",
+      "kind": "function",
+      "line": 45,
+      "name": "observational_connection_recovers_after_a_reader_panics",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 45,
+        "name": "observational_connection_recovers_after_a_reader_panics"
+      },
+      "path": "src/node_registry/tests/open.rs",
+      "signature": "fn observational_connection_recovers_after_a_reader_panics()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::tests::open::observational_connection_recovers_after_a_reader_panics::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/tests/open.rs",
+        "signature": "let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::tests::open::observational_connection_recovers_after_a_reader_panics::<closure>",
+      "kind": "closure",
+      "line": 53,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 53,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/tests/open.rs",
+      "signature": "let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::tests::open::observational_connection_recovers_after_a_reader_panics::<closure>::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/tests/open.rs",
+        "signature": "let _: Result<(), RegistryError> = registry.with_connection(|_| panic!(\"reader panic\"));",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::tests::open::observational_connection_recovers_after_a_reader_panics::<closure>::<closure>",
+      "kind": "closure",
+      "line": 54,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 54,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/tests/open.rs",
+      "signature": "let _: Result<(), RegistryError> = registry.with_connection(|_| panic!(\"reader panic\"));",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::tests::open::observational_connection_recovers_after_a_reader_panics::<closure>@59#2",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/tests/open.rs",
+        "signature": ".with_connection(|connection| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::tests::open::observational_connection_recovers_after_a_reader_panics::<closure>@59#2",
+      "kind": "closure",
+      "line": 59,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 59,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/tests/open.rs",
+      "signature": ".with_connection(|connection| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node_registry::tests::open::observational_connection_recovers_after_a_reader_panics::<closure>::<closure>@60#2",
+        "macro_expansion": "not_measured",
+        "path": "src/node_registry/tests/open.rs",
+        "signature": "Ok(connection.query_row(\"PRAGMA query_only\", [], |row| row.get(0))?)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node_registry::tests::open::observational_connection_recovers_after_a_reader_panics::<closure>::<closure>@60#2",
+      "kind": "closure",
+      "line": 60,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 60,
+        "name": "<closure>"
+      },
+      "path": "src/node_registry/tests/open.rs",
+      "signature": "Ok(connection.query_row(\"PRAGMA query_only\", [], |row| row.get(0))?)",
       "source_class": "handwritten"
     }
   ],

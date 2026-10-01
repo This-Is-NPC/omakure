@@ -15,7 +15,7 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use subtle::ConstantTimeEq;
 
 const SIGNED_BUNDLE_ACTOR: &str = "signed-bundle-installer";
@@ -283,17 +283,16 @@ pub fn apply_signed_bundle_from_local_token(
     context: &NodeContext,
     mut request: SignedBundleApplyRequest,
     token_id: &str,
+    token_path: Option<&Path>,
 ) -> OperationResult<PublicPeer> {
-    let token_path = std::env::var_os(BOOTSTRAP_TOKEN_FILE_ENV)
-        .map(PathBuf::from)
-        .ok_or_else(|| {
-            OperationError::new(
-                OperationErrorCode::EnrollmentDenied,
-                "local bootstrap token file is not configured",
-            )
-        })?;
+    let token_path = token_path.ok_or_else(|| {
+        OperationError::new(
+            OperationErrorCode::EnrollmentDenied,
+            "local bootstrap token file is not configured",
+        )
+    })?;
     request.bootstrap_token.clear();
-    request.bootstrap_token_path = Some(token_path);
+    request.bootstrap_token_path = Some(token_path.to_path_buf());
     apply_signed_bundle_authenticated(context, request, token_id)
 }
 
@@ -405,8 +404,11 @@ pub(super) fn recover_private_token_tombstones(
     Ok(())
 }
 
-pub fn recover_local_bootstrap_token_tombstones(context: &NodeContext) -> OperationResult<()> {
-    let Some(path) = std::env::var_os(BOOTSTRAP_TOKEN_FILE_ENV).map(PathBuf::from) else {
+pub fn recover_local_bootstrap_token_tombstones(
+    context: &NodeContext,
+    token_path: Option<&Path>,
+) -> OperationResult<()> {
+    let Some(path) = token_path else {
         return Ok(());
     };
     let result = (|| {
@@ -414,7 +416,7 @@ pub fn recover_local_bootstrap_token_tombstones(context: &NodeContext) -> Operat
         let identity = NodeIdentity::load_existing(context).map_err(map_identity_error)?;
         let registry = NodeRegistry::open_existing(context, identity.public_status())
             .map_err(map_registry_error)?;
-        recover_private_token_tombstones(context, &registry, &config.organization.id, &path)
+        recover_private_token_tombstones(context, &registry, &config.organization.id, path)
     })();
     result.map_err(|error| cleanup_recovery_error(&error))
 }

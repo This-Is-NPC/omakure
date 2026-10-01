@@ -253,9 +253,6 @@ pub fn run(
     context: crate::node::NodeContext,
     args: NodeServeArgs,
 ) -> Result<(), Box<dyn Error>> {
-    if let Some(path) = &args.bootstrap_token_file {
-        std::env::set_var(crate::operations::node::BOOTSTRAP_TOKEN_FILE_ENV, path);
-    }
     let lifecycle = context.acquire_lifecycle_lock()?;
     context.validate_existing_state_directory()?;
     let initialized = crate::operations::node::initialize_node_locked(
@@ -263,7 +260,10 @@ pub fn run(
         &crate::domain::NodeConfig::default(),
         lifecycle.state_was_present(),
     )?;
-    crate::operations::node::recover_local_bootstrap_token_tombstones(&context)?;
+    crate::operations::node::recover_local_bootstrap_token_tombstones(
+        &context,
+        args.bootstrap_token_file.as_deref(),
+    )?;
     let configured = initialized
         .status
         .config
@@ -439,6 +439,7 @@ pub fn run(
             cue_dispatcher,
             baseline_dispatcher,
             health_plane,
+            args.bootstrap_token_file,
             auth_verification_gate,
             cancel_for_http,
             None,

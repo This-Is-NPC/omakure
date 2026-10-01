@@ -1,5 +1,36 @@
 use super::*;
 
+#[test]
+fn local_bundle_apply_requires_a_configured_token_path_before_inspecting_bundle() {
+    let temp = TempDir::new().unwrap();
+    let context = node_context(temp.path());
+    let error = apply_signed_bundle_from_local_token(
+        &context,
+        SignedBundleApplyRequest {
+            bundle_hex: "invalid".into(),
+            bootstrap_token: "untrusted".into(),
+            bootstrap_nonce: "invalid".into(),
+            bootstrap_token_path: None,
+        },
+        "test-token",
+        None,
+    )
+    .unwrap_err();
+    assert_eq!(error.code, OperationErrorCode::EnrollmentDenied);
+    assert_eq!(
+        error.message,
+        "local bootstrap token file is not configured"
+    );
+}
+
+#[test]
+fn startup_recovery_without_a_token_path_does_not_open_node_state() {
+    let temp = TempDir::new().unwrap();
+    let context = node_context(temp.path());
+    recover_local_bootstrap_token_tombstones(&context, None).unwrap();
+    assert!(!context.database_path().exists());
+}
+
 /// A recovery abort must carry the cause it was given.
 #[test]
 fn a_failed_cleanup_recovery_reports_what_actually_failed() {

@@ -2,6 +2,7 @@ use crate::auth::{AuthContext, Authenticator};
 use crate::direct_service::TransportStatusHandle;
 use crate::policy::DeployPolicy;
 use crate::workspace::Workspace;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -113,6 +114,7 @@ pub(super) struct ApiState {
     /// nothing to dispatch over and the route says so rather than pretending.
     pub(super) cues: Option<crate::direct_service::CueDispatcher>,
     pub(super) baselines: Option<crate::direct_service::BaselineDispatcher>,
+    pub(super) bootstrap_token_path: Option<PathBuf>,
     pub(super) auth_verification_gate: Arc<tokio::sync::Semaphore>,
     pub(super) blocking_operation_gate: Arc<tokio::sync::Semaphore>,
 }
@@ -129,6 +131,7 @@ impl Clone for ApiState {
             discovery: self.discovery.clone(),
             cues: self.cues.clone(),
             baselines: self.baselines.clone(),
+            bootstrap_token_path: self.bootstrap_token_path.clone(),
             auth_verification_gate: Arc::clone(&self.auth_verification_gate),
             blocking_operation_gate: Arc::clone(&self.blocking_operation_gate),
         }

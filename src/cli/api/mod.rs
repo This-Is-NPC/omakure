@@ -55,6 +55,7 @@ pub fn run(scripts_dir: PathBuf, args: ApiArgs) -> Result<(), Box<dyn Error>> {
             None,
             None,
             Router::new(),
+            std::env::var_os(crate::operations::node::BOOTSTRAP_TOKEN_FILE_ENV).map(PathBuf::from),
             auth_verification_gate,
             cancel_flag,
             None,

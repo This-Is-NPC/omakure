@@ -8,6 +8,7 @@ use crate::workspace::Workspace;
 use axum::Router;
 use std::error::Error;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -104,6 +105,7 @@ pub(crate) async fn serve_http(
     cues: Option<crate::direct_service::CueDispatcher>,
     baselines: Option<crate::direct_service::BaselineDispatcher>,
     health_plane: Router,
+    bootstrap_token_path: Option<PathBuf>,
     auth_verification_gate: Arc<tokio::sync::Semaphore>,
     cancel_flag: Arc<AtomicBool>,
     on_listening: Option<tokio::sync::oneshot::Sender<()>>,
@@ -123,6 +125,7 @@ pub(crate) async fn serve_http(
         discovery,
         cues,
         baselines,
+        bootstrap_token_path,
         auth_verification_gate,
         Arc::new(tokio::sync::Semaphore::new(
             MAX_CONCURRENT_BLOCKING_OPERATIONS,

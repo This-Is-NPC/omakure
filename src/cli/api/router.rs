@@ -150,6 +150,7 @@ pub(super) fn router_with_blocking_gate(
         None,
         None,
         None,
+        None,
         auth_gate,
         blocking_operation_gate,
         BODY_LIMIT_BYTES,
@@ -202,6 +203,7 @@ pub(super) fn router_with_policy(
         None,
         None,
         None,
+        None,
         auth_gate,
         Arc::new(tokio::sync::Semaphore::new(
             MAX_CONCURRENT_BLOCKING_OPERATIONS,
@@ -223,6 +225,7 @@ pub(super) fn router_with_transport(
     discovery: Option<crate::discovery::DiscoveryStatusHandle>,
     cues: Option<crate::direct_service::CueDispatcher>,
     baselines: Option<crate::direct_service::BaselineDispatcher>,
+    bootstrap_token_path: Option<std::path::PathBuf>,
     auth_verification_gate: Arc<tokio::sync::Semaphore>,
     blocking_operation_gate: Arc<tokio::sync::Semaphore>,
     body_limit: usize,
@@ -237,6 +240,7 @@ pub(super) fn router_with_transport(
         discovery,
         cues,
         baselines,
+        bootstrap_token_path,
         auth_verification_gate,
         blocking_operation_gate,
     };

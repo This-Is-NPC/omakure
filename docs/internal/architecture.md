@@ -231,9 +231,11 @@ src/
   `run_executor::execute_with_heartbeat`, including cancellation, timeout,
   reserved environment variables, and output redaction.
 - `node serve` validates and initializes machine state before binding HTTP,
-   then starts optional workers and scheduler and shuts
+  then starts optional workers and scheduler and shuts
   them down in reverse order. `/v1/health` and `/v1/ready` are unauthenticated;
-  other routes require bearer auth and policy scopes.
+  other routes require bearer auth and policy scopes. The resolved bootstrap
+  token file path reaches cleanup recovery and the authenticated bundle handler
+  through process-owned state.
 - Schedules are declared in script schemas. `serve` scans every five seconds,
   prevents overlapping fires, and records scheduler provenance in SQLite.
 - Scheduler run-table reads are exposed by the tested `runs/` APIs

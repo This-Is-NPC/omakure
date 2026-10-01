@@ -378,6 +378,7 @@ pub(super) async fn node_signed_bundle_apply_handler(
         Err(error) => return operation_error_response(error),
     };
     let token_id = auth_ctx.token_id;
+    let bootstrap_token_path = state.bootstrap_token_path.clone();
     operation_response_bounded("node", state.blocking_operation_gate, move || {
         node_context().and_then(|context| {
             node_ops::apply_signed_bundle_from_local_token(
@@ -389,6 +390,7 @@ pub(super) async fn node_signed_bundle_apply_handler(
                     bootstrap_token_path: None,
                 },
                 &token_id,
+                bootstrap_token_path.as_deref(),
             )
         })
     })

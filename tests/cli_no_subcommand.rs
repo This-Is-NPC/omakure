@@ -1,15 +1,13 @@
 //! Black-box coverage for the deterministic no-subcommand contract.
 
+#[path = "support/bin.rs"]
+mod bin;
+
 use serde_json::Value;
-use std::path::PathBuf;
 use std::process::{Command, Output};
 
-fn omakure_bin() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_omakure"))
-}
-
 fn run(args: &[&str]) -> Output {
-    Command::new(omakure_bin())
+    Command::new(bin::omakure_bin())
         .args(args)
         .output()
         .expect("spawn omakure")

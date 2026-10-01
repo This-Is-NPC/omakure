@@ -1,7 +1,10 @@
 #![allow(dead_code)]
 
+mod bin;
 pub mod direct_client;
 mod frame;
+
+pub use bin::omakure_bin;
 
 use serde_json::Value;
 use std::collections::HashSet;
@@ -33,10 +36,6 @@ pub fn unique_loopback_port() -> u16 {
             return port;
         }
     }
-}
-
-pub fn omakure_bin() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_omakure"))
 }
 
 pub fn omakure_command() -> Command {

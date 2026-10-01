@@ -232,6 +232,12 @@ fn revoked_cue_cleanup_reconciles_after_runs_storage_returns() {
     .unwrap();
     assert!(revoked.cleanup_pending);
 
+    let error = reconcile_revoked_cue_runs(&context, &workspace).unwrap_err();
+    assert_eq!(error.code, OperationErrorCode::IoFailed);
+    assert!(error
+        .message
+        .starts_with("cannot reconcile revoked Cue runs: Create history dir failed: "));
+
     fs::remove_file(&history).unwrap();
     fs::rename(&history_backup, &history).unwrap();
     let reconciled = reconcile_revoked_cue_runs(&context, &workspace).unwrap();

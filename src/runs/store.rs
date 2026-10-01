@@ -69,4 +69,8 @@ impl RunStore {
     ) -> Result<RunRow, RunsError> {
         lifecycle::dead_letter(&self.connection, run_id, reason)
     }
+
+    pub(crate) fn cancel_cue_runs_for_actor(&self, actor: &str) -> Result<Vec<String>, RunsError> {
+        super::cancel_cue_runs_for_actor(&self.connection, actor)
+    }
 }

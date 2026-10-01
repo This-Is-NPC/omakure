@@ -499,6 +499,7 @@ fn production_architecture_boundaries_are_clean() {
         "operations/core/run_queries.rs",
         "operations/core/enqueue.rs",
         "operations/health/facts.rs",
+        "operations/node/trust.rs",
     ] {
         let path = src.join(relative);
         let source = fs::read_to_string(&path).expect("read run operation source");

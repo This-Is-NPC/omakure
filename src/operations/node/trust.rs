@@ -7,6 +7,7 @@ use crate::node_identity::NodeIdentity;
 use crate::node_registry::{
     NodeRegistry, PeerRecord, PeerRegistration, PeerRole, PeerSource, PeerState,
 };
+use crate::runs::RunStore;
 use crate::util::hex;
 use serde::{Deserialize, Serialize};
 
@@ -167,8 +168,8 @@ pub fn revoke_peer(
     let peer = registry
         .revoke_peer(&request.node_id, &request.actor, &request.reason)
         .map_err(map_registry_error)?;
-    let (cleanup_pending, cleanup_error) = match crate::runs::open(workspace) {
-        Ok(runs) => match crate::runs::cancel_cue_runs_for_actor(&runs, &request.node_id) {
+    let (cleanup_pending, cleanup_error) = match RunStore::open(workspace) {
+        Ok(store) => match store.cancel_cue_runs_for_actor(&request.node_id) {
             Ok(_) => (false, None),
             Err(error) => (true, Some(error.to_string())),
         },
@@ -197,7 +198,7 @@ pub fn reconcile_revoked_cue_runs(
         .filter(|peer| peer.state == PeerState::Revoked)
         .map(|peer| peer.node_id)
         .collect::<Vec<_>>();
-    let conn = crate::runs::open(workspace).map_err(|error| {
+    let store = RunStore::open(workspace).map_err(|error| {
         OperationError::new(
             OperationErrorCode::IoFailed,
             format!("cannot reconcile revoked Cue runs: {error}"),
@@ -207,7 +208,7 @@ pub fn reconcile_revoked_cue_runs(
     for actor in revoked {
         let _guard = crate::remote_cue::ExecutionGuard::acquire(context, &actor)
             .map_err(map_execution_lock_error)?;
-        let rows = crate::runs::cancel_cue_runs_for_actor(&conn, &actor).map_err(|error| {
+        let rows = store.cancel_cue_runs_for_actor(&actor).map_err(|error| {
             OperationError::new(
                 OperationErrorCode::IoFailed,
                 format!("cannot reconcile revoked Cue runs for {actor}: {error}"),

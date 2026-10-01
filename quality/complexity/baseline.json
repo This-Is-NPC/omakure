@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "6c52ffb08b138b4c5cca63f30ba08a0300a00d48b21c0a4e78079e7d955fe515",
+  "canonical_sha256": "e1dad00f4a742c788512471c12c029b869087ba0eb22eabc0757fa859423155f",
   "config_identity": "no-config",
   "files": [
     {
@@ -4800,8 +4800,8 @@
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 7,
-        "cyclomatic": 7
+        "cognitive": 10,
+        "cyclomatic": 10
       },
       "path": "src/runs/store.rs",
       "source_class": "handwritten"
@@ -86422,14 +86422,14 @@
       },
       "identity": "crate::operations::node::trust::is_false",
       "kind": "function",
-      "line": 32,
+      "line": 33,
       "name": "is_false",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 32,
+        "line": 33,
         "name": "is_false"
       },
       "path": "src/operations/node/trust.rs",
@@ -86448,14 +86448,14 @@
       },
       "identity": "crate::operations::node::trust::list_trusted_peers",
       "kind": "function",
-      "line": 67,
+      "line": 68,
       "name": "list_trusted_peers",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 67,
+        "line": 68,
         "name": "list_trusted_peers"
       },
       "path": "src/operations/node/trust.rs",
@@ -86474,14 +86474,14 @@
       },
       "identity": "crate::operations::node::trust::list_trusted_peers::<closure>",
       "kind": "closure",
-      "line": 72,
+      "line": 73,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 72,
+        "line": 73,
         "name": "<closure>"
       },
       "path": "src/operations/node/trust.rs",
@@ -86500,14 +86500,14 @@
       },
       "identity": "crate::operations::node::trust::import_manual_trust",
       "kind": "function",
-      "line": 75,
+      "line": 76,
       "name": "import_manual_trust",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 75,
+        "line": 76,
         "name": "import_manual_trust"
       },
       "path": "src/operations/node/trust.rs",
@@ -86526,14 +86526,14 @@
       },
       "identity": "crate::operations::node::trust::decode_transport_certificate",
       "kind": "function",
-      "line": 101,
+      "line": 102,
       "name": "decode_transport_certificate",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 101,
+        "line": 102,
         "name": "decode_transport_certificate"
       },
       "path": "src/operations/node/trust.rs",
@@ -86552,14 +86552,14 @@
       },
       "identity": "crate::operations::node::trust::decode_transport_certificate::invalid",
       "kind": "closure",
-      "line": 102,
+      "line": 103,
       "name": "invalid",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 102,
+        "line": 103,
         "name": "invalid"
       },
       "path": "src/operations/node/trust.rs",
@@ -86578,14 +86578,14 @@
       },
       "identity": "crate::operations::node::trust::decode_transport_certificate::<closure>",
       "kind": "closure",
-      "line": 112,
+      "line": 113,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 112,
+        "line": 113,
         "name": "<closure>"
       },
       "path": "src/operations/node/trust.rs",
@@ -86604,14 +86604,14 @@
       },
       "identity": "crate::operations::node::trust::update_peer_capabilities",
       "kind": "function",
-      "line": 121,
+      "line": 122,
       "name": "update_peer_capabilities",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 121,
+        "line": 122,
         "name": "update_peer_capabilities"
       },
       "path": "src/operations/node/trust.rs",
@@ -86630,14 +86630,14 @@
       },
       "identity": "crate::operations::node::trust::revoke_peer",
       "kind": "function",
-      "line": 148,
+      "line": 149,
       "name": "revoke_peer",
       "native": {
         "analyzer": "cccc",
         "cognitive": 5,
         "cyclomatic": 6,
         "kind": "function",
-        "line": 148,
+        "line": 149,
         "name": "revoke_peer"
       },
       "path": "src/operations/node/trust.rs",
@@ -86656,14 +86656,14 @@
       },
       "identity": "crate::operations::node::trust::reconcile_revoked_cue_runs",
       "kind": "function",
-      "line": 186,
+      "line": 187,
       "name": "reconcile_revoked_cue_runs",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 186,
+        "line": 187,
         "name": "reconcile_revoked_cue_runs"
       },
       "path": "src/operations/node/trust.rs",
@@ -86682,32 +86682,6 @@
       },
       "identity": "crate::operations::node::trust::reconcile_revoked_cue_runs::<closure>",
       "kind": "closure",
-      "line": 197,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 197,
-        "name": "<closure>"
-      },
-      "path": "src/operations/node/trust.rs",
-      "signature": ".filter(|peer| peer.state == PeerState::Revoked)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::node::trust::reconcile_revoked_cue_runs::<closure>@198#2",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/node/trust.rs",
-        "signature": ".map(|peer| peer.node_id)",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::node::trust::reconcile_revoked_cue_runs::<closure>@198#2",
-      "kind": "closure",
       "line": 198,
       "name": "<closure>",
       "native": {
@@ -86719,6 +86693,32 @@
         "name": "<closure>"
       },
       "path": "src/operations/node/trust.rs",
+      "signature": ".filter(|peer| peer.state == PeerState::Revoked)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::node::trust::reconcile_revoked_cue_runs::<closure>@199#2",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/node/trust.rs",
+        "signature": ".map(|peer| peer.node_id)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::node::trust::reconcile_revoked_cue_runs::<closure>@199#2",
+      "kind": "closure",
+      "line": 199,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 199,
+        "name": "<closure>"
+      },
+      "path": "src/operations/node/trust.rs",
       "signature": ".map(|peer| peer.node_id)",
       "source_class": "handwritten"
     },
@@ -86726,52 +86726,52 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::node::trust::reconcile_revoked_cue_runs::<closure>@200#3",
+        "identity": "crate::operations::node::trust::reconcile_revoked_cue_runs::<closure>@201#3",
         "macro_expansion": "not_measured",
         "path": "src/operations/node/trust.rs",
-        "signature": "let conn = crate::runs::open(workspace).map_err(|error| {",
+        "signature": "let store = RunStore::open(workspace).map_err(|error| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::node::trust::reconcile_revoked_cue_runs::<closure>@200#3",
+      "identity": "crate::operations::node::trust::reconcile_revoked_cue_runs::<closure>@201#3",
       "kind": "closure",
-      "line": 200,
+      "line": 201,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 200,
+        "line": 201,
         "name": "<closure>"
       },
       "path": "src/operations/node/trust.rs",
-      "signature": "let conn = crate::runs::open(workspace).map_err(|error| {",
+      "signature": "let store = RunStore::open(workspace).map_err(|error| {",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::node::trust::reconcile_revoked_cue_runs::<closure>@210#4",
+        "identity": "crate::operations::node::trust::reconcile_revoked_cue_runs::<closure>@211#4",
         "macro_expansion": "not_measured",
         "path": "src/operations/node/trust.rs",
-        "signature": "let rows = crate::runs::cancel_cue_runs_for_actor(&conn, &actor).map_err(|error| {",
+        "signature": "let rows = store.cancel_cue_runs_for_actor(&actor).map_err(|error| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::node::trust::reconcile_revoked_cue_runs::<closure>@210#4",
+      "identity": "crate::operations::node::trust::reconcile_revoked_cue_runs::<closure>@211#4",
       "kind": "closure",
-      "line": 210,
+      "line": 211,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 210,
+        "line": 211,
         "name": "<closure>"
       },
       "path": "src/operations/node/trust.rs",
-      "signature": "let rows = crate::runs::cancel_cue_runs_for_actor(&conn, &actor).map_err(|error| {",
+      "signature": "let rows = store.cancel_cue_runs_for_actor(&actor).map_err(|error| {",
       "source_class": "handwritten"
     },
     {
@@ -86786,14 +86786,14 @@
       },
       "identity": "crate::operations::node::trust::public_peer",
       "kind": "function",
-      "line": 221,
+      "line": 222,
       "name": "public_peer",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 221,
+        "line": 222,
         "name": "public_peer"
       },
       "path": "src/operations/node/trust.rs",
@@ -86812,14 +86812,14 @@
       },
       "identity": "crate::operations::node::trust::parse_role",
       "kind": "function",
-      "line": 237,
+      "line": 238,
       "name": "parse_role",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 237,
+        "line": 238,
         "name": "parse_role"
       },
       "path": "src/operations/node/trust.rs",
@@ -86838,14 +86838,14 @@
       },
       "identity": "crate::operations::node::trust::parse_role::<closure>",
       "kind": "closure",
-      "line": 238,
+      "line": 239,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 238,
+        "line": 239,
         "name": "<closure>"
       },
       "path": "src/operations/node/trust.rs",
@@ -110030,18 +110030,70 @@
       },
       "identity": "crate::runs::store::open",
       "kind": "method",
-      "line": 15,
+      "line": 16,
       "name": "open",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 15,
+        "line": 16,
         "name": "open"
       },
       "path": "src/runs/store.rs",
       "signature": "pub(crate) fn open(workspace: &Workspace) -> Result<Self, RunsError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::runs::store::enqueue",
+        "macro_expansion": "not_measured",
+        "path": "src/runs/store.rs",
+        "signature": "pub(crate) fn enqueue( &self, script_path: &str, args: &[String], options: EnqueueOptions, ) -> Result<RunRow, RunsError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::runs::store::enqueue",
+      "kind": "method",
+      "line": 22,
+      "name": "enqueue",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 22,
+        "name": "enqueue"
+      },
+      "path": "src/runs/store.rs",
+      "signature": "pub(crate) fn enqueue( &self, script_path: &str, args: &[String], options: EnqueueOptions, ) -> Result<RunRow, RunsError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::runs::store::enqueue_cue",
+        "macro_expansion": "not_measured",
+        "path": "src/runs/store.rs",
+        "signature": "pub(crate) fn enqueue_cue( &mut self, script_path: &str, args: &[String], options: EnqueueOptions, ) -> Result<RunRow, RunsError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::runs::store::enqueue_cue",
+      "kind": "method",
+      "line": 31,
+      "name": "enqueue_cue",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 31,
+        "name": "enqueue_cue"
+      },
+      "path": "src/runs/store.rs",
+      "signature": "pub(crate) fn enqueue_cue( &mut self, script_path: &str, args: &[String], options: EnqueueOptions, ) -> Result<RunRow, RunsError>",
       "source_class": "handwritten"
     },
     {
@@ -110056,14 +110108,14 @@
       },
       "identity": "crate::runs::store::query_runs",
       "kind": "method",
-      "line": 21,
+      "line": 40,
       "name": "query_runs",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 21,
+        "line": 40,
         "name": "query_runs"
       },
       "path": "src/runs/store.rs",
@@ -110082,14 +110134,14 @@
       },
       "identity": "crate::runs::store::get_run_required",
       "kind": "method",
-      "line": 25,
+      "line": 44,
       "name": "get_run_required",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 25,
+        "line": 44,
         "name": "get_run_required"
       },
       "path": "src/runs/store.rs",
@@ -110108,14 +110160,14 @@
       },
       "identity": "crate::runs::store::query_traces",
       "kind": "method",
-      "line": 29,
+      "line": 48,
       "name": "query_traces",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 29,
+        "line": 48,
         "name": "query_traces"
       },
       "path": "src/runs/store.rs",
@@ -110134,14 +110186,14 @@
       },
       "identity": "crate::runs::store::stats",
       "kind": "method",
-      "line": 38,
+      "line": 57,
       "name": "stats",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 38,
+        "line": 57,
         "name": "stats"
       },
       "path": "src/runs/store.rs",
@@ -110160,14 +110212,14 @@
       },
       "identity": "crate::runs::store::cancel",
       "kind": "method",
-      "line": 42,
+      "line": 61,
       "name": "cancel",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 42,
+        "line": 61,
         "name": "cancel"
       },
       "path": "src/runs/store.rs",
@@ -110186,18 +110238,44 @@
       },
       "identity": "crate::runs::store::dead_letter",
       "kind": "method",
-      "line": 46,
+      "line": 65,
       "name": "dead_letter",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 46,
+        "line": 65,
         "name": "dead_letter"
       },
       "path": "src/runs/store.rs",
       "signature": "pub(crate) fn dead_letter( &self, run_id: &str, reason: Option<String>, ) -> Result<RunRow, RunsError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::runs::store::cancel_cue_runs_for_actor",
+        "macro_expansion": "not_measured",
+        "path": "src/runs/store.rs",
+        "signature": "pub(crate) fn cancel_cue_runs_for_actor(&self, actor: &str) -> Result<Vec<String>, RunsError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::runs::store::cancel_cue_runs_for_actor",
+      "kind": "method",
+      "line": 73,
+      "name": "cancel_cue_runs_for_actor",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 73,
+        "name": "cancel_cue_runs_for_actor"
+      },
+      "path": "src/runs/store.rs",
+      "signature": "pub(crate) fn cancel_cue_runs_for_actor(&self, actor: &str) -> Result<Vec<String>, RunsError>",
       "source_class": "handwritten"
     },
     {

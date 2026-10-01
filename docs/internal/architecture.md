@@ -223,11 +223,10 @@ src/
 - `domain/` is I/O-free. `operations/` owns validation and stable errors;
   CLI and HTTP only parse/render requests and responses.
 - `runs/` is the sole owner of `runs.sqlite`. Core run queries, enqueue
-  operations, and local Health facts use an opaque `RunStore` handle. Core
-  queries map typed run errors at the operation boundary. The state machine
-  allows `queued`, `running`, `completed`,
-  `failed`, `cancelled`, `timed_out`, and `dead_letter` with a closed transition
-  graph.
+  operations, local Health facts, and peer revocation use an opaque `RunStore`
+  handle. Core queries map typed run errors at the operation boundary. The
+  state machine allows `queued`, `running`, `completed`, `failed`, `cancelled`,
+  `timed_out`, and `dead_letter` with a closed transition graph.
 - Direct runs, queue workers, and scheduled runs all use
   `run_executor::execute_with_heartbeat`, including cancellation, timeout,
   reserved environment variables, and output redaction.

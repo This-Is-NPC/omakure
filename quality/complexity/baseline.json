@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "768b39f3dfb4de4c8ee5b487bb3fa8d757ef23d7c1114874605712ac904d1b8e",
+  "canonical_sha256": "52785c48a64be46658b55abad1e68f60a8ea947faf6f7e55bc4cc80a6666c5c3",
   "config_identity": "no-config",
   "schema_version": 2,
   "files": [
@@ -4041,14 +4041,84 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 83,
+        "invocations": 3,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 62,
-        "cyclomatic": 111
+        "cognitive": 7,
+        "cyclomatic": 26
       },
-      "path": "src/run_executor.rs",
+      "path": "src/run_executor/admission.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 4,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 3,
+        "cyclomatic": 12
+      },
+      "path": "src/run_executor/environment.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 5,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 40,
+        "cyclomatic": 42
+      },
+      "path": "src/run_executor/lifecycle.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 0,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 0,
+        "cyclomatic": 0
+      },
+      "path": "src/run_executor/mod.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 0,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 6,
+        "cyclomatic": 8
+      },
+      "path": "src/run_executor/pipes.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 71,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 0,
+        "cyclomatic": 21
+      },
+      "path": "src/run_executor/tests.rs",
       "source_class": "handwritten"
     },
     {
@@ -92644,184 +92714,132 @@
       "source_class": "handwritten"
     },
     {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::run_executor::admission::execution_script_path",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/admission.rs",
+        "signature": "pub(super) fn execution_script_path( workspace: &Workspace, row: &RunRow, ) -> Result<PathBuf, ExecutionResult>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::admission::execution_script_path",
+      "kind": "function",
+      "line": 8,
+      "name": "execution_script_path",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 8,
+        "name": "execution_script_path"
+      },
+      "path": "src/run_executor/admission.rs",
+      "signature": "pub(super) fn execution_script_path( workspace: &Workspace, row: &RunRow, ) -> Result<PathBuf, ExecutionResult>",
+      "source_class": "handwritten"
+    },
+    {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::execute_with_heartbeat",
+        "identity": "crate::run_executor::admission::execution_script_path::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
-        "signature": "pub fn execute_with_heartbeat( workspace: &Workspace, row: &RunRow, extra_env: Vec<(String, String)>, cancel: Option<CancelFlag>, ) -> ExecutionResult",
+        "path": "src/run_executor/admission.rs",
+        "signature": ".map_err(|error| script_admission_failure(ExecutionTerminal::Errored, error.to_string()))?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::execute_with_heartbeat",
+      "identity": "crate::run_executor::admission::execution_script_path::<closure>",
+      "kind": "closure",
+      "line": 20,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 20,
+        "name": "<closure>"
+      },
+      "path": "src/run_executor/admission.rs",
+      "signature": ".map_err(|error| script_admission_failure(ExecutionTerminal::Errored, error.to_string()))?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::run_executor::admission::execution_script_path::<closure>@22#2",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/admission.rs",
+        "signature": ".map_err(|error| script_admission_failure(ExecutionTerminal::Failed, error))?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::admission::execution_script_path::<closure>@22#2",
+      "kind": "closure",
+      "line": 22,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 22,
+        "name": "<closure>"
+      },
+      "path": "src/run_executor/admission.rs",
+      "signature": ".map_err(|error| script_admission_failure(ExecutionTerminal::Failed, error))?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::run_executor::admission::script_admission_failure",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/admission.rs",
+        "signature": "fn script_admission_failure(terminal: ExecutionTerminal, error: String) -> ExecutionResult",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::admission::script_admission_failure",
       "kind": "function",
-      "line": 63,
-      "name": "execute_with_heartbeat",
+      "line": 26,
+      "name": "script_admission_failure",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 63,
-        "name": "execute_with_heartbeat"
+        "line": 26,
+        "name": "script_admission_failure"
       },
-      "path": "src/run_executor.rs",
-      "signature": "pub fn execute_with_heartbeat( workspace: &Workspace, row: &RunRow, extra_env: Vec<(String, String)>, cancel: Option<CancelFlag>, ) -> ExecutionResult",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 30,
-      "cyclomatic": 29,
-      "derived": {
-        "identity": "crate::run_executor::execute_with_heartbeat_guarded",
-        "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
-        "signature": "pub fn execute_with_heartbeat_guarded( workspace: &Workspace, row: &RunRow, extra_env: Vec<(String, String)>, cancel: Option<CancelFlag>, spawn_guard: Option<crate::remote_cue::ExecutionGuard>, ) -> ExecutionResult",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::run_executor::execute_with_heartbeat_guarded",
-      "kind": "function",
-      "line": 72,
-      "name": "execute_with_heartbeat_guarded",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 30,
-        "cyclomatic": 29,
-        "kind": "function",
-        "line": 72,
-        "name": "execute_with_heartbeat_guarded"
-      },
-      "path": "src/run_executor.rs",
-      "signature": "pub fn execute_with_heartbeat_guarded( workspace: &Workspace, row: &RunRow, extra_env: Vec<(String, String)>, cancel: Option<CancelFlag>, spawn_guard: Option<crate::remote_cue::ExecutionGuard>, ) -> ExecutionResult",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::run_executor::execute_with_heartbeat_guarded::<closure>@272#2",
-        "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
-        "signature": ".unwrap_or_else(|| \"inline\".to_string());",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::run_executor::execute_with_heartbeat_guarded::<closure>@272#2",
-      "kind": "closure",
-      "line": 272,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 272,
-        "name": "<closure>"
-      },
-      "path": "src/run_executor.rs",
-      "signature": ".unwrap_or_else(|| \"inline\".to_string());",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 11,
-      "cyclomatic": 8,
-      "derived": {
-        "identity": "crate::run_executor::execute_with_heartbeat_guarded::<closure>@274#3",
-        "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
-        "signature": "let heartbeat_handle = thread::spawn(move || {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::run_executor::execute_with_heartbeat_guarded::<closure>@274#3",
-      "kind": "closure",
-      "line": 274,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 11,
-        "cyclomatic": 8,
-        "kind": "closure",
-        "line": 274,
-        "name": "<closure>"
-      },
-      "path": "src/run_executor.rs",
-      "signature": "let heartbeat_handle = thread::spawn(move || {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::run_executor::execute_with_heartbeat_guarded::<closure>@313#4",
-        "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
-        "signature": ".map(|ms| Duration::from_millis(ms.max(0) as u64));",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::run_executor::execute_with_heartbeat_guarded::<closure>@313#4",
-      "kind": "closure",
-      "line": 313,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 313,
-        "name": "<closure>"
-      },
-      "path": "src/run_executor.rs",
-      "signature": ".map(|ms| Duration::from_millis(ms.max(0) as u64));",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::run_executor::execute_with_heartbeat_guarded::<closure>@327#5",
-        "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
-        "signature": "break status.map_err(|e| e.to_string());",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::run_executor::execute_with_heartbeat_guarded::<closure>@327#5",
-      "kind": "closure",
-      "line": 327,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 327,
-        "name": "<closure>"
-      },
-      "path": "src/run_executor.rs",
-      "signature": "break status.map_err(|e| e.to_string());",
+      "path": "src/run_executor/admission.rs",
+      "signature": "fn script_admission_failure(terminal: ExecutionTerminal, error: String) -> ExecutionResult",
       "source_class": "handwritten"
     },
     {
       "cognitive": 2,
       "cyclomatic": 4,
       "derived": {
-        "identity": "crate::run_executor::check_cue_script_unchanged",
+        "identity": "crate::run_executor::admission::check_cue_script_unchanged",
         "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
+        "path": "src/run_executor/admission.rs",
         "signature": "fn check_cue_script_unchanged( workspace: &Workspace, row: &RunRow, script_path: &Path, ) -> Result<(), String>",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::check_cue_script_unchanged",
+      "identity": "crate::run_executor::admission::check_cue_script_unchanged",
       "kind": "function",
-      "line": 423,
+      "line": 57,
       "name": "check_cue_script_unchanged",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 4,
         "kind": "function",
-        "line": 423,
+        "line": 57,
         "name": "check_cue_script_unchanged"
       },
-      "path": "src/run_executor.rs",
+      "path": "src/run_executor/admission.rs",
       "signature": "fn check_cue_script_unchanged( workspace: &Workspace, row: &RunRow, script_path: &Path, ) -> Result<(), String>",
       "source_class": "handwritten"
     },
@@ -92829,25 +92847,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::check_cue_script_unchanged::<closure>",
+        "identity": "crate::run_executor::admission::check_cue_script_unchanged::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
+        "path": "src/run_executor/admission.rs",
         "signature": ".and_then(|conn| runs::get_run_script_hash(&conn, &row.run_id))",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::check_cue_script_unchanged::<closure>",
+      "identity": "crate::run_executor::admission::check_cue_script_unchanged::<closure>",
       "kind": "closure",
-      "line": 432,
+      "line": 66,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 432,
+        "line": 66,
         "name": "<closure>"
       },
-      "path": "src/run_executor.rs",
+      "path": "src/run_executor/admission.rs",
       "signature": ".and_then(|conn| runs::get_run_script_hash(&conn, &row.run_id))",
       "source_class": "handwritten"
     },
@@ -92855,25 +92873,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::check_cue_script_unchanged::<closure>@433#2",
+        "identity": "crate::run_executor::admission::check_cue_script_unchanged::<closure>@67#2",
         "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
+        "path": "src/run_executor/admission.rs",
         "signature": ".map_err(|err| format!(\"authorized script content lookup failed: {err}\"))?",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::check_cue_script_unchanged::<closure>@433#2",
+      "identity": "crate::run_executor::admission::check_cue_script_unchanged::<closure>@67#2",
       "kind": "closure",
-      "line": 433,
+      "line": 67,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 433,
+        "line": 67,
         "name": "<closure>"
       },
-      "path": "src/run_executor.rs",
+      "path": "src/run_executor/admission.rs",
       "signature": ".map_err(|err| format!(\"authorized script content lookup failed: {err}\"))?",
       "source_class": "handwritten"
     },
@@ -92881,25 +92899,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::check_cue_script_unchanged::<closure>@434#3",
+        "identity": "crate::run_executor::admission::check_cue_script_unchanged::<closure>@68#3",
         "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
+        "path": "src/run_executor/admission.rs",
         "signature": ".ok_or_else(|| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::check_cue_script_unchanged::<closure>@434#3",
+      "identity": "crate::run_executor::admission::check_cue_script_unchanged::<closure>@68#3",
       "kind": "closure",
-      "line": 434,
+      "line": 68,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 434,
+        "line": 68,
         "name": "<closure>"
       },
-      "path": "src/run_executor.rs",
+      "path": "src/run_executor/admission.rs",
       "signature": ".ok_or_else(|| {",
       "source_class": "handwritten"
     },
@@ -92907,51 +92925,51 @@
       "cognitive": 3,
       "cyclomatic": 7,
       "derived": {
-        "identity": "crate::run_executor::secret_access_for_row",
+        "identity": "crate::run_executor::admission::secret_access_for_row",
         "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
-        "signature": "fn secret_access_for_row( workspace: &Workspace, row: &RunRow, args: &[String], ) -> Result<crate::secrets::SecretAccess, String>",
+        "path": "src/run_executor/admission.rs",
+        "signature": "pub(super) fn secret_access_for_row( workspace: &Workspace, row: &RunRow, args: &[String], ) -> Result<crate::secrets::SecretAccess, String>",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::secret_access_for_row",
+      "identity": "crate::run_executor::admission::secret_access_for_row",
       "kind": "function",
-      "line": 447,
+      "line": 81,
       "name": "secret_access_for_row",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 7,
         "kind": "function",
-        "line": 447,
+        "line": 81,
         "name": "secret_access_for_row"
       },
-      "path": "src/run_executor.rs",
-      "signature": "fn secret_access_for_row( workspace: &Workspace, row: &RunRow, args: &[String], ) -> Result<crate::secrets::SecretAccess, String>",
+      "path": "src/run_executor/admission.rs",
+      "signature": "pub(super) fn secret_access_for_row( workspace: &Workspace, row: &RunRow, args: &[String], ) -> Result<crate::secrets::SecretAccess, String>",
       "source_class": "handwritten"
     },
     {
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::run_executor::secret_access_for_row::<closure>",
+        "identity": "crate::run_executor::admission::secret_access_for_row::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
+        "path": "src/run_executor/admission.rs",
         "signature": "let has_provider_ref = args.iter().any(|arg| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::secret_access_for_row::<closure>",
+      "identity": "crate::run_executor::admission::secret_access_for_row::<closure>",
       "kind": "closure",
-      "line": 452,
+      "line": 86,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "closure",
-        "line": 452,
+        "line": 86,
         "name": "<closure>"
       },
-      "path": "src/run_executor.rs",
+      "path": "src/run_executor/admission.rs",
       "signature": "let has_provider_ref = args.iter().any(|arg| {",
       "source_class": "handwritten"
     },
@@ -92959,25 +92977,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::secret_access_for_row::<closure>::<closure>",
+        "identity": "crate::run_executor::admission::secret_access_for_row::<closure>::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
+        "path": "src/run_executor/admission.rs",
         "signature": ".map(|(_, value)| value.starts_with(\"secret://\"))",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::secret_access_for_row::<closure>::<closure>",
+      "identity": "crate::run_executor::admission::secret_access_for_row::<closure>::<closure>",
       "kind": "closure",
-      "line": 456,
+      "line": 90,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 456,
+        "line": 90,
         "name": "<closure>"
       },
-      "path": "src/run_executor.rs",
+      "path": "src/run_executor/admission.rs",
       "signature": ".map(|(_, value)| value.starts_with(\"secret://\"))",
       "source_class": "handwritten"
     },
@@ -92985,25 +93003,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::secret_access_for_row::<closure>@460#2",
+        "identity": "crate::run_executor::admission::secret_access_for_row::<closure>@94#2",
         "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
+        "path": "src/run_executor/admission.rs",
         "signature": ".and_then(|conn| runs::get_run_secret_refs(&conn, &row.run_id))",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::secret_access_for_row::<closure>@460#2",
+      "identity": "crate::run_executor::admission::secret_access_for_row::<closure>@94#2",
       "kind": "closure",
-      "line": 460,
+      "line": 94,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 460,
+        "line": 94,
         "name": "<closure>"
       },
-      "path": "src/run_executor.rs",
+      "path": "src/run_executor/admission.rs",
       "signature": ".and_then(|conn| runs::get_run_secret_refs(&conn, &row.run_id))",
       "source_class": "handwritten"
     },
@@ -93011,25 +93029,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::secret_access_for_row::<closure>@474#3",
+        "identity": "crate::run_executor::admission::secret_access_for_row::<closure>@108#3",
         "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
+        "path": "src/run_executor/admission.rs",
         "signature": ".any(|secret_ref| secret_ref == runs::ALLOW_ALL_SECRET_REFS_POLICY)",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::secret_access_for_row::<closure>@474#3",
+      "identity": "crate::run_executor::admission::secret_access_for_row::<closure>@108#3",
       "kind": "closure",
-      "line": 474,
+      "line": 108,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 474,
+        "line": 108,
         "name": "<closure>"
       },
-      "path": "src/run_executor.rs",
+      "path": "src/run_executor/admission.rs",
       "signature": ".any(|secret_ref| secret_ref == runs::ALLOW_ALL_SECRET_REFS_POLICY)",
       "source_class": "handwritten"
     },
@@ -93037,311 +93055,51 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::drop",
+        "identity": "crate::run_executor::admission::parse_args_json",
         "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
-        "signature": "fn drop(&mut self)",
+        "path": "src/run_executor/admission.rs",
+        "signature": "pub(super) fn parse_args_json(args_json: &str) -> Vec<String>",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::drop",
-      "kind": "method",
-      "line": 487,
-      "name": "drop",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "method",
-        "line": 487,
-        "name": "drop"
-      },
-      "path": "src/run_executor.rs",
-      "signature": "fn drop(&mut self)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::run_executor::write_redaction_file",
-        "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
-        "signature": "fn write_redaction_file( workspace: &Workspace, run_id: &str, secrets: &[String], ) -> Result<Option<RedactionFile>, String>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::run_executor::write_redaction_file",
+      "identity": "crate::run_executor::admission::parse_args_json",
       "kind": "function",
-      "line": 492,
-      "name": "write_redaction_file",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 492,
-        "name": "write_redaction_file"
-      },
-      "path": "src/run_executor.rs",
-      "signature": "fn write_redaction_file( workspace: &Workspace, run_id: &str, secrets: &[String], ) -> Result<Option<RedactionFile>, String>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::run_executor::write_redaction_file::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
-        "signature": ".map_err(|err| format!(\"create redaction dir failed: {err}\"))?;",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::run_executor::write_redaction_file::<closure>",
-      "kind": "closure",
-      "line": 501,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 501,
-        "name": "<closure>"
-      },
-      "path": "src/run_executor.rs",
-      "signature": ".map_err(|err| format!(\"create redaction dir failed: {err}\"))?;",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::run_executor::write_redaction_file::<closure>@517#2",
-        "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
-        "signature": ".map_err(|err| format!(\"open redaction file failed: {err}\"))?;",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::run_executor::write_redaction_file::<closure>@517#2",
-      "kind": "closure",
-      "line": 517,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 517,
-        "name": "<closure>"
-      },
-      "path": "src/run_executor.rs",
-      "signature": ".map_err(|err| format!(\"open redaction file failed: {err}\"))?;",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::run_executor::write_redaction_file::<closure>@519#3",
-        "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
-        "signature": ".map_err(|err| format!(\"write redaction file failed: {err}\"))?;",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::run_executor::write_redaction_file::<closure>@519#3",
-      "kind": "closure",
-      "line": 519,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 519,
-        "name": "<closure>"
-      },
-      "path": "src/run_executor.rs",
-      "signature": ".map_err(|err| format!(\"write redaction file failed: {err}\"))?;",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::run_executor::sanitize_run_id_for_filename",
-        "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
-        "signature": "fn sanitize_run_id_for_filename(run_id: &str) -> String",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::run_executor::sanitize_run_id_for_filename",
-      "kind": "function",
-      "line": 523,
-      "name": "sanitize_run_id_for_filename",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 523,
-        "name": "sanitize_run_id_for_filename"
-      },
-      "path": "src/run_executor.rs",
-      "signature": "fn sanitize_run_id_for_filename(run_id: &str) -> String",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 2,
-      "cyclomatic": 2,
-      "derived": {
-        "identity": "crate::run_executor::sanitize_run_id_for_filename::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
-        "signature": ".map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '_' })",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::run_executor::sanitize_run_id_for_filename::<closure>",
-      "kind": "closure",
-      "line": 526,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 2,
-        "cyclomatic": 2,
-        "kind": "closure",
-        "line": 526,
-        "name": "<closure>"
-      },
-      "path": "src/run_executor.rs",
-      "signature": ".map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '_' })",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::run_executor::spawn_pipe_reader_to_channel",
-        "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
-        "signature": "fn spawn_pipe_reader_to_channel<R: Read + Send + 'static>(handle: R, tx: Sender<String>)",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::run_executor::spawn_pipe_reader_to_channel",
-      "kind": "function",
-      "line": 539,
-      "name": "spawn_pipe_reader_to_channel",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 539,
-        "name": "spawn_pipe_reader_to_channel"
-      },
-      "path": "src/run_executor.rs",
-      "signature": "fn spawn_pipe_reader_to_channel<R: Read + Send + 'static>(handle: R, tx: Sender<String>)",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 3,
-      "cyclomatic": 3,
-      "derived": {
-        "identity": "crate::run_executor::spawn_pipe_reader_to_channel::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
-        "signature": "thread::spawn(move || {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::run_executor::spawn_pipe_reader_to_channel::<closure>",
-      "kind": "closure",
-      "line": 540,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 3,
-        "cyclomatic": 3,
-        "kind": "closure",
-        "line": 540,
-        "name": "<closure>"
-      },
-      "path": "src/run_executor.rs",
-      "signature": "thread::spawn(move || {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 3,
-      "cyclomatic": 4,
-      "derived": {
-        "identity": "crate::run_executor::drain_channel",
-        "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
-        "signature": "fn drain_channel(rx: &std::sync::mpsc::Receiver<String>, budget: Duration) -> String",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::run_executor::drain_channel",
-      "kind": "function",
-      "line": 554,
-      "name": "drain_channel",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 3,
-        "cyclomatic": 4,
-        "kind": "function",
-        "line": 554,
-        "name": "drain_channel"
-      },
-      "path": "src/run_executor.rs",
-      "signature": "fn drain_channel(rx: &std::sync::mpsc::Receiver<String>, budget: Duration) -> String",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::run_executor::parse_args_json",
-        "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
-        "signature": "fn parse_args_json(args_json: &str) -> Vec<String>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::run_executor::parse_args_json",
-      "kind": "function",
-      "line": 569,
+      "line": 119,
       "name": "parse_args_json",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 569,
+        "line": 119,
         "name": "parse_args_json"
       },
-      "path": "src/run_executor.rs",
-      "signature": "fn parse_args_json(args_json: &str) -> Vec<String>",
+      "path": "src/run_executor/admission.rs",
+      "signature": "pub(super) fn parse_args_json(args_json: &str) -> Vec<String>",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::parse_args_json::<closure>",
+        "identity": "crate::run_executor::admission::parse_args_json::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
+        "path": "src/run_executor/admission.rs",
         "signature": "serde_json::from_str(args_json).unwrap_or_else(|_| Vec::new())",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::parse_args_json::<closure>",
+      "identity": "crate::run_executor::admission::parse_args_json::<closure>",
       "kind": "closure",
-      "line": 570,
+      "line": 120,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 570,
+        "line": 120,
         "name": "<closure>"
       },
-      "path": "src/run_executor.rs",
+      "path": "src/run_executor/admission.rs",
       "signature": "serde_json::from_str(args_json).unwrap_or_else(|_| Vec::new())",
       "source_class": "handwritten"
     },
@@ -93349,25 +93107,571 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::a_cue_run_refuses_a_script_that_changed_after_it_was_authorized",
+        "identity": "crate::run_executor::environment::drop",
         "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
+        "path": "src/run_executor/environment.rs",
+        "signature": "fn drop(&mut self)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::environment::drop",
+      "kind": "method",
+      "line": 12,
+      "name": "drop",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 12,
+        "name": "drop"
+      },
+      "path": "src/run_executor/environment.rs",
+      "signature": "fn drop(&mut self)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::run_executor::environment::write_redaction_file",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/environment.rs",
+        "signature": "pub(super) fn write_redaction_file( workspace: &Workspace, run_id: &str, secrets: &[String], ) -> Result<Option<RedactionFile>, String>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::environment::write_redaction_file",
+      "kind": "function",
+      "line": 17,
+      "name": "write_redaction_file",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 17,
+        "name": "write_redaction_file"
+      },
+      "path": "src/run_executor/environment.rs",
+      "signature": "pub(super) fn write_redaction_file( workspace: &Workspace, run_id: &str, secrets: &[String], ) -> Result<Option<RedactionFile>, String>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::run_executor::environment::write_redaction_file::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/environment.rs",
+        "signature": ".map_err(|err| format!(\"create redaction dir failed: {err}\"))?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::environment::write_redaction_file::<closure>",
+      "kind": "closure",
+      "line": 26,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 26,
+        "name": "<closure>"
+      },
+      "path": "src/run_executor/environment.rs",
+      "signature": ".map_err(|err| format!(\"create redaction dir failed: {err}\"))?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::run_executor::environment::write_redaction_file::<closure>@42#2",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/environment.rs",
+        "signature": ".map_err(|err| format!(\"open redaction file failed: {err}\"))?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::environment::write_redaction_file::<closure>@42#2",
+      "kind": "closure",
+      "line": 42,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 42,
+        "name": "<closure>"
+      },
+      "path": "src/run_executor/environment.rs",
+      "signature": ".map_err(|err| format!(\"open redaction file failed: {err}\"))?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::run_executor::environment::write_redaction_file::<closure>@44#3",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/environment.rs",
+        "signature": ".map_err(|err| format!(\"write redaction file failed: {err}\"))?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::environment::write_redaction_file::<closure>@44#3",
+      "kind": "closure",
+      "line": 44,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 44,
+        "name": "<closure>"
+      },
+      "path": "src/run_executor/environment.rs",
+      "signature": ".map_err(|err| format!(\"write redaction file failed: {err}\"))?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::run_executor::environment::sanitize_run_id_for_filename",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/environment.rs",
+        "signature": "fn sanitize_run_id_for_filename(run_id: &str) -> String",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::environment::sanitize_run_id_for_filename",
+      "kind": "function",
+      "line": 48,
+      "name": "sanitize_run_id_for_filename",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 48,
+        "name": "sanitize_run_id_for_filename"
+      },
+      "path": "src/run_executor/environment.rs",
+      "signature": "fn sanitize_run_id_for_filename(run_id: &str) -> String",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::run_executor::environment::sanitize_run_id_for_filename::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/environment.rs",
+        "signature": ".map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '_' })",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::environment::sanitize_run_id_for_filename::<closure>",
+      "kind": "closure",
+      "line": 51,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 2,
+        "kind": "closure",
+        "line": 51,
+        "name": "<closure>"
+      },
+      "path": "src/run_executor/environment.rs",
+      "signature": ".map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '_' })",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::run_executor::environment::push_reserved_run_env",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/environment.rs",
+        "signature": "pub(super) fn push_reserved_run_env( env: &mut Vec<(String, String)>, workspace: &Workspace, run_id: &str, )",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::environment::push_reserved_run_env",
+      "kind": "function",
+      "line": 56,
+      "name": "push_reserved_run_env",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 56,
+        "name": "push_reserved_run_env"
+      },
+      "path": "src/run_executor/environment.rs",
+      "signature": "pub(super) fn push_reserved_run_env( env: &mut Vec<(String, String)>, workspace: &Workspace, run_id: &str, )",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::run_executor::environment::bash_safe_current_exe",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/environment.rs",
+        "signature": "pub(super) fn bash_safe_current_exe() -> Option<String>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::environment::bash_safe_current_exe",
+      "kind": "function",
+      "line": 71,
+      "name": "bash_safe_current_exe",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 71,
+        "name": "bash_safe_current_exe"
+      },
+      "path": "src/run_executor/environment.rs",
+      "signature": "pub(super) fn bash_safe_current_exe() -> Option<String>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::run_executor::environment::bash_safe_current_exe::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/environment.rs",
+        "signature": "std::env::current_exe().ok().map(|exe| bash_safe_path(&exe))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::environment::bash_safe_current_exe::<closure>",
+      "kind": "closure",
+      "line": 72,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 72,
+        "name": "<closure>"
+      },
+      "path": "src/run_executor/environment.rs",
+      "signature": "std::env::current_exe().ok().map(|exe| bash_safe_path(&exe))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::run_executor::lifecycle::execute_with_heartbeat",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/lifecycle.rs",
+        "signature": "pub fn execute_with_heartbeat( workspace: &Workspace, row: &RunRow, extra_env: Vec<(String, String)>, cancel: Option<CancelFlag>, ) -> ExecutionResult",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::lifecycle::execute_with_heartbeat",
+      "kind": "function",
+      "line": 25,
+      "name": "execute_with_heartbeat",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 25,
+        "name": "execute_with_heartbeat"
+      },
+      "path": "src/run_executor/lifecycle.rs",
+      "signature": "pub fn execute_with_heartbeat( workspace: &Workspace, row: &RunRow, extra_env: Vec<(String, String)>, cancel: Option<CancelFlag>, ) -> ExecutionResult",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 30,
+      "cyclomatic": 29,
+      "derived": {
+        "identity": "crate::run_executor::lifecycle::execute_with_heartbeat_guarded",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/lifecycle.rs",
+        "signature": "pub fn execute_with_heartbeat_guarded( workspace: &Workspace, row: &RunRow, extra_env: Vec<(String, String)>, cancel: Option<CancelFlag>, spawn_guard: Option<crate::remote_cue::ExecutionGuard>, ) -> ExecutionResult",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::lifecycle::execute_with_heartbeat_guarded",
+      "kind": "function",
+      "line": 34,
+      "name": "execute_with_heartbeat_guarded",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 30,
+        "cyclomatic": 29,
+        "kind": "function",
+        "line": 34,
+        "name": "execute_with_heartbeat_guarded"
+      },
+      "path": "src/run_executor/lifecycle.rs",
+      "signature": "pub fn execute_with_heartbeat_guarded( workspace: &Workspace, row: &RunRow, extra_env: Vec<(String, String)>, cancel: Option<CancelFlag>, spawn_guard: Option<crate::remote_cue::ExecutionGuard>, ) -> ExecutionResult",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::run_executor::lifecycle::execute_with_heartbeat_guarded::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/lifecycle.rs",
+        "signature": ".unwrap_or_else(|| \"inline\".to_string());",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::lifecycle::execute_with_heartbeat_guarded::<closure>",
+      "kind": "closure",
+      "line": 205,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 205,
+        "name": "<closure>"
+      },
+      "path": "src/run_executor/lifecycle.rs",
+      "signature": ".unwrap_or_else(|| \"inline\".to_string());",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 11,
+      "cyclomatic": 8,
+      "derived": {
+        "identity": "crate::run_executor::lifecycle::execute_with_heartbeat_guarded::<closure>@207#2",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/lifecycle.rs",
+        "signature": "let heartbeat_handle = thread::spawn(move || {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::lifecycle::execute_with_heartbeat_guarded::<closure>@207#2",
+      "kind": "closure",
+      "line": 207,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 11,
+        "cyclomatic": 8,
+        "kind": "closure",
+        "line": 207,
+        "name": "<closure>"
+      },
+      "path": "src/run_executor/lifecycle.rs",
+      "signature": "let heartbeat_handle = thread::spawn(move || {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::run_executor::lifecycle::execute_with_heartbeat_guarded::<closure>@246#3",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/lifecycle.rs",
+        "signature": ".map(|ms| Duration::from_millis(ms.max(0) as u64));",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::lifecycle::execute_with_heartbeat_guarded::<closure>@246#3",
+      "kind": "closure",
+      "line": 246,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 246,
+        "name": "<closure>"
+      },
+      "path": "src/run_executor/lifecycle.rs",
+      "signature": ".map(|ms| Duration::from_millis(ms.max(0) as u64));",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::run_executor::lifecycle::execute_with_heartbeat_guarded::<closure>@260#4",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/lifecycle.rs",
+        "signature": "break status.map_err(|e| e.to_string());",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::lifecycle::execute_with_heartbeat_guarded::<closure>@260#4",
+      "kind": "closure",
+      "line": 260,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 260,
+        "name": "<closure>"
+      },
+      "path": "src/run_executor/lifecycle.rs",
+      "signature": "break status.map_err(|e| e.to_string());",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::run_executor::lifecycle::execute_with_heartbeat_guarded::<closure>@268#5",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/lifecycle.rs",
+        "signature": "break status.map_err(|e| e.to_string());",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::lifecycle::execute_with_heartbeat_guarded::<closure>@268#5",
+      "kind": "closure",
+      "line": 268,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 268,
+        "name": "<closure>"
+      },
+      "path": "src/run_executor/lifecycle.rs",
+      "signature": "break status.map_err(|e| e.to_string());",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::run_executor::pipes::spawn_pipe_reader_to_channel",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/pipes.rs",
+        "signature": "pub(super) fn spawn_pipe_reader_to_channel<R: Read + Send + 'static>( handle: R, tx: Sender<String>, )",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::pipes::spawn_pipe_reader_to_channel",
+      "kind": "function",
+      "line": 15,
+      "name": "spawn_pipe_reader_to_channel",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 15,
+        "name": "spawn_pipe_reader_to_channel"
+      },
+      "path": "src/run_executor/pipes.rs",
+      "signature": "pub(super) fn spawn_pipe_reader_to_channel<R: Read + Send + 'static>( handle: R, tx: Sender<String>, )",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 3,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::run_executor::pipes::spawn_pipe_reader_to_channel::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/pipes.rs",
+        "signature": "thread::spawn(move || {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::pipes::spawn_pipe_reader_to_channel::<closure>",
+      "kind": "closure",
+      "line": 19,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 3,
+        "cyclomatic": 3,
+        "kind": "closure",
+        "line": 19,
+        "name": "<closure>"
+      },
+      "path": "src/run_executor/pipes.rs",
+      "signature": "thread::spawn(move || {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 3,
+      "cyclomatic": 4,
+      "derived": {
+        "identity": "crate::run_executor::pipes::drain_channel",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/pipes.rs",
+        "signature": "pub(super) fn drain_channel(rx: &std::sync::mpsc::Receiver<String>, budget: Duration) -> String",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::pipes::drain_channel",
+      "kind": "function",
+      "line": 33,
+      "name": "drain_channel",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 3,
+        "cyclomatic": 4,
+        "kind": "function",
+        "line": 33,
+        "name": "drain_channel"
+      },
+      "path": "src/run_executor/pipes.rs",
+      "signature": "pub(super) fn drain_channel(rx: &std::sync::mpsc::Receiver<String>, budget: Duration) -> String",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::run_executor::tests::queued_subject_replaced_with_metadata_symlink_is_not_executed",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/tests.rs",
+        "signature": "fn queued_subject_replaced_with_metadata_symlink_is_not_executed()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::tests::queued_subject_replaced_with_metadata_symlink_is_not_executed",
+      "kind": "function",
+      "line": 14,
+      "name": "queued_subject_replaced_with_metadata_symlink_is_not_executed",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 14,
+        "name": "queued_subject_replaced_with_metadata_symlink_is_not_executed"
+      },
+      "path": "src/run_executor/tests.rs",
+      "signature": "fn queued_subject_replaced_with_metadata_symlink_is_not_executed()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::run_executor::tests::a_cue_run_refuses_a_script_that_changed_after_it_was_authorized",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/tests.rs",
         "signature": "fn a_cue_run_refuses_a_script_that_changed_after_it_was_authorized()",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::a_cue_run_refuses_a_script_that_changed_after_it_was_authorized",
+      "identity": "crate::run_executor::tests::a_cue_run_refuses_a_script_that_changed_after_it_was_authorized",
       "kind": "function",
-      "line": 644,
+      "line": 51,
       "name": "a_cue_run_refuses_a_script_that_changed_after_it_was_authorized",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 644,
+        "line": 51,
         "name": "a_cue_run_refuses_a_script_that_changed_after_it_was_authorized"
       },
-      "path": "src/run_executor.rs",
+      "path": "src/run_executor/tests.rs",
       "signature": "fn a_cue_run_refuses_a_script_that_changed_after_it_was_authorized()",
       "source_class": "handwritten"
     },
@@ -93375,25 +93679,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::a_cue_run_with_no_recorded_hash_does_not_execute",
+        "identity": "crate::run_executor::tests::a_cue_run_with_no_recorded_hash_does_not_execute",
         "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
+        "path": "src/run_executor/tests.rs",
         "signature": "fn a_cue_run_with_no_recorded_hash_does_not_execute()",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::a_cue_run_with_no_recorded_hash_does_not_execute",
+      "identity": "crate::run_executor::tests::a_cue_run_with_no_recorded_hash_does_not_execute",
       "kind": "function",
-      "line": 694,
+      "line": 101,
       "name": "a_cue_run_with_no_recorded_hash_does_not_execute",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 694,
+        "line": 101,
         "name": "a_cue_run_with_no_recorded_hash_does_not_execute"
       },
-      "path": "src/run_executor.rs",
+      "path": "src/run_executor/tests.rs",
       "signature": "fn a_cue_run_with_no_recorded_hash_does_not_execute()",
       "source_class": "handwritten"
     },
@@ -93401,25 +93705,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::a_manual_run_is_unaffected_by_the_authorized_content_check",
+        "identity": "crate::run_executor::tests::a_manual_run_is_unaffected_by_the_authorized_content_check",
         "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
+        "path": "src/run_executor/tests.rs",
         "signature": "fn a_manual_run_is_unaffected_by_the_authorized_content_check()",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::a_manual_run_is_unaffected_by_the_authorized_content_check",
+      "identity": "crate::run_executor::tests::a_manual_run_is_unaffected_by_the_authorized_content_check",
       "kind": "function",
-      "line": 729,
+      "line": 136,
       "name": "a_manual_run_is_unaffected_by_the_authorized_content_check",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 729,
+        "line": 136,
         "name": "a_manual_run_is_unaffected_by_the_authorized_content_check"
       },
-      "path": "src/run_executor.rs",
+      "path": "src/run_executor/tests.rs",
       "signature": "fn a_manual_run_is_unaffected_by_the_authorized_content_check()",
       "source_class": "handwritten"
     },
@@ -93427,25 +93731,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::execute_completes_simple_script",
+        "identity": "crate::run_executor::tests::execute_completes_simple_script",
         "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
+        "path": "src/run_executor/tests.rs",
         "signature": "fn execute_completes_simple_script()",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::execute_completes_simple_script",
+      "identity": "crate::run_executor::tests::execute_completes_simple_script",
       "kind": "function",
-      "line": 759,
+      "line": 166,
       "name": "execute_completes_simple_script",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 759,
+        "line": 166,
         "name": "execute_completes_simple_script"
       },
-      "path": "src/run_executor.rs",
+      "path": "src/run_executor/tests.rs",
       "signature": "fn execute_completes_simple_script()",
       "source_class": "handwritten"
     },
@@ -93453,25 +93757,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::execute_injects_omakure_scripts_dir_env_var",
+        "identity": "crate::run_executor::tests::execute_injects_omakure_scripts_dir_env_var",
         "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
+        "path": "src/run_executor/tests.rs",
         "signature": "fn execute_injects_omakure_scripts_dir_env_var()",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::execute_injects_omakure_scripts_dir_env_var",
+      "identity": "crate::run_executor::tests::execute_injects_omakure_scripts_dir_env_var",
       "kind": "function",
-      "line": 785,
+      "line": 192,
       "name": "execute_injects_omakure_scripts_dir_env_var",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 785,
+        "line": 192,
         "name": "execute_injects_omakure_scripts_dir_env_var"
       },
-      "path": "src/run_executor.rs",
+      "path": "src/run_executor/tests.rs",
       "signature": "fn execute_injects_omakure_scripts_dir_env_var()",
       "source_class": "handwritten"
     },
@@ -93479,25 +93783,51 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::execute_uses_redaction_file_instead_of_plaintext_secret_env",
+        "identity": "crate::run_executor::tests::execute_injects_omakure_bin_env_var",
         "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
+        "path": "src/run_executor/tests.rs",
+        "signature": "fn execute_injects_omakure_bin_env_var()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::run_executor::tests::execute_injects_omakure_bin_env_var",
+      "kind": "function",
+      "line": 226,
+      "name": "execute_injects_omakure_bin_env_var",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 226,
+        "name": "execute_injects_omakure_bin_env_var"
+      },
+      "path": "src/run_executor/tests.rs",
+      "signature": "fn execute_injects_omakure_bin_env_var()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::run_executor::tests::execute_uses_redaction_file_instead_of_plaintext_secret_env",
+        "macro_expansion": "not_measured",
+        "path": "src/run_executor/tests.rs",
         "signature": "fn execute_uses_redaction_file_instead_of_plaintext_secret_env()",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::execute_uses_redaction_file_instead_of_plaintext_secret_env",
+      "identity": "crate::run_executor::tests::execute_uses_redaction_file_instead_of_plaintext_secret_env",
       "kind": "function",
-      "line": 818,
+      "line": 258,
       "name": "execute_uses_redaction_file_instead_of_plaintext_secret_env",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 818,
+        "line": 258,
         "name": "execute_uses_redaction_file_instead_of_plaintext_secret_env"
       },
-      "path": "src/run_executor.rs",
+      "path": "src/run_executor/tests.rs",
       "signature": "fn execute_uses_redaction_file_instead_of_plaintext_secret_env()",
       "source_class": "handwritten"
     },
@@ -93505,25 +93835,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::execute_injects_omakure_run_id_env_var",
+        "identity": "crate::run_executor::tests::execute_injects_omakure_run_id_env_var",
         "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
+        "path": "src/run_executor/tests.rs",
         "signature": "fn execute_injects_omakure_run_id_env_var()",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::execute_injects_omakure_run_id_env_var",
+      "identity": "crate::run_executor::tests::execute_injects_omakure_run_id_env_var",
       "kind": "function",
-      "line": 867,
+      "line": 307,
       "name": "execute_injects_omakure_run_id_env_var",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 867,
+        "line": 307,
         "name": "execute_injects_omakure_run_id_env_var"
       },
-      "path": "src/run_executor.rs",
+      "path": "src/run_executor/tests.rs",
       "signature": "fn execute_injects_omakure_run_id_env_var()",
       "source_class": "handwritten"
     },
@@ -93531,25 +93861,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::execute_reserved_vars_win_over_injected_extra_env",
+        "identity": "crate::run_executor::tests::execute_reserved_vars_win_over_injected_extra_env",
         "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
+        "path": "src/run_executor/tests.rs",
         "signature": "fn execute_reserved_vars_win_over_injected_extra_env()",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::execute_reserved_vars_win_over_injected_extra_env",
+      "identity": "crate::run_executor::tests::execute_reserved_vars_win_over_injected_extra_env",
       "kind": "function",
-      "line": 897,
+      "line": 337,
       "name": "execute_reserved_vars_win_over_injected_extra_env",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 897,
+        "line": 337,
         "name": "execute_reserved_vars_win_over_injected_extra_env"
       },
-      "path": "src/run_executor.rs",
+      "path": "src/run_executor/tests.rs",
       "signature": "fn execute_reserved_vars_win_over_injected_extra_env()",
       "source_class": "handwritten"
     },
@@ -93557,25 +93887,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::execute_reserved_scripts_dir_wins_over_injected_extra_env",
+        "identity": "crate::run_executor::tests::execute_reserved_scripts_dir_wins_over_injected_extra_env",
         "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
+        "path": "src/run_executor/tests.rs",
         "signature": "fn execute_reserved_scripts_dir_wins_over_injected_extra_env()",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::execute_reserved_scripts_dir_wins_over_injected_extra_env",
+      "identity": "crate::run_executor::tests::execute_reserved_scripts_dir_wins_over_injected_extra_env",
       "kind": "function",
-      "line": 936,
+      "line": 376,
       "name": "execute_reserved_scripts_dir_wins_over_injected_extra_env",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 936,
+        "line": 376,
         "name": "execute_reserved_scripts_dir_wins_over_injected_extra_env"
       },
-      "path": "src/run_executor.rs",
+      "path": "src/run_executor/tests.rs",
       "signature": "fn execute_reserved_scripts_dir_wins_over_injected_extra_env()",
       "source_class": "handwritten"
     },
@@ -93583,25 +93913,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::execute_reserved_vars_are_not_expandable_in_resolved_env",
+        "identity": "crate::run_executor::tests::execute_reserved_vars_are_not_expandable_in_resolved_env",
         "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
+        "path": "src/run_executor/tests.rs",
         "signature": "fn execute_reserved_vars_are_not_expandable_in_resolved_env()",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::execute_reserved_vars_are_not_expandable_in_resolved_env",
+      "identity": "crate::run_executor::tests::execute_reserved_vars_are_not_expandable_in_resolved_env",
       "kind": "function",
-      "line": 970,
+      "line": 411,
       "name": "execute_reserved_vars_are_not_expandable_in_resolved_env",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 970,
+        "line": 411,
         "name": "execute_reserved_vars_are_not_expandable_in_resolved_env"
       },
-      "path": "src/run_executor.rs",
+      "path": "src/run_executor/tests.rs",
       "signature": "fn execute_reserved_vars_are_not_expandable_in_resolved_env()",
       "source_class": "handwritten"
     },
@@ -93609,25 +93939,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::execute_failed_script_marked_failed",
+        "identity": "crate::run_executor::tests::execute_failed_script_marked_failed",
         "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
+        "path": "src/run_executor/tests.rs",
         "signature": "fn execute_failed_script_marked_failed()",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::execute_failed_script_marked_failed",
+      "identity": "crate::run_executor::tests::execute_failed_script_marked_failed",
       "kind": "function",
-      "line": 1006,
+      "line": 451,
       "name": "execute_failed_script_marked_failed",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1006,
+        "line": 451,
         "name": "execute_failed_script_marked_failed"
       },
-      "path": "src/run_executor.rs",
+      "path": "src/run_executor/tests.rs",
       "signature": "fn execute_failed_script_marked_failed()",
       "source_class": "handwritten"
     },
@@ -93635,25 +93965,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::execute_timeout_kills_long_script",
+        "identity": "crate::run_executor::tests::execute_timeout_kills_long_script",
         "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
+        "path": "src/run_executor/tests.rs",
         "signature": "fn execute_timeout_kills_long_script()",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::execute_timeout_kills_long_script",
+      "identity": "crate::run_executor::tests::execute_timeout_kills_long_script",
       "kind": "function",
-      "line": 1030,
+      "line": 475,
       "name": "execute_timeout_kills_long_script",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1030,
+        "line": 475,
         "name": "execute_timeout_kills_long_script"
       },
-      "path": "src/run_executor.rs",
+      "path": "src/run_executor/tests.rs",
       "signature": "fn execute_timeout_kills_long_script()",
       "source_class": "handwritten"
     },
@@ -93661,25 +93991,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::execute_returns_errored_when_script_missing",
+        "identity": "crate::run_executor::tests::execute_returns_errored_when_script_missing",
         "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
+        "path": "src/run_executor/tests.rs",
         "signature": "fn execute_returns_errored_when_script_missing()",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::execute_returns_errored_when_script_missing",
+      "identity": "crate::run_executor::tests::execute_returns_errored_when_script_missing",
       "kind": "function",
-      "line": 1055,
+      "line": 500,
       "name": "execute_returns_errored_when_script_missing",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1055,
+        "line": 500,
         "name": "execute_returns_errored_when_script_missing"
       },
-      "path": "src/run_executor.rs",
+      "path": "src/run_executor/tests.rs",
       "signature": "fn execute_returns_errored_when_script_missing()",
       "source_class": "handwritten"
     },
@@ -93687,25 +94017,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::execute_returns_errored_for_unsupported_extension",
+        "identity": "crate::run_executor::tests::execute_returns_errored_for_unsupported_extension",
         "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
+        "path": "src/run_executor/tests.rs",
         "signature": "fn execute_returns_errored_for_unsupported_extension()",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::execute_returns_errored_for_unsupported_extension",
+      "identity": "crate::run_executor::tests::execute_returns_errored_for_unsupported_extension",
       "kind": "function",
-      "line": 1086,
+      "line": 531,
       "name": "execute_returns_errored_for_unsupported_extension",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1086,
+        "line": 531,
         "name": "execute_returns_errored_for_unsupported_extension"
       },
-      "path": "src/run_executor.rs",
+      "path": "src/run_executor/tests.rs",
       "signature": "fn execute_returns_errored_for_unsupported_extension()",
       "source_class": "handwritten"
     },
@@ -93713,25 +94043,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::execute_fails_when_required_field_missing",
+        "identity": "crate::run_executor::tests::execute_fails_when_required_field_missing",
         "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
+        "path": "src/run_executor/tests.rs",
         "signature": "fn execute_fails_when_required_field_missing()",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::execute_fails_when_required_field_missing",
+      "identity": "crate::run_executor::tests::execute_fails_when_required_field_missing",
       "kind": "function",
-      "line": 1111,
+      "line": 556,
       "name": "execute_fails_when_required_field_missing",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1111,
+        "line": 556,
         "name": "execute_fails_when_required_field_missing"
       },
-      "path": "src/run_executor.rs",
+      "path": "src/run_executor/tests.rs",
       "signature": "fn execute_fails_when_required_field_missing()",
       "source_class": "handwritten"
     },
@@ -93739,25 +94069,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::execute_resolves_persisted_secret_ref_at_runtime_and_redacts_output",
+        "identity": "crate::run_executor::tests::execute_resolves_persisted_secret_ref_at_runtime_and_redacts_output",
         "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
+        "path": "src/run_executor/tests.rs",
         "signature": "fn execute_resolves_persisted_secret_ref_at_runtime_and_redacts_output()",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::execute_resolves_persisted_secret_ref_at_runtime_and_redacts_output",
+      "identity": "crate::run_executor::tests::execute_resolves_persisted_secret_ref_at_runtime_and_redacts_output",
       "kind": "function",
-      "line": 1175,
+      "line": 595,
       "name": "execute_resolves_persisted_secret_ref_at_runtime_and_redacts_output",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1175,
+        "line": 595,
         "name": "execute_resolves_persisted_secret_ref_at_runtime_and_redacts_output"
       },
-      "path": "src/run_executor.rs",
+      "path": "src/run_executor/tests.rs",
       "signature": "fn execute_resolves_persisted_secret_ref_at_runtime_and_redacts_output()",
       "source_class": "handwritten"
     },
@@ -93765,25 +94095,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::parse_args_json_handles_invalid_input",
+        "identity": "crate::run_executor::tests::parse_args_json_handles_invalid_input",
         "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
+        "path": "src/run_executor/tests.rs",
         "signature": "fn parse_args_json_handles_invalid_input()",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::parse_args_json_handles_invalid_input",
+      "identity": "crate::run_executor::tests::parse_args_json_handles_invalid_input",
       "kind": "function",
-      "line": 1214,
+      "line": 634,
       "name": "parse_args_json_handles_invalid_input",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1214,
+        "line": 634,
         "name": "parse_args_json_handles_invalid_input"
       },
-      "path": "src/run_executor.rs",
+      "path": "src/run_executor/tests.rs",
       "signature": "fn parse_args_json_handles_invalid_input()",
       "source_class": "handwritten"
     },
@@ -93791,25 +94121,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::execute_external_cancel_kills_running_script",
+        "identity": "crate::run_executor::tests::execute_external_cancel_kills_running_script",
         "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
+        "path": "src/run_executor/tests.rs",
         "signature": "fn execute_external_cancel_kills_running_script()",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::execute_external_cancel_kills_running_script",
+      "identity": "crate::run_executor::tests::execute_external_cancel_kills_running_script",
       "kind": "function",
-      "line": 1221,
+      "line": 641,
       "name": "execute_external_cancel_kills_running_script",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 1221,
+        "line": 641,
         "name": "execute_external_cancel_kills_running_script"
       },
-      "path": "src/run_executor.rs",
+      "path": "src/run_executor/tests.rs",
       "signature": "fn execute_external_cancel_kills_running_script()",
       "source_class": "handwritten"
     },
@@ -93817,25 +94147,25 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::run_executor::execute_external_cancel_kills_running_script::<closure>",
+        "identity": "crate::run_executor::tests::execute_external_cancel_kills_running_script::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/run_executor.rs",
+        "path": "src/run_executor/tests.rs",
         "signature": "let canceller = thread::spawn(move || {",
         "source_class": "handwritten"
       },
-      "identity": "crate::run_executor::execute_external_cancel_kills_running_script::<closure>",
+      "identity": "crate::run_executor::tests::execute_external_cancel_kills_running_script::<closure>",
       "kind": "closure",
-      "line": 1241,
+      "line": 661,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 1241,
+        "line": 661,
         "name": "<closure>"
       },
-      "path": "src/run_executor.rs",
+      "path": "src/run_executor/tests.rs",
       "signature": "let canceller = thread::spawn(move || {",
       "source_class": "handwritten"
     },

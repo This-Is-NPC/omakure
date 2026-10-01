@@ -118,7 +118,7 @@ verify workspace paths or host runtimes.
 | Canonical JSON | serde_jcs 0.2 | RFC 8785 bytes for signed envelopes and Health reports |
 | HTTP | axum 0.7, tokio 1, tower 0.5 | Authenticated management API |
 | Storage | rusqlite 0.31, bundled SQLite | Runs, queue state, traces, search index, node registry |
-| Errors | thiserror 1.0 | Typed domain and application errors |
+| Errors | thiserror 2.0 | Typed domain and application errors |
 | Scheduling | cron 0.12, chrono 0.4, humantime 2.1 | Schedule parsing, next-fire calculation, duration flags |
 | Processes | signal-hook 0.3, daemonize 0.5 | Graceful workers and Unix daemon mode |
 | Script runtime | mlua 0.10 (`lua54`, `vendored`) | Embedded Lua host for `.lua` scripts |

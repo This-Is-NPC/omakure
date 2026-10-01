@@ -298,10 +298,10 @@
     {
       "coverable_functions": 24,
       "coverable_lines": 144,
-      "coverable_regions": 278,
+      "coverable_regions": 277,
       "covered_functions": 12,
       "covered_lines": 104,
-      "covered_regions": 195,
+      "covered_regions": 194,
       "path": "src/auth/append.rs"
     },
     {
@@ -360,20 +360,20 @@
     },
     {
       "coverable_functions": 37,
-      "coverable_lines": 356,
-      "coverable_regions": 815,
+      "coverable_lines": 366,
+      "coverable_regions": 828,
       "covered_functions": 37,
-      "covered_lines": 354,
-      "covered_regions": 807,
+      "covered_lines": 364,
+      "covered_regions": 820,
       "path": "src/auth/tests.rs"
     },
     {
-      "coverable_functions": 8,
-      "coverable_lines": 61,
-      "coverable_regions": 124,
+      "coverable_functions": 9,
+      "coverable_lines": 64,
+      "coverable_regions": 131,
       "covered_functions": 6,
-      "covered_lines": 57,
-      "covered_regions": 115,
+      "covered_lines": 59,
+      "covered_regions": 119,
       "path": "src/auth/token.rs"
     },
     {
@@ -406,10 +406,10 @@
     {
       "coverable_functions": 26,
       "coverable_lines": 319,
-      "coverable_regions": 465,
+      "coverable_regions": 464,
       "covered_functions": 26,
       "covered_lines": 300,
-      "covered_regions": 415,
+      "covered_regions": 414,
       "path": "src/baseline_push/mod.rs"
     },
     {
@@ -539,9 +539,9 @@
       "path": "src/cli/api/mod.rs"
     },
     {
-      "coverable_functions": 78,
-      "coverable_lines": 517,
-      "coverable_regions": 614,
+      "coverable_functions": 75,
+      "coverable_lines": 465,
+      "coverable_regions": 536,
       "covered_functions": 21,
       "covered_lines": 99,
       "covered_regions": 111,
@@ -567,10 +567,10 @@
     },
     {
       "coverable_functions": 15,
-      "coverable_lines": 256,
+      "coverable_lines": 258,
       "coverable_regions": 324,
       "covered_functions": 15,
-      "covered_lines": 256,
+      "covered_lines": 258,
       "covered_regions": 324,
       "path": "src/cli/api/router.rs"
     },
@@ -944,15 +944,6 @@
       "path": "src/cli/init.rs"
     },
     {
-      "coverable_functions": 44,
-      "coverable_lines": 367,
-      "coverable_regions": 539,
-      "covered_functions": 44,
-      "covered_lines": 360,
-      "covered_regions": 529,
-      "path": "src/cli/inventory.rs"
-    },
-    {
       "coverable_functions": 12,
       "coverable_lines": 69,
       "coverable_regions": 105,
@@ -989,12 +980,12 @@
       "path": "src/cli/mod.rs"
     },
     {
-      "coverable_functions": 57,
-      "coverable_lines": 480,
-      "coverable_regions": 675,
-      "covered_functions": 48,
-      "covered_lines": 378,
-      "covered_regions": 540,
+      "coverable_functions": 55,
+      "coverable_lines": 469,
+      "coverable_regions": 663,
+      "covered_functions": 47,
+      "covered_lines": 372,
+      "covered_regions": 531,
       "path": "src/cli/node.rs"
     },
     {
@@ -1137,8 +1128,8 @@
       "coverable_lines": 200,
       "coverable_regions": 289,
       "covered_functions": 6,
-      "covered_lines": 157,
-      "covered_regions": 218,
+      "covered_lines": 153,
+      "covered_regions": 214,
       "path": "src/cli/serve/scheduler.rs"
     },
     {
@@ -1223,12 +1214,12 @@
       "path": "src/cli_http_parity/docs.rs"
     },
     {
-      "coverable_functions": 29,
-      "coverable_lines": 320,
-      "coverable_regions": 401,
-      "covered_functions": 26,
-      "covered_lines": 277,
-      "covered_regions": 360,
+      "coverable_functions": 32,
+      "coverable_lines": 329,
+      "coverable_regions": 412,
+      "covered_functions": 29,
+      "covered_lines": 286,
+      "covered_regions": 371,
       "path": "src/cli_http_parity/manifest.rs"
     },
     {
@@ -1269,11 +1260,11 @@
     },
     {
       "coverable_functions": 23,
-      "coverable_lines": 321,
-      "coverable_regions": 404,
+      "coverable_lines": 323,
+      "coverable_regions": 406,
       "covered_functions": 22,
-      "covered_lines": 320,
-      "covered_regions": 400,
+      "covered_lines": 322,
+      "covered_regions": 402,
       "path": "src/cli_http_parity/tests/mod.rs"
     },
     {
@@ -1288,10 +1279,10 @@
     {
       "coverable_functions": 35,
       "coverable_lines": 440,
-      "coverable_regions": 608,
+      "coverable_regions": 606,
       "covered_functions": 33,
       "covered_lines": 389,
-      "covered_regions": 519,
+      "covered_regions": 517,
       "path": "src/direct_health.rs"
     },
     {
@@ -1335,14 +1326,14 @@
       "coverable_lines": 223,
       "coverable_regions": 294,
       "covered_functions": 18,
-      "covered_lines": 213,
-      "covered_regions": 275,
+      "covered_lines": 214,
+      "covered_regions": 276,
       "path": "src/direct_service/admission.rs"
     },
     {
       "coverable_functions": 13,
       "coverable_lines": 130,
-      "coverable_regions": 143,
+      "coverable_regions": 142,
       "covered_functions": 8,
       "covered_lines": 76,
       "covered_regions": 71,
@@ -1352,36 +1343,36 @@
       "coverable_functions": 23,
       "coverable_lines": 198,
       "coverable_regions": 262,
-      "covered_functions": 19,
-      "covered_lines": 150,
-      "covered_regions": 183,
+      "covered_functions": 20,
+      "covered_lines": 157,
+      "covered_regions": 198,
       "path": "src/direct_service/connection.rs"
     },
     {
       "coverable_functions": 19,
       "coverable_lines": 378,
-      "coverable_regions": 543,
+      "coverable_regions": 539,
       "covered_functions": 8,
       "covered_lines": 99,
-      "covered_regions": 104,
+      "covered_regions": 103,
       "path": "src/direct_service/cue.rs"
     },
     {
       "coverable_functions": 13,
-      "coverable_lines": 276,
-      "coverable_regions": 498,
-      "covered_functions": 9,
-      "covered_lines": 232,
-      "covered_regions": 380,
+      "coverable_lines": 277,
+      "coverable_regions": 495,
+      "covered_functions": 12,
+      "covered_lines": 259,
+      "covered_regions": 421,
       "path": "src/direct_service/dial.rs"
     },
     {
       "coverable_functions": 4,
       "coverable_lines": 167,
-      "coverable_regions": 282,
+      "coverable_regions": 281,
       "covered_functions": 1,
       "covered_lines": 78,
-      "covered_regions": 143,
+      "covered_regions": 142,
       "path": "src/direct_service/enrollment.rs"
     },
     {
@@ -1397,9 +1388,9 @@
       "coverable_functions": 15,
       "coverable_lines": 296,
       "coverable_regions": 468,
-      "covered_functions": 7,
-      "covered_lines": 68,
-      "covered_regions": 99,
+      "covered_functions": 13,
+      "covered_lines": 215,
+      "covered_regions": 326,
       "path": "src/direct_service/listener.rs"
     },
     {
@@ -1435,7 +1426,7 @@
       "coverable_regions": 460,
       "covered_functions": 16,
       "covered_lines": 176,
-      "covered_regions": 195,
+      "covered_regions": 198,
       "path": "src/direct_service/session.rs"
     },
     {
@@ -1452,8 +1443,8 @@
       "coverable_lines": 101,
       "coverable_regions": 150,
       "covered_functions": 12,
-      "covered_lines": 97,
-      "covered_regions": 137,
+      "covered_lines": 98,
+      "covered_regions": 139,
       "path": "src/direct_service/stream.rs"
     },
     {
@@ -1568,18 +1559,18 @@
       "coverable_functions": 10,
       "coverable_lines": 184,
       "coverable_regions": 284,
-      "covered_functions": 8,
-      "covered_lines": 137,
-      "covered_regions": 221,
+      "covered_functions": 9,
+      "covered_lines": 151,
+      "covered_regions": 230,
       "path": "src/direct_transport/envelope.rs"
     },
     {
       "coverable_functions": 6,
       "coverable_lines": 63,
       "coverable_regions": 65,
-      "covered_functions": 3,
-      "covered_lines": 13,
-      "covered_regions": 13,
+      "covered_functions": 4,
+      "covered_lines": 18,
+      "covered_regions": 18,
       "path": "src/direct_transport/errors.rs"
     },
     {
@@ -1594,10 +1585,10 @@
     {
       "coverable_functions": 8,
       "coverable_lines": 142,
-      "coverable_regions": 222,
+      "coverable_regions": 221,
       "covered_functions": 8,
       "covered_lines": 132,
-      "covered_regions": 192,
+      "covered_regions": 191,
       "path": "src/direct_transport/handshake.rs"
     },
     {
@@ -1675,10 +1666,10 @@
     {
       "coverable_functions": 14,
       "coverable_lines": 274,
-      "coverable_regions": 359,
+      "coverable_regions": 358,
       "covered_functions": 13,
       "covered_lines": 224,
-      "covered_regions": 287,
+      "covered_regions": 286,
       "path": "src/discovery/service.rs"
     },
     {
@@ -1792,10 +1783,10 @@
     {
       "coverable_functions": 38,
       "coverable_lines": 598,
-      "coverable_regions": 998,
+      "coverable_regions": 995,
       "covered_functions": 36,
       "covered_lines": 540,
-      "covered_regions": 839,
+      "covered_regions": 836,
       "path": "src/enrollment.rs"
     },
     {
@@ -1934,6 +1925,33 @@
       "path": "src/installer.rs"
     },
     {
+      "coverable_functions": 44,
+      "coverable_lines": 367,
+      "coverable_regions": 539,
+      "covered_functions": 44,
+      "covered_lines": 360,
+      "covered_regions": 529,
+      "path": "src/inventory/command.rs"
+    },
+    {
+      "coverable_functions": 0,
+      "coverable_lines": 0,
+      "coverable_regions": 0,
+      "covered_functions": 0,
+      "covered_lines": 0,
+      "covered_regions": 0,
+      "path": "src/inventory/mod.rs"
+    },
+    {
+      "coverable_functions": 0,
+      "coverable_lines": 0,
+      "coverable_regions": 0,
+      "covered_functions": 0,
+      "covered_lines": 0,
+      "covered_regions": 0,
+      "path": "src/inventory/routes.rs"
+    },
+    {
       "coverable_functions": 0,
       "coverable_lines": 0,
       "coverable_regions": 0,
@@ -2017,19 +2035,19 @@
     {
       "coverable_functions": 18,
       "coverable_lines": 221,
-      "coverable_regions": 340,
+      "coverable_regions": 339,
       "covered_functions": 11,
       "covered_lines": 189,
-      "covered_regions": 278,
+      "covered_regions": 277,
       "path": "src/node/private_token.rs"
     },
     {
       "coverable_functions": 16,
       "coverable_lines": 164,
-      "coverable_regions": 225,
+      "coverable_regions": 224,
       "covered_functions": 13,
       "covered_lines": 138,
-      "covered_regions": 188,
+      "covered_regions": 187,
       "path": "src/node/security.rs"
     },
     {
@@ -2440,10 +2458,10 @@
     {
       "coverable_functions": 11,
       "coverable_lines": 138,
-      "coverable_regions": 244,
+      "coverable_regions": 242,
       "covered_functions": 10,
       "covered_lines": 122,
-      "covered_regions": 212,
+      "covered_regions": 210,
       "path": "src/node_transport.rs"
     },
     {
@@ -2546,6 +2564,15 @@
       "path": "src/operations/baseline/record.rs"
     },
     {
+      "coverable_functions": 9,
+      "coverable_lines": 93,
+      "coverable_regions": 93,
+      "covered_functions": 6,
+      "covered_lines": 45,
+      "covered_regions": 54,
+      "path": "src/operations/baseline/service.rs"
+    },
+    {
       "coverable_functions": 14,
       "coverable_lines": 239,
       "coverable_regions": 520,
@@ -2573,12 +2600,12 @@
       "path": "src/operations/battery/fs_unix.rs"
     },
     {
-      "coverable_functions": 52,
-      "coverable_lines": 434,
-      "coverable_regions": 625,
-      "covered_functions": 31,
-      "covered_lines": 305,
-      "covered_regions": 472,
+      "coverable_functions": 55,
+      "coverable_lines": 433,
+      "coverable_regions": 631,
+      "covered_functions": 34,
+      "covered_lines": 304,
+      "covered_regions": 478,
       "path": "src/operations/battery/git.rs"
     },
     {
@@ -2772,11 +2799,11 @@
     },
     {
       "coverable_functions": 16,
-      "coverable_lines": 108,
-      "coverable_regions": 179,
+      "coverable_lines": 111,
+      "coverable_regions": 175,
       "covered_functions": 16,
-      "covered_lines": 106,
-      "covered_regions": 170,
+      "covered_lines": 108,
+      "covered_regions": 165,
       "path": "src/operations/core/run_queries.rs"
     },
     {
@@ -2798,12 +2825,12 @@
       "path": "src/operations/core/scripts.rs"
     },
     {
-      "coverable_functions": 33,
-      "coverable_lines": 504,
-      "coverable_regions": 823,
-      "covered_functions": 33,
-      "covered_lines": 504,
-      "covered_regions": 823,
+      "coverable_functions": 34,
+      "coverable_lines": 535,
+      "coverable_regions": 847,
+      "covered_functions": 34,
+      "covered_lines": 535,
+      "covered_regions": 847,
       "path": "src/operations/core/tests.rs"
     },
     {
@@ -2814,6 +2841,15 @@
       "covered_lines": 0,
       "covered_regions": 0,
       "path": "src/operations/core/types.rs"
+    },
+    {
+      "coverable_functions": 7,
+      "coverable_lines": 87,
+      "coverable_regions": 92,
+      "covered_functions": 5,
+      "covered_lines": 48,
+      "covered_regions": 57,
+      "path": "src/operations/cue.rs"
     },
     {
       "coverable_functions": 10,
@@ -2839,7 +2875,7 @@
       "coverable_regions": 612,
       "covered_functions": 38,
       "covered_lines": 348,
-      "covered_regions": 530,
+      "covered_regions": 531,
       "path": "src/operations/health/facts.rs"
     },
     {
@@ -2881,10 +2917,10 @@
     {
       "coverable_functions": 6,
       "coverable_lines": 98,
-      "coverable_regions": 118,
+      "coverable_regions": 117,
       "covered_functions": 5,
       "covered_lines": 72,
-      "covered_regions": 99,
+      "covered_regions": 98,
       "path": "src/operations/node/authority.rs"
     },
     {
@@ -2910,8 +2946,8 @@
       "coverable_lines": 87,
       "coverable_regions": 143,
       "covered_functions": 6,
-      "covered_lines": 54,
-      "covered_regions": 87,
+      "covered_lines": 52,
+      "covered_regions": 85,
       "path": "src/operations/node/errors.rs"
     },
     {
@@ -2982,8 +3018,8 @@
       "coverable_lines": 269,
       "coverable_regions": 582,
       "covered_functions": 19,
-      "covered_lines": 269,
-      "covered_regions": 581,
+      "covered_lines": 268,
+      "covered_regions": 579,
       "path": "src/operations/node/tests/status.rs"
     },
     {
@@ -3030,6 +3066,15 @@
       "covered_lines": 129,
       "covered_regions": 190,
       "path": "src/operations/search.rs"
+    },
+    {
+      "coverable_functions": 3,
+      "coverable_lines": 12,
+      "coverable_regions": 20,
+      "covered_functions": 2,
+      "covered_lines": 8,
+      "covered_regions": 16,
+      "path": "src/operations/service_delivery.rs"
     },
     {
       "coverable_functions": 10,
@@ -3124,7 +3169,7 @@
     {
       "coverable_functions": 19,
       "coverable_lines": 250,
-      "coverable_regions": 406,
+      "coverable_regions": 405,
       "covered_functions": 5,
       "covered_lines": 46,
       "covered_regions": 40,
@@ -3225,8 +3270,8 @@
       "coverable_lines": 383,
       "coverable_regions": 479,
       "covered_functions": 16,
-      "covered_lines": 308,
-      "covered_regions": 371,
+      "covered_lines": 307,
+      "covered_regions": 370,
       "path": "src/runs/enqueue.rs"
     },
     {
@@ -3275,12 +3320,12 @@
       "path": "src/runs/open.rs"
     },
     {
-      "coverable_functions": 28,
-      "coverable_lines": 232,
-      "coverable_regions": 395,
-      "covered_functions": 20,
-      "covered_lines": 203,
-      "covered_regions": 341,
+      "coverable_functions": 30,
+      "coverable_lines": 236,
+      "coverable_regions": 404,
+      "covered_functions": 22,
+      "covered_lines": 207,
+      "covered_regions": 350,
       "path": "src/runs/query.rs"
     },
     {
@@ -3291,6 +3336,15 @@
       "covered_lines": 81,
       "covered_regions": 93,
       "path": "src/runs/state.rs"
+    },
+    {
+      "coverable_functions": 7,
+      "coverable_lines": 30,
+      "coverable_regions": 39,
+      "covered_functions": 7,
+      "covered_lines": 30,
+      "covered_regions": 39,
+      "path": "src/runs/store.rs"
     },
     {
       "coverable_functions": 2,
@@ -3339,11 +3393,11 @@
     },
     {
       "coverable_functions": 14,
-      "coverable_lines": 259,
-      "coverable_regions": 515,
+      "coverable_lines": 266,
+      "coverable_regions": 533,
       "covered_functions": 14,
-      "covered_lines": 257,
-      "covered_regions": 512,
+      "covered_lines": 264,
+      "covered_regions": 530,
       "path": "src/runs/tests/query.rs"
     },
     {
@@ -3446,6 +3500,15 @@
       "path": "src/util/digest.rs"
     },
     {
+      "coverable_functions": 2,
+      "coverable_lines": 10,
+      "coverable_regions": 15,
+      "covered_functions": 2,
+      "covered_lines": 10,
+      "covered_regions": 15,
+      "path": "src/util/entropy.rs"
+    },
+    {
       "coverable_functions": 15,
       "coverable_lines": 121,
       "coverable_regions": 214,
@@ -3518,19 +3581,19 @@
       "path": "src/workspace.rs"
     }
   ],
-  "source_revision": "21fd2ac8f762c9785db7cff7b4b1411a26aff333",
+  "source_revision": "9957902c85fc35114da66c0c115f098251171711",
   "summary": {
     "functions": {
-      "coverable": 4809,
-      "covered": 4166
+      "coverable": 4998,
+      "covered": 4371
     },
     "lines": {
-      "coverable": 55355,
-      "covered": 48713
+      "coverable": 57048,
+      "covered": 50673
     },
     "regions": {
-      "coverable": 84820,
-      "covered": 74698
+      "coverable": 87308,
+      "covered": 77555
     }
   },
   "toolchain": {

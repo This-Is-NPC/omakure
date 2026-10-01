@@ -5,10 +5,6 @@ use super::HEARTBEAT_MS;
 use crate::util::time::unix_millis;
 use rusqlite::{params, Connection, OptionalExtension};
 
-fn query_error_text(error: RunsError) -> String {
-    error.to_string()
-}
-
 /// Filters used by [`claim_next`] to scope a worker to a subset of jobs.
 #[derive(Debug, Clone, Default)]
 pub struct ClaimFilters {
@@ -27,7 +23,7 @@ pub fn claim_next(
     conn: &Connection,
     worker_id: &str,
     filters: &ClaimFilters,
-) -> Result<Option<RunRow>, String> {
+) -> Result<Option<RunRow>, RunsError> {
     let now = unix_millis();
     // Build the inner SELECT with optional filters. The outer UPDATE always
     // sets state='running'.
@@ -97,20 +93,24 @@ pub fn claim_next(
     );
 
     let claimed_id: Option<String> = {
-        let mut stmt = conn
-            .prepare(&sql)
-            .map_err(|err| format!("Prepare claim_next failed: {}", err))?;
+        let mut stmt = conn.prepare(&sql).map_err(|source| RunsError::Sqlite {
+            operation: "Prepare claim_next failed",
+            source,
+        })?;
         let params_ref: Vec<(&str, &dyn rusqlite::ToSql)> = named_params
             .iter()
             .map(|(name, value)| (*name, value.as_ref()))
             .collect();
         stmt.query_row(&params_ref[..], |row| row.get::<_, String>(0))
             .optional()
-            .map_err(|err| format!("Claim next failed: {}", err))?
+            .map_err(|source| RunsError::Sqlite {
+                operation: "Claim next failed",
+                source,
+            })?
     };
 
     match claimed_id {
-        Some(id) => get_run(conn, &id).map_err(query_error_text),
+        Some(id) => get_run(conn, &id),
         None => Ok(None),
     }
 }
@@ -125,7 +125,7 @@ pub fn heartbeat(
     conn: &Connection,
     run_id: &str,
     worker_id: &str,
-) -> Result<Option<RunState>, String> {
+) -> Result<Option<RunState>, RunsError> {
     let now = unix_millis();
     let updated = conn
         .execute(
@@ -134,10 +134,13 @@ pub fn heartbeat(
               WHERE run_id = ? AND worker_id = ? AND state = 'running'",
             params![now + HEARTBEAT_MS, run_id, worker_id],
         )
-        .map_err(|err| format!("Heartbeat failed: {}", err))?;
+        .map_err(|source| RunsError::Sqlite {
+            operation: "Heartbeat failed",
+            source,
+        })?;
     if updated == 0 {
         // Either the row was reclaimed/cancelled, or terminated already.
-        let row = get_run(conn, run_id).map_err(query_error_text)?;
+        let row = get_run(conn, run_id)?;
         return Ok(row.map(|r| r.state));
     }
     Ok(Some(RunState::Running))
@@ -159,19 +162,16 @@ fn finalize(
     run_id: &str,
     target: RunState,
     completion: &RunCompletion,
-) -> Result<(), String> {
+) -> Result<(), RunsError> {
     let now = unix_millis();
     // Look up the row first so we can compute duration_ms relative to its
     // started_at and reject illegal transitions.
-    let row = get_run(conn, run_id)
-        .map_err(query_error_text)?
-        .ok_or_else(|| format!("run not found: {}", run_id))?;
+    let row = get_run(conn, run_id)?.ok_or_else(|| RunsError::RunNotFound(run_id.to_string()))?;
     if !matches!(row.state, RunState::Running) {
-        return Err(format!(
-            "illegal transition: cannot move {} -> {}; row must be in 'running'",
-            row.state.as_str(),
-            target.as_str()
-        ));
+        return Err(RunsError::IllegalTransition {
+            from: row.state,
+            to: target,
+        });
     }
     let started = row.started_at.unwrap_or(now);
     let duration_ms = (now - started).max(0);
@@ -192,17 +192,24 @@ fn finalize(
             run_id,
         ],
     )
-    .map_err(|err| format!("Finalize run failed: {}", err))?;
+    .map_err(|source| RunsError::Sqlite {
+        operation: "Finalize run failed",
+        source,
+    })?;
     Ok(())
 }
 
 /// Mark a `running` row as `completed`.
-pub fn complete(conn: &Connection, run_id: &str, completion: RunCompletion) -> Result<(), String> {
+pub fn complete(
+    conn: &Connection,
+    run_id: &str,
+    completion: RunCompletion,
+) -> Result<(), RunsError> {
     finalize(conn, run_id, RunState::Completed, &completion)
 }
 
 /// Mark a `running` row as `failed`.
-pub fn fail(conn: &Connection, run_id: &str, completion: RunCompletion) -> Result<(), String> {
+pub fn fail(conn: &Connection, run_id: &str, completion: RunCompletion) -> Result<(), RunsError> {
     finalize(conn, run_id, RunState::Failed, &completion)
 }
 
@@ -222,7 +229,7 @@ pub fn fail(conn: &Connection, run_id: &str, completion: RunCompletion) -> Resul
 /// otherwise.
 ///
 /// Returns the run ids it resolved.
-pub fn recover_abandoned_cue_runs(conn: &Connection) -> Result<Vec<String>, String> {
+pub fn recover_abandoned_cue_runs(conn: &Connection) -> Result<Vec<String>, RunsError> {
     let now = unix_millis();
     let mut statement = conn
         .prepare(
@@ -242,7 +249,10 @@ pub fn recover_abandoned_cue_runs(conn: &Connection) -> Result<Vec<String>, Stri
                 AND lease_until < ?1
               RETURNING run_id",
         )
-        .map_err(|err| format!("Prepare cue recovery failed: {}", err))?;
+        .map_err(|source| RunsError::Sqlite {
+            operation: "Prepare cue recovery failed",
+            source,
+        })?;
     let recovered = statement
         .query_map(
             params![
@@ -252,9 +262,15 @@ pub fn recover_abandoned_cue_runs(conn: &Connection) -> Result<Vec<String>, Stri
             ],
             |row| row.get(0),
         )
-        .map_err(|err| format!("Query cue recovery failed: {}", err))?
+        .map_err(|source| RunsError::Sqlite {
+            operation: "Query cue recovery failed",
+            source,
+        })?
         .collect::<Result<Vec<String>, _>>()
-        .map_err(|err| format!("Read cue recovery failed: {}", err))?;
+        .map_err(|source| RunsError::Sqlite {
+            operation: "Read cue recovery failed",
+            source,
+        })?;
     Ok(recovered)
 }
 
@@ -266,7 +282,7 @@ pub fn recover_abandoned_cue_runs(conn: &Connection) -> Result<Vec<String>, Stri
 /// Scoped to `trigger = 'cue'` on purpose. A revoked peer's name may also
 /// appear on locally-initiated work, and revoking a peer is not a licence to
 /// cancel what this node's owner started.
-pub fn cancel_cue_runs_for_actor(conn: &Connection, actor: &str) -> Result<Vec<String>, String> {
+pub fn cancel_cue_runs_for_actor(conn: &Connection, actor: &str) -> Result<Vec<String>, RunsError> {
     let now = unix_millis();
     let mut statement = conn
         .prepare(
@@ -290,20 +306,33 @@ pub fn cancel_cue_runs_for_actor(conn: &Connection, actor: &str) -> Result<Vec<S
                 AND state IN ('queued', 'running')
               RETURNING run_id",
         )
-        .map_err(|err| format!("Prepare cue revocation failed: {}", err))?;
+        .map_err(|source| RunsError::Sqlite {
+            operation: "Prepare cue revocation failed",
+            source,
+        })?;
     let cancelled = statement
         .query_map(params![now, RunTrigger::Cue.as_str(), actor], |row| {
             row.get(0)
         })
-        .map_err(|err| format!("Cancel cue runs failed: {}", err))?
+        .map_err(|source| RunsError::Sqlite {
+            operation: "Cancel cue runs failed",
+            source,
+        })?
         .collect::<Result<Vec<String>, _>>()
-        .map_err(|err| format!("Read cancelled Cue runs failed: {}", err))?;
+        .map_err(|source| RunsError::Sqlite {
+            operation: "Read cancelled Cue runs failed",
+            source,
+        })?;
     Ok(cancelled)
 }
 
 /// Mark a `running` row as `timed_out` after the worker killed the
 /// process for exceeding its `--timeout`.
-pub fn time_out(conn: &Connection, run_id: &str, completion: RunCompletion) -> Result<(), String> {
+pub fn time_out(
+    conn: &Connection,
+    run_id: &str,
+    completion: RunCompletion,
+) -> Result<(), RunsError> {
     finalize(conn, run_id, RunState::TimedOut, &completion)
 }
 
@@ -321,10 +350,8 @@ pub fn cancel(
     run_id: &str,
     reason: Option<String>,
     completion: Option<RunCompletion>,
-) -> Result<RunRow, String> {
-    let row = get_run(conn, run_id)
-        .map_err(query_error_text)?
-        .ok_or_else(|| format!("run not found: {}", run_id))?;
+) -> Result<RunRow, RunsError> {
+    let row = get_run(conn, run_id)?.ok_or_else(|| RunsError::RunNotFound(run_id.to_string()))?;
     let now = unix_millis();
     match row.state {
         RunState::Queued => {
@@ -335,7 +362,10 @@ pub fn cancel(
                   WHERE run_id = ?",
                 params![now, reason, run_id],
             )
-            .map_err(|err| format!("Cancel queued run failed: {}", err))?;
+            .map_err(|source| RunsError::Sqlite {
+                operation: "Cancel queued run failed",
+                source,
+            })?;
         }
         RunState::Running => {
             let completion = completion.unwrap_or(RunCompletion {
@@ -365,18 +395,16 @@ pub fn cancel(
                     run_id,
                 ],
             )
-            .map_err(|err| format!("Cancel running run failed: {}", err))?;
+            .map_err(|source| RunsError::Sqlite {
+                operation: "Cancel running run failed",
+                source,
+            })?;
         }
         terminal => {
-            return Err(format!(
-                "cannot cancel run in terminal state '{}'",
-                terminal.as_str()
-            ));
+            return Err(RunsError::TerminalState(terminal));
         }
     }
-    get_run(conn, run_id)
-        .map_err(query_error_text)?
-        .ok_or_else(|| format!("run not found after cancel: {}", run_id))
+    get_run(conn, run_id)?.ok_or_else(|| RunsError::RunNotFoundAfterCancel(run_id.to_string()))
 }
 
 /// Mark a `cancelled` row produced by mid-execution cancel as needing
@@ -386,10 +414,8 @@ pub fn record_cancelled_output(
     conn: &Connection,
     run_id: &str,
     completion: RunCompletion,
-) -> Result<(), String> {
-    let row = get_run(conn, run_id)
-        .map_err(query_error_text)?
-        .ok_or_else(|| format!("run not found: {}", run_id))?;
+) -> Result<(), RunsError> {
+    let row = get_run(conn, run_id)?.ok_or_else(|| RunsError::RunNotFound(run_id.to_string()))?;
     let now = unix_millis();
     let started = row.started_at.unwrap_or(now);
     let duration_ms = (now - started).max(0);
@@ -409,7 +435,10 @@ pub fn record_cancelled_output(
             run_id,
         ],
     )
-    .map_err(|err| format!("Record cancelled output failed: {}", err))?;
+    .map_err(|source| RunsError::Sqlite {
+        operation: "Record cancelled output failed",
+        source,
+    })?;
     Ok(())
 }
 
@@ -419,15 +448,10 @@ pub fn dead_letter(
     conn: &Connection,
     run_id: &str,
     reason: Option<String>,
-) -> Result<RunRow, String> {
-    let row = get_run(conn, run_id)
-        .map_err(query_error_text)?
-        .ok_or_else(|| format!("run not found: {}", run_id))?;
+) -> Result<RunRow, RunsError> {
+    let row = get_run(conn, run_id)?.ok_or_else(|| RunsError::RunNotFound(run_id.to_string()))?;
     if !matches!(row.state, RunState::Failed | RunState::TimedOut) {
-        return Err(format!(
-            "cannot promote run in state '{}' to dead_letter; only failed or timed_out rows are eligible",
-            row.state.as_str()
-        ));
+        return Err(RunsError::DeadLetterIneligible(row.state));
     }
     let merged_reason = match (row.reason.as_deref(), reason.as_deref()) {
         (Some(existing), Some(new)) => Some(format!("{}\n{}", existing, new)),
@@ -439,8 +463,9 @@ pub fn dead_letter(
         "UPDATE runs SET state = 'dead_letter', reason = ? WHERE run_id = ?",
         params![merged_reason, run_id],
     )
-    .map_err(|err| format!("Dead-letter run failed: {}", err))?;
-    get_run(conn, run_id)
-        .map_err(query_error_text)?
-        .ok_or_else(|| format!("run not found after dead_letter: {}", run_id))
+    .map_err(|source| RunsError::Sqlite {
+        operation: "Dead-letter run failed",
+        source,
+    })?;
+    get_run(conn, run_id)?.ok_or_else(|| RunsError::RunNotFoundAfterDeadLetter(run_id.to_string()))
 }

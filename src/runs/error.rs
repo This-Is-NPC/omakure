@@ -1,3 +1,4 @@
+use super::state::RunState;
 use crate::util::sqlite::is_lock_contention;
 
 #[derive(Debug, thiserror::Error)]
@@ -6,6 +7,18 @@ pub enum RunsError {
     NotFound(String),
     #[error("{0}")]
     InvalidEnqueue(&'static str),
+    #[error("run not found: {0}")]
+    RunNotFound(String),
+    #[error("run not found after cancel: {0}")]
+    RunNotFoundAfterCancel(String),
+    #[error("run not found after dead_letter: {0}")]
+    RunNotFoundAfterDeadLetter(String),
+    #[error("illegal transition: cannot move {from} -> {to}; row must be in 'running'")]
+    IllegalTransition { from: RunState, to: RunState },
+    #[error("cannot cancel run in terminal state '{0}'")]
+    TerminalState(RunState),
+    #[error("cannot promote run in state '{0}' to dead_letter; only failed or timed_out rows are eligible")]
+    DeadLetterIneligible(RunState),
     #[error("{operation}: {source}")]
     Sqlite {
         operation: &'static str,

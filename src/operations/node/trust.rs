@@ -170,7 +170,7 @@ pub fn revoke_peer(
     let (cleanup_pending, cleanup_error) = match crate::runs::open(workspace) {
         Ok(runs) => match crate::runs::cancel_cue_runs_for_actor(&runs, &request.node_id) {
             Ok(_) => (false, None),
-            Err(error) => (true, Some(error)),
+            Err(error) => (true, Some(error.to_string())),
         },
         Err(error) => (true, Some(format!("cannot open runs database: {error}"))),
     };

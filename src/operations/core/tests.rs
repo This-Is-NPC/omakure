@@ -540,6 +540,33 @@ fn enqueue_list_show_cancel_and_stats_share_runs_state_machine() {
     .unwrap();
     assert_eq!(cancelled.state, RunState::Cancelled);
 
+    let cancel_error = cancel_run(
+        &ws,
+        CancelRunRequest {
+            run_id: "rid-op".into(),
+            reason: None,
+        },
+    )
+    .unwrap_err();
+    assert_eq!(cancel_error.code, OperationErrorCode::Conflict);
+    assert_eq!(
+        cancel_error.message,
+        "cannot cancel run in terminal state 'cancelled'"
+    );
+    let dead_letter_error = dead_letter_run(
+        &ws,
+        DeadLetterRunRequest {
+            run_id: "rid-op".into(),
+            reason: None,
+        },
+    )
+    .unwrap_err();
+    assert_eq!(dead_letter_error.code, OperationErrorCode::Conflict);
+    assert_eq!(
+        dead_letter_error.message,
+        "cannot promote run in state 'cancelled' to dead_letter; only failed or timed_out rows are eligible"
+    );
+
     let stats = queue_stats(&ws).unwrap();
     assert_eq!(stats.total, 1);
 }

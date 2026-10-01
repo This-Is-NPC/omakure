@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "ca29c82d01607aa22234fa75be0aa183553e1e362bc17a348c5cb82f01d2b682",
+  "canonical_sha256": "b9ede46e2346c15c40fea8b10d9e123a77ab847eac3a1d1a3aa92f7e7d4ce026",
   "config_identity": "no-config",
   "files": [
     {
@@ -82165,13 +82165,13 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 3,
-      "cyclomatic": 3,
+      "cognitive": 1,
+      "cyclomatic": 2,
       "derived": {
         "identity": "crate::operations::core::run_queries::map_transition_error",
         "macro_expansion": "not_measured",
         "path": "src/operations/core/run_queries.rs",
-        "signature": "pub(super) fn map_transition_error(message: String) -> OperationError",
+        "signature": "pub(super) fn map_transition_error(error: RunsError) -> OperationError",
         "source_class": "handwritten"
       },
       "identity": "crate::operations::core::run_queries::map_transition_error",
@@ -82180,14 +82180,14 @@
       "name": "map_transition_error",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 3,
-        "cyclomatic": 3,
+        "cognitive": 1,
+        "cyclomatic": 2,
         "kind": "function",
         "line": 108,
         "name": "map_transition_error"
       },
       "path": "src/operations/core/run_queries.rs",
-      "signature": "pub(super) fn map_transition_error(message: String) -> OperationError",
+      "signature": "pub(super) fn map_transition_error(error: RunsError) -> OperationError",
       "source_class": "handwritten"
     },
     {
@@ -97797,23 +97797,23 @@
         "identity": "crate::runs::lifecycle::claim_next",
         "macro_expansion": "not_measured",
         "path": "src/runs/lifecycle.rs",
-        "signature": "pub fn claim_next( conn: &Connection, worker_id: &str, filters: &ClaimFilters, ) -> Result<Option<RunRow>, String>",
+        "signature": "pub fn claim_next( conn: &Connection, worker_id: &str, filters: &ClaimFilters, ) -> Result<Option<RunRow>, RunsError>",
         "source_class": "handwritten"
       },
       "identity": "crate::runs::lifecycle::claim_next",
       "kind": "function",
-      "line": 21,
+      "line": 22,
       "name": "claim_next",
       "native": {
         "analyzer": "cccc",
         "cognitive": 4,
         "cyclomatic": 5,
         "kind": "function",
-        "line": 21,
+        "line": 22,
         "name": "claim_next"
       },
       "path": "src/runs/lifecycle.rs",
-      "signature": "pub fn claim_next( conn: &Connection, worker_id: &str, filters: &ClaimFilters, ) -> Result<Option<RunRow>, String>",
+      "signature": "pub fn claim_next( conn: &Connection, worker_id: &str, filters: &ClaimFilters, ) -> Result<Option<RunRow>, RunsError>",
       "source_class": "handwritten"
     },
     {
@@ -97927,23 +97927,23 @@
         "identity": "crate::runs::lifecycle::heartbeat",
         "macro_expansion": "not_measured",
         "path": "src/runs/lifecycle.rs",
-        "signature": "pub fn heartbeat( conn: &Connection, run_id: &str, worker_id: &str, ) -> Result<Option<RunState>, String>",
+        "signature": "pub fn heartbeat( conn: &Connection, run_id: &str, worker_id: &str, ) -> Result<Option<RunState>, RunsError>",
         "source_class": "handwritten"
       },
       "identity": "crate::runs::lifecycle::heartbeat",
       "kind": "function",
-      "line": 119,
+      "line": 124,
       "name": "heartbeat",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 119,
+        "line": 124,
         "name": "heartbeat"
       },
       "path": "src/runs/lifecycle.rs",
-      "signature": "pub fn heartbeat( conn: &Connection, run_id: &str, worker_id: &str, ) -> Result<Option<RunState>, String>",
+      "signature": "pub fn heartbeat( conn: &Connection, run_id: &str, worker_id: &str, ) -> Result<Option<RunState>, RunsError>",
       "source_class": "handwritten"
     },
     {
@@ -98005,23 +98005,23 @@
         "identity": "crate::runs::lifecycle::finalize",
         "macro_expansion": "not_measured",
         "path": "src/runs/lifecycle.rs",
-        "signature": "fn finalize( conn: &Connection, run_id: &str, target: RunState, completion: &RunCompletion, ) -> Result<(), String>",
+        "signature": "fn finalize( conn: &Connection, run_id: &str, target: RunState, completion: &RunCompletion, ) -> Result<(), RunsError>",
         "source_class": "handwritten"
       },
       "identity": "crate::runs::lifecycle::finalize",
       "kind": "function",
-      "line": 152,
+      "line": 160,
       "name": "finalize",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 152,
+        "line": 160,
         "name": "finalize"
       },
       "path": "src/runs/lifecycle.rs",
-      "signature": "fn finalize( conn: &Connection, run_id: &str, target: RunState, completion: &RunCompletion, ) -> Result<(), String>",
+      "signature": "fn finalize( conn: &Connection, run_id: &str, target: RunState, completion: &RunCompletion, ) -> Result<(), RunsError>",
       "source_class": "handwritten"
     },
     {
@@ -98083,23 +98083,23 @@
         "identity": "crate::runs::lifecycle::complete",
         "macro_expansion": "not_measured",
         "path": "src/runs/lifecycle.rs",
-        "signature": "pub fn complete(conn: &Connection, run_id: &str, completion: RunCompletion) -> Result<(), String>",
+        "signature": "pub fn complete( conn: &Connection, run_id: &str, completion: RunCompletion, ) -> Result<(), RunsError>",
         "source_class": "handwritten"
       },
       "identity": "crate::runs::lifecycle::complete",
       "kind": "function",
-      "line": 193,
+      "line": 203,
       "name": "complete",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 193,
+        "line": 203,
         "name": "complete"
       },
       "path": "src/runs/lifecycle.rs",
-      "signature": "pub fn complete(conn: &Connection, run_id: &str, completion: RunCompletion) -> Result<(), String>",
+      "signature": "pub fn complete( conn: &Connection, run_id: &str, completion: RunCompletion, ) -> Result<(), RunsError>",
       "source_class": "handwritten"
     },
     {
@@ -98109,23 +98109,23 @@
         "identity": "crate::runs::lifecycle::fail",
         "macro_expansion": "not_measured",
         "path": "src/runs/lifecycle.rs",
-        "signature": "pub fn fail(conn: &Connection, run_id: &str, completion: RunCompletion) -> Result<(), String>",
+        "signature": "pub fn fail(conn: &Connection, run_id: &str, completion: RunCompletion) -> Result<(), RunsError>",
         "source_class": "handwritten"
       },
       "identity": "crate::runs::lifecycle::fail",
       "kind": "function",
-      "line": 198,
+      "line": 212,
       "name": "fail",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 198,
+        "line": 212,
         "name": "fail"
       },
       "path": "src/runs/lifecycle.rs",
-      "signature": "pub fn fail(conn: &Connection, run_id: &str, completion: RunCompletion) -> Result<(), String>",
+      "signature": "pub fn fail(conn: &Connection, run_id: &str, completion: RunCompletion) -> Result<(), RunsError>",
       "source_class": "handwritten"
     },
     {
@@ -98135,23 +98135,23 @@
         "identity": "crate::runs::lifecycle::recover_abandoned_cue_runs",
         "macro_expansion": "not_measured",
         "path": "src/runs/lifecycle.rs",
-        "signature": "pub fn recover_abandoned_cue_runs(conn: &Connection) -> Result<Vec<String>, String>",
+        "signature": "pub fn recover_abandoned_cue_runs(conn: &Connection) -> Result<Vec<String>, RunsError>",
         "source_class": "handwritten"
       },
       "identity": "crate::runs::lifecycle::recover_abandoned_cue_runs",
       "kind": "function",
-      "line": 218,
+      "line": 232,
       "name": "recover_abandoned_cue_runs",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 218,
+        "line": 232,
         "name": "recover_abandoned_cue_runs"
       },
       "path": "src/runs/lifecycle.rs",
-      "signature": "pub fn recover_abandoned_cue_runs(conn: &Connection) -> Result<Vec<String>, String>",
+      "signature": "pub fn recover_abandoned_cue_runs(conn: &Connection) -> Result<Vec<String>, RunsError>",
       "source_class": "handwritten"
     },
     {
@@ -98239,23 +98239,23 @@
         "identity": "crate::runs::lifecycle::cancel_cue_runs_for_actor",
         "macro_expansion": "not_measured",
         "path": "src/runs/lifecycle.rs",
-        "signature": "pub fn cancel_cue_runs_for_actor(conn: &Connection, actor: &str) -> Result<Vec<String>, String>",
+        "signature": "pub fn cancel_cue_runs_for_actor(conn: &Connection, actor: &str) -> Result<Vec<String>, RunsError>",
         "source_class": "handwritten"
       },
       "identity": "crate::runs::lifecycle::cancel_cue_runs_for_actor",
       "kind": "function",
-      "line": 262,
+      "line": 285,
       "name": "cancel_cue_runs_for_actor",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 262,
+        "line": 285,
         "name": "cancel_cue_runs_for_actor"
       },
       "path": "src/runs/lifecycle.rs",
-      "signature": "pub fn cancel_cue_runs_for_actor(conn: &Connection, actor: &str) -> Result<Vec<String>, String>",
+      "signature": "pub fn cancel_cue_runs_for_actor(conn: &Connection, actor: &str) -> Result<Vec<String>, RunsError>",
       "source_class": "handwritten"
     },
     {
@@ -98369,23 +98369,23 @@
         "identity": "crate::runs::lifecycle::time_out",
         "macro_expansion": "not_measured",
         "path": "src/runs/lifecycle.rs",
-        "signature": "pub fn time_out(conn: &Connection, run_id: &str, completion: RunCompletion) -> Result<(), String>",
+        "signature": "pub fn time_out( conn: &Connection, run_id: &str, completion: RunCompletion, ) -> Result<(), RunsError>",
         "source_class": "handwritten"
       },
       "identity": "crate::runs::lifecycle::time_out",
       "kind": "function",
-      "line": 299,
+      "line": 331,
       "name": "time_out",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 299,
+        "line": 331,
         "name": "time_out"
       },
       "path": "src/runs/lifecycle.rs",
-      "signature": "pub fn time_out(conn: &Connection, run_id: &str, completion: RunCompletion) -> Result<(), String>",
+      "signature": "pub fn time_out( conn: &Connection, run_id: &str, completion: RunCompletion, ) -> Result<(), RunsError>",
       "source_class": "handwritten"
     },
     {
@@ -98395,23 +98395,23 @@
         "identity": "crate::runs::lifecycle::cancel",
         "macro_expansion": "not_measured",
         "path": "src/runs/lifecycle.rs",
-        "signature": "pub fn cancel( conn: &Connection, run_id: &str, reason: Option<String>, completion: Option<RunCompletion>, ) -> Result<RunRow, String>",
+        "signature": "pub fn cancel( conn: &Connection, run_id: &str, reason: Option<String>, completion: Option<RunCompletion>, ) -> Result<RunRow, RunsError>",
         "source_class": "handwritten"
       },
       "identity": "crate::runs::lifecycle::cancel",
       "kind": "function",
-      "line": 312,
+      "line": 348,
       "name": "cancel",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 312,
+        "line": 348,
         "name": "cancel"
       },
       "path": "src/runs/lifecycle.rs",
-      "signature": "pub fn cancel( conn: &Connection, run_id: &str, reason: Option<String>, completion: Option<RunCompletion>, ) -> Result<RunRow, String>",
+      "signature": "pub fn cancel( conn: &Connection, run_id: &str, reason: Option<String>, completion: Option<RunCompletion>, ) -> Result<RunRow, RunsError>",
       "source_class": "handwritten"
     },
     {
@@ -98525,23 +98525,23 @@
         "identity": "crate::runs::lifecycle::record_cancelled_output",
         "macro_expansion": "not_measured",
         "path": "src/runs/lifecycle.rs",
-        "signature": "pub fn record_cancelled_output( conn: &Connection, run_id: &str, completion: RunCompletion, ) -> Result<(), String>",
+        "signature": "pub fn record_cancelled_output( conn: &Connection, run_id: &str, completion: RunCompletion, ) -> Result<(), RunsError>",
         "source_class": "handwritten"
       },
       "identity": "crate::runs::lifecycle::record_cancelled_output",
       "kind": "function",
-      "line": 374,
+      "line": 413,
       "name": "record_cancelled_output",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 374,
+        "line": 413,
         "name": "record_cancelled_output"
       },
       "path": "src/runs/lifecycle.rs",
-      "signature": "pub fn record_cancelled_output( conn: &Connection, run_id: &str, completion: RunCompletion, ) -> Result<(), String>",
+      "signature": "pub fn record_cancelled_output( conn: &Connection, run_id: &str, completion: RunCompletion, ) -> Result<(), RunsError>",
       "source_class": "handwritten"
     },
     {
@@ -98603,23 +98603,23 @@
         "identity": "crate::runs::lifecycle::dead_letter",
         "macro_expansion": "not_measured",
         "path": "src/runs/lifecycle.rs",
-        "signature": "pub fn dead_letter( conn: &Connection, run_id: &str, reason: Option<String>, ) -> Result<RunRow, String>",
+        "signature": "pub fn dead_letter( conn: &Connection, run_id: &str, reason: Option<String>, ) -> Result<RunRow, RunsError>",
         "source_class": "handwritten"
       },
       "identity": "crate::runs::lifecycle::dead_letter",
       "kind": "function",
-      "line": 405,
+      "line": 447,
       "name": "dead_letter",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 6,
         "kind": "function",
-        "line": 405,
+        "line": 447,
         "name": "dead_letter"
       },
       "path": "src/runs/lifecycle.rs",
-      "signature": "pub fn dead_letter( conn: &Connection, run_id: &str, reason: Option<String>, ) -> Result<RunRow, String>",
+      "signature": "pub fn dead_letter( conn: &Connection, run_id: &str, reason: Option<String>, ) -> Result<RunRow, RunsError>",
       "source_class": "handwritten"
     },
     {

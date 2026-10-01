@@ -162,7 +162,16 @@ fn cue_revocation_failure_is_atomic_and_is_not_reported_as_cleanup_success() {
     .unwrap();
 
     let error = cancel_cue_runs_for_actor(&conn, peer).unwrap_err();
-    assert!(error.contains("injected Cue cancellation failure"));
+    assert!(matches!(
+        &error,
+        RunsError::Sqlite {
+            operation: "Read cancelled Cue runs failed",
+            ..
+        }
+    ));
+    assert!(error
+        .to_string()
+        .contains("injected Cue cancellation failure"));
     assert_eq!(
         get_run(&conn, &running.run_id).unwrap().unwrap().state,
         RunState::Running
@@ -384,7 +393,17 @@ fn complete_rejects_queued_row() {
     let conn = open(&ws).expect("open");
     let row = enqueue(&conn, "/x/a.sh", &[], enqueue_opts()).unwrap();
     let err = complete(&conn, &row.run_id, ok_completion()).unwrap_err();
-    assert!(err.contains("illegal transition"));
+    assert!(matches!(
+        &err,
+        RunsError::IllegalTransition {
+            from: RunState::Queued,
+            to: RunState::Completed
+        }
+    ));
+    assert_eq!(
+        err.to_string(),
+        "illegal transition: cannot move queued -> completed; row must be in 'running'"
+    );
     let _ = fs::remove_dir_all(ws.root());
 }
 
@@ -423,7 +442,14 @@ fn cancel_terminal_returns_error() {
         .unwrap();
     complete(&conn, &row.run_id, ok_completion()).unwrap();
     let err = cancel(&conn, &row.run_id, None, None).unwrap_err();
-    assert!(err.contains("terminal state"));
+    assert!(matches!(
+        &err,
+        RunsError::TerminalState(RunState::Completed)
+    ));
+    assert_eq!(
+        err.to_string(),
+        "cannot cancel run in terminal state 'completed'"
+    );
     let _ = fs::remove_dir_all(ws.root());
 }
 
@@ -452,7 +478,11 @@ fn dead_letter_only_succeeds_on_failed_or_timed_out() {
     claim_next(&conn, "w", &ClaimFilters::default()).unwrap();
     complete(&conn, &row.run_id, ok_completion()).unwrap();
     let err = dead_letter(&conn, &row.run_id, None).unwrap_err();
-    assert!(err.contains("only failed or timed_out"));
+    assert!(matches!(
+        &err,
+        RunsError::DeadLetterIneligible(RunState::Completed)
+    ));
+    assert_eq!(err.to_string(), "cannot promote run in state 'completed' to dead_letter; only failed or timed_out rows are eligible");
 
     let _ = fs::remove_dir_all(ws.root());
 }
@@ -805,5 +835,26 @@ fn dead_letter_preserves_existing_reason_when_no_new() {
     assert_eq!(promoted.state, RunState::DeadLetter);
     assert_eq!(promoted.reason.as_deref(), Some("first failure"));
 
+    let _ = fs::remove_dir_all(ws.root());
+}
+
+#[test]
+fn missing_run_and_missing_table_preserve_lifecycle_error_kinds_and_text() {
+    let ws = scratch_workspace("lifecycle_errors");
+    let conn = open(&ws).unwrap();
+    let missing = complete(&conn, "absent", ok_completion()).unwrap_err();
+    assert!(matches!(&missing, RunsError::RunNotFound(id) if id == "absent"));
+    assert_eq!(missing.to_string(), "run not found: absent");
+
+    let empty = Connection::open_in_memory().unwrap();
+    let sqlite = heartbeat(&empty, "absent", "worker").unwrap_err();
+    match &sqlite {
+        RunsError::Sqlite { operation, source } => {
+            assert_eq!(*operation, "Heartbeat failed");
+            assert_eq!(source.to_string(), "no such table: runs");
+        }
+        other => panic!("expected SQLite error, got {other:?}"),
+    }
+    assert_eq!(sqlite.to_string(), "Heartbeat failed: no such table: runs");
     let _ = fs::remove_dir_all(ws.root());
 }

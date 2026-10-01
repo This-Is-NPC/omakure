@@ -105,18 +105,20 @@ pub(super) fn require_run(conn: &rusqlite::Connection, run_id: &str) -> Operatio
     }
 }
 
-pub(super) fn map_transition_error(message: String) -> OperationError {
-    if message.contains("terminal state") || message.contains("only failed or timed_out") {
-        OperationError::new(OperationErrorCode::Conflict, message)
-    } else {
-        OperationError::new(OperationErrorCode::IoFailed, message)
-    }
+pub(super) fn map_transition_error(error: RunsError) -> OperationError {
+    let code = match error {
+        RunsError::TerminalState(_) | RunsError::DeadLetterIneligible(_) => {
+            OperationErrorCode::Conflict
+        }
+        _ => OperationErrorCode::IoFailed,
+    };
+    OperationError::new(code, error.to_string())
 }
 
 fn map_trace_error(error: RunsError) -> OperationError {
     let code = match &error {
         RunsError::NotFound(_) => OperationErrorCode::NotFound,
-        RunsError::Sqlite { .. } | RunsError::InvalidEnqueue(_) => OperationErrorCode::IoFailed,
+        _ => OperationErrorCode::IoFailed,
     };
     OperationError::new(code, error.to_string())
 }

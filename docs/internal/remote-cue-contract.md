@@ -216,7 +216,7 @@ A Cue-origin run row is written with an explicit **deny-all** secret policy:
 
 `None` must never be used for a Cue-origin run. `None` writes
 `ALLOW_ALL_SECRET_REFS_POLICY` (`src/runs/enqueue.rs:131-138`), and
-`src/run_executor.rs:399` returns `SecretAccess::allow_all()` both when the
+`src/run_executor/admission.rs` returns `SecretAccess::allow_all()` both when the
 policy row is missing **and when the lookup errors**. A Cue "carrying no secrets"
 written the obvious way would therefore receive *every* secret the node holds,
 and a transient database error would do the same. This is the single most

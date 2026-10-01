@@ -179,7 +179,7 @@ src/
 ├── cli_http_parity/         CLI/HTTP parity manifest and observable comparator
 ├── operation_catalog.rs     versioned operation metadata catalog
 ├── runs/                    SQLite state machine and structured traces
-├── run_executor.rs          shared child lifecycle and redaction
+├── run_executor/           shared child lifecycle and redaction
 ├── search_index.rs          SQLite full-text index
 ├── runtime.rs               Script-kind detection and command construction
 ├── workspace.rs             one workspace root and metadata layout

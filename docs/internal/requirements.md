@@ -15,12 +15,12 @@ must be updated in the same change.
 | FR-005 | `describe` returns a complete parsed schema and resolved path; malformed schemas and missing scripts have stable errors. | `src/cli/describe.rs`, `src/operations/core/scripts.rs` |
 | FR-006 | SQLite full-text search refreshes and queries one transaction per CLI or HTTP request, supports repeatable tag filters, and reports refresh or commit failures instead of serving stale results. | `src/search_index.rs`, `src/cli/search.rs`, `src/cli/api/`, `src/operations/search.rs` |
 | FR-007 | `init` creates schema-bearing Bash, PowerShell, Python, or Lua templates, validates supplied schema JSON, reads optional body stdin, and protects existing files unless forced. | `src/cli/init.rs` |
-| FR-008 | Direct runs support actors, reasons, caller IDs, parent IDs, forwarded args, per-run env files, no-prompt mode, timeouts, and secret inputs. | `src/cli/run.rs`, `src/run_executor.rs` |
+| FR-008 | Direct runs support actors, reasons, caller IDs, parent IDs, forwarded args, per-run env files, no-prompt mode, timeouts, and secret inputs. | `src/cli/run.rs`, `src/run_executor/` |
 | FR-009 | Bash, PowerShell, and Python commands resolve interpreters and preserve injected `PATH` semantics; `.lua` resolves no interpreter at all and re-executes the binary as an embedded Lua host. | `src/runtime.rs`, `src/adapters/script_runner.rs` |
-| FR-010 | Active and per-run environment values are injected with reserved Omakure variables last; sensitive values are masked and not persisted. | `src/adapters/environments/`, `src/run_executor.rs`, `src/redaction.rs` |
+| FR-010 | Active and per-run environment values are injected with reserved Omakure variables last; sensitive values are masked and not persisted. | `src/adapters/environments/`, `src/run_executor/`, `src/redaction.rs` |
 | FR-011 | Named environments can be listed, created, shown, set, removed, replaced, activated, deactivated, and deleted through CLI and HTTP. | `src/cli/env.rs`, `src/operations/envs.rs` |
 | FR-012 | Runs are stored in SQLite with state, actor, reason, args, output, timing, trigger, and schedule provenance. | `src/runs/` |
-| FR-013 | Queue producers add, cancel, dead-letter, and report jobs; workers claim jobs atomically, heartbeat leases, honor timeouts, and drain on signals. | `src/cli/queue.rs`, `src/runs/`, `src/run_executor.rs` |
+| FR-013 | Queue producers add, cancel, dead-letter, and report jobs; workers claim jobs atomically, heartbeat leases, honor timeouts, and drain on signals. | `src/cli/queue/`, `src/runs/`, `src/run_executor/` |
 | FR-014 | History lists, shows, tails, aggregates, and filters runs; trace events can be written from a child and read incrementally. | `src/cli/history.rs`, `src/cli/trace.rs`, `src/runs/` |
 | FR-015 | Schema schedules accept supported cron forms, enqueue due runs every five seconds, skip overlap, and log lifecycle/errors. | `src/domain/schedule.rs`, `src/cli/serve.rs` |
 | FR-016 | Linux systemd user lifecycle operations install, uninstall, and report the per-workspace scheduler service. | `src/cli/serve_autostart.rs`, `src/cli/serve.rs` |
@@ -67,7 +67,7 @@ must be updated in the same change.
 | BR-003 | Scheduled runs use declared field defaults; missing defaults are omitted rather than blocking the scheduler. | `src/cli/serve.rs` |
 | BR-004 | Scheduler overlap is keyed by canonical script path and cron expression. | `src/cli/serve.rs`, `src/runs/` |
 | BR-005 | Secret schema fields cannot declare choices; plaintext secret values are redacted while provider references can be retained. | `src/domain/schema.rs`, `src/secrets.rs`, `src/runs/` |
-| BR-006 | Omakure-reserved `OMAKURE_RUN_ID` and `OMAKURE_SCRIPTS_DIR` values cannot be overridden by managed or per-run environments. | `src/run_executor.rs` |
+| BR-006 | Omakure-reserved `OMAKURE_RUN_ID` and `OMAKURE_SCRIPTS_DIR` values cannot be overridden by managed or per-run environments. | `src/run_executor/` |
 | BR-007 | HTTP Battery registration is HTTPS-only and cached repositories are never executed directly. | `src/operations/battery/`, `src/cli/api/` |
 | BR-008 | Non-loopback HTTP binding requires explicit opt-in and route policy cannot be bypassed by token scope. | `src/cli/api/`, `src/policy.rs` |
 | BR-009 | No positional script path, TUI launch, theme configuration/assets, or directory `index.lua` widget behavior is part of the current product contract. | `src/cli/args/`, `src/main.rs`, `tests/packaging_smoke.rs` |

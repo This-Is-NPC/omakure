@@ -95,19 +95,15 @@ impl Resolver {
 
     pub(super) fn cancel(&self) {
         self.stop.store(true, Ordering::SeqCst);
-        if let Ok(mut shutdown) = self.shutdown.lock() {
-            if let Some(sender) = shutdown.take() {
-                let _ = sender.send(());
-            }
+        if let Some(sender) = self.shutdown.lock().ok().and_then(|mut guard| guard.take()) {
+            let _ = sender.send(());
         }
     }
 
     pub(super) fn shutdown(&self) {
         self.cancel();
-        if let Ok(mut handle) = self.handle.lock() {
-            if let Some(handle) = handle.take() {
-                let _ = handle.join();
-            }
+        if let Some(handle) = self.handle.lock().ok().and_then(|mut guard| guard.take()) {
+            let _ = handle.join();
         }
     }
 

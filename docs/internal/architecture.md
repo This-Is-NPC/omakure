@@ -177,7 +177,7 @@ src/
 ├── util/                    shared filesystem, process, and encoding helpers
 ├── app_meta.rs              package version constant
 ├── cli_http_parity/         CLI/HTTP parity manifest and observable comparator
-├── operation_catalog.rs     versioned operation metadata catalog
+├── operation_catalog/       versioned metadata, validation, rendering, and tests
 ├── runs/                    SQLite state machine and structured traces
 ├── run_executor/           shared child lifecycle and redaction
 ├── search_index.rs          SQLite full-text index

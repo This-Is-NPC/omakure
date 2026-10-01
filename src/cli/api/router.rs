@@ -53,7 +53,7 @@ use std::sync::Arc;
 #[cfg(test)]
 pub(super) const BODY_LIMIT_BYTES: usize = 1024 * 1024;
 
-/// Auth bundle for Health Plane HTTP routes (`State` is `Arc<NodeRegistry>`).
+/// Auth bundle for Health Plane HTTP routes.
 #[derive(Clone)]
 pub(super) struct HealthPlaneAuthState {
     pub(super) auth: Authenticator,
@@ -63,13 +63,38 @@ pub(super) struct HealthPlaneAuthState {
 
 /// Health Plane read routes mounted under `/v1/node` by `serve_http`.
 ///
-/// Handlers use `State<Arc<NodeRegistry>>`; the registry is opened once by
-/// `omakure node serve`, not by `omakure api`.
+/// The registry is opened once by `omakure node serve`, not by `omakure api`.
 pub(crate) fn health_plane_router(
     registry: Arc<NodeRegistry>,
     auth: Authenticator,
     deploy: DeployPolicy,
     auth_verification_gate: Arc<tokio::sync::Semaphore>,
+    body_limit: usize,
+) -> Router {
+    health_plane_router_with_blocking_gate(
+        registry,
+        auth,
+        deploy,
+        auth_verification_gate,
+        Arc::new(tokio::sync::Semaphore::new(
+            super::state::MAX_CONCURRENT_BLOCKING_OPERATIONS,
+        )),
+        body_limit,
+    )
+}
+
+#[derive(Clone)]
+pub(super) struct HealthPlaneState {
+    pub(super) registry: Arc<NodeRegistry>,
+    pub(super) blocking_operation_gate: Arc<tokio::sync::Semaphore>,
+}
+
+pub(super) fn health_plane_router_with_blocking_gate(
+    registry: Arc<NodeRegistry>,
+    auth: Authenticator,
+    deploy: DeployPolicy,
+    auth_verification_gate: Arc<tokio::sync::Semaphore>,
+    blocking_operation_gate: Arc<tokio::sync::Semaphore>,
     body_limit: usize,
 ) -> Router {
     let auth_state = HealthPlaneAuthState {
@@ -90,7 +115,10 @@ pub(crate) fn health_plane_router(
                 }
             },
         ))
-        .with_state(registry)
+        .with_state(HealthPlaneState {
+            registry,
+            blocking_operation_gate,
+        })
 }
 
 #[cfg(test)]

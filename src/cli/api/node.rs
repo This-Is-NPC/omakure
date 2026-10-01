@@ -2,10 +2,10 @@ use super::bearer::{require_capability, require_scope};
 use super::blocking::{operation_response_bounded, run_bounded_with_join};
 use super::query::{query_pairs, query_value};
 use super::respond::{operation_error_response, operation_response, parse_json_body};
+use super::router::HealthPlaneState;
 use super::state::{ApiCapability, ApiState};
 use super::SIGNED_BUNDLE_HTTP_BODY_LIMIT_BYTES;
 use crate::auth::AuthContext;
-use crate::node_registry::NodeRegistry;
 use crate::operations::node as node_ops;
 use crate::operations::{OperationError, OperationErrorCode, OperationResult};
 use crate::util::hex;
@@ -14,7 +14,6 @@ use axum::extract::{Path as AxumPath, RawQuery, State};
 use axum::response::Response;
 use axum::Extension;
 use serde::Deserialize;
-use std::sync::Arc;
 use std::time::Duration;
 
 #[derive(Debug, Default, Deserialize)]
@@ -204,13 +203,16 @@ pub(super) async fn node_initialize_handler(
 /// this projection; it can never write it, because the only writer is the
 /// authenticated node-to-node Health Plane exchange.
 pub(super) async fn node_health_handler(
-    State(registry): State<Arc<NodeRegistry>>,
+    State(state): State<HealthPlaneState>,
     Extension(auth_ctx): Extension<AuthContext>,
 ) -> Response {
     if let Some(response) = require_capability(&auth_ctx, ApiCapability::NodeRead) {
         return response;
     }
-    operation_response(crate::operations::health::fleet_status(&registry))
+    operation_response_bounded("fleet health", state.blocking_operation_gate, move || {
+        crate::operations::health::fleet_status(&state.registry)
+    })
+    .await
 }
 
 /// Thin adapter over the protocol-neutral Signal feed operation.
@@ -221,13 +223,16 @@ pub(super) async fn node_health_handler(
 /// Signals is the authenticated node-to-node Health Plane exchange plus this
 /// node's own append-only trust log.
 pub(super) async fn node_signals_handler(
-    State(registry): State<Arc<NodeRegistry>>,
+    State(state): State<HealthPlaneState>,
     Extension(auth_ctx): Extension<AuthContext>,
 ) -> Response {
     if let Some(response) = require_capability(&auth_ctx, ApiCapability::NodeRead) {
         return response;
     }
-    operation_response(crate::operations::health::signal_feed(&registry))
+    operation_response_bounded("fleet signals", state.blocking_operation_gate, move || {
+        crate::operations::health::signal_feed(&state.registry)
+    })
+    .await
 }
 
 pub(super) async fn node_peers_handler(

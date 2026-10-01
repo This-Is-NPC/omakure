@@ -30,6 +30,47 @@ async fn node_routes_use_the_shared_blocking_gate_after_validation() {
     );
 }
 
+#[tokio::test(flavor = "current_thread")]
+async fn health_plane_reads_use_a_bounded_blocking_gate() {
+    let dir = TempDir::new().unwrap();
+    let workspace = crate::test_support::workspace_in(&dir);
+    let deploy = DeployPolicy::default();
+    let auth = test_credential::authenticator(&["node:read"]);
+    let gate = Arc::new(tokio::sync::Semaphore::new(1));
+    gate.close();
+    let health = super::super::router::health_plane_router_with_blocking_gate(
+        shared_test_health_registry(),
+        auth.clone(),
+        deploy.clone(),
+        super::super::boot::auth_verification_gate(&deploy),
+        gate,
+        BODY_LIMIT_BYTES,
+    );
+    let app = router_with_policy(
+        auth,
+        workspace,
+        ApiPolicy::default(),
+        deploy,
+        None,
+        BODY_LIMIT_BYTES,
+    )
+    .nest("/v1/node", health);
+
+    for path in ["/v1/node/health", "/v1/node/signals"] {
+        let response = app.clone().oneshot(authed_request(path)).await.unwrap();
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(response_json(response).await["error"]["code"], "io_failed");
+    }
+
+    assert_eq!(
+        app.oneshot(authed_request("/v1/health"))
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::OK
+    );
+}
+
 #[tokio::test]
 async fn discovery_status_requires_its_explicit_scope_and_redacts_addresses() {
     let dir = TempDir::new().unwrap();

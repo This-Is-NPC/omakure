@@ -36,7 +36,7 @@ for pattern in \
 do
   append_glob "$pattern"
 done
-for path in scripts/tasks/check/fast scripts/tasks/check/full; do
+for path in scripts/tasks/check/fast scripts/tasks/check/full scripts/tasks/check/platform-mode; do
   append_path "$path"
 done
 

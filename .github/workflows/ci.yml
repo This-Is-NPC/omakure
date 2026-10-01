@@ -11,6 +11,12 @@ jobs:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
+    env:
+      RUSTFLAGS: ${{ matrix.rustflags }}
+      CC_x86_64_unknown_linux_musl: musl-gcc
+      CC_aarch64_unknown_linux_musl: musl-gcc
+      CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
+      CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
     strategy:
       fail-fast: false
       matrix:
@@ -73,25 +79,19 @@ jobs:
       - uses: Swatinem/rust-cache@v2.9.2
         with:
           shared-key: build-${{ matrix.target }}
-        env:
-          RUSTFLAGS: ${{ matrix.rustflags }}
       - name: Install musl toolchain
         if: matrix.musl
         run: sudo apt-get update && sudo apt-get install -y musl-tools
-      - name: Run platform checks
+      - name: Run native platform tests
+        if: matrix.musl == false
         shell: bash
-        env:
-          RUSTFLAGS: ${{ matrix.rustflags }}
-          CC_x86_64_unknown_linux_musl: musl-gcc
-          CC_aarch64_unknown_linux_musl: musl-gcc
-          CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
-        run: ./scripts/tasks/check/platform/${{ matrix.platform }} "${{ matrix.target }}"
+        run: ./scripts/tasks/check/platform/${{ matrix.platform }} --test-only "${{ matrix.target }}"
+      - name: Build and smoke platform release
+        shell: bash
+        run: ./scripts/tasks/check/platform/${{ matrix.platform }} --build-only "${{ matrix.target }}"
       - name: Check Windows all-target Clippy
         if: matrix.platform == 'windows'
         shell: bash
-        env:
-          RUSTFLAGS: ${{ matrix.rustflags }}
         run: cargo clippy --all-targets --locked --target "${{ matrix.target }}" -- -D warnings
 
   lint:

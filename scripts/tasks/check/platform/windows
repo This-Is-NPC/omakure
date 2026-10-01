@@ -5,11 +5,7 @@ root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../../.." && pwd -P)"
 cd "$root"
 export MISE_PROJECT_ROOT="$root"
 
-build_only=0
-if [[ "${1:-}" == --build-only ]]; then
-    build_only=1
-    shift
-fi
+source "$root/scripts/tasks/check/platform-mode"
 
 die() {
     printf 'check:platform:windows: %s\n' "$1" >&2
@@ -23,17 +19,19 @@ case "$target" in
     *) die "unsupported Windows target: $target" ;;
 esac
 
-if (( !build_only )); then
+if [[ "$mode" != build ]]; then
     printf 'check:platform:windows: native tests (%s)\n' "$target"
     CARGO_BUILD_TARGET="$target" "$root/scripts/tasks/suite/native-tests"
     printf 'check:platform:windows: all-target check (%s)\n' "$target"
     CARGO_BUILD_TARGET="$target" "$root/scripts/tasks/atomic/check-all-targets"
 fi
-if [[ "${RUSTFLAGS:-}" != *'+crt-static'* ]]; then
-    export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C target-feature=+crt-static"
+if [[ "$mode" != test ]]; then
+    if [[ "${RUSTFLAGS:-}" != *'+crt-static'* ]]; then
+        export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C target-feature=+crt-static"
+    fi
+    printf 'check:platform:windows: static CRT release build (%s)\n' "$target"
+    "$root/scripts/tasks/atomic/build-release" --target-triple "$target"
+    printf 'check:platform:windows: executable smoke (%s)\n' "$target"
+    "$root/scripts/tasks/atomic/binary-smoke" "$target"
 fi
-printf 'check:platform:windows: static CRT release build (%s)\n' "$target"
-"$root/scripts/tasks/atomic/build-release" --target-triple "$target"
-printf 'check:platform:windows: executable smoke (%s)\n' "$target"
-"$root/scripts/tasks/atomic/binary-smoke" "$target"
 printf 'check:platform:windows: PASS\n'

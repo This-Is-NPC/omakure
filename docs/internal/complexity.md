@@ -68,6 +68,12 @@ successful runs and reports whether the chain has ten consecutive records
 spanning at least seven calendar days. This evidence is informational and does
 not weaken local changed-function enforcement.
 
+Both CI workflows use `scripts/tasks/complexity-workflow` to verify pinned
+analyzers and fixtures, generate repeated reports, write run evidence, and
+enforce the ratchet. Its `trusted-soak` mode also records the fixed corpus hash
+and analyzer identity before the dedicated workflow updates the temporal chain.
+The `calibration` mode leaves that trusted state untouched.
+
 The soak proves that the pinned analyzer keeps producing the same output for
 the same input across days and runners. Each record therefore carries the
 analyzer's identity (version, binary digest, configuration, output schema digest) and the

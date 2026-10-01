@@ -68,6 +68,9 @@ caller:
 - CI and release matrix jobs invoke the selected
   `scripts/tasks/check/platform/${{ matrix.platform }}` route. Release adds
   `--build-only` so native tests run in CI only.
+- Complexity CI and the trusted soak share `scripts/tasks/complexity-workflow`
+  for canonical reports, evidence, and the changed-function gate. The soak
+  workflow owns its trusted state and artifact persistence.
   Packaging remains an archive assertion around the same platform build; it
   does not reproduce test/build/static-link/smoke commands in workflow YAML.
 

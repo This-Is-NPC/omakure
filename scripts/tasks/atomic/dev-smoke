@@ -15,28 +15,32 @@ port="${OMAKURE_DEV_PORT:-17878}"
 log="$workspace/.omakure/dev-node.log"
 
 "$bounded" 15m cargo build --bin omakure
-mkdir -p "$workspace/.omakure/dev-node-state"
-chmod 700 "$workspace/.omakure/dev-node-state"
+mkdir -p "$workspace/.omakure"
+smoke_dir="$(mktemp -d "$workspace/.omakure/dev-smoke.XXXXXX")"
+node_pid=""
+cleanup() {
+  if [[ -n "$node_pid" ]]; then
+    kill "$node_pid" 2>/dev/null || true
+    wait "$node_pid" 2>/dev/null || true
+  fi
+  rm -rf -- "$smoke_dir"
+}
+trap cleanup EXIT INT TERM
+mkdir -p "$smoke_dir/node-state"
+chmod 700 "$smoke_dir/node-state"
 
-tokens_file="$workspace/.omakure/dev-node-tokens.toml"
-rm -f "$tokens_file"
+tokens_file="$smoke_dir/tokens.toml"
 token="$("$bin" --json token generate --id dev-smoke --scope '*' --append "$tokens_file" --confirmed |
   sed -n 's/.*"token":"\([^"]*\)".*/\1/p')"
 [[ -n "$token" ]] || { printf 'atomic/dev-smoke: token generation failed\n' >&2; exit 1; }
 ready_url="http://127.0.0.1:${port}/v1/ready"
 health_url="http://127.0.0.1:${port}/v1/health"
 
-OMAKURE_NODE_TEST_MODE=1 "$bin" node --node-state-dir "$workspace/.omakure/dev-node-state" \
-  --node-config "$workspace/.omakure/dev-node.toml" serve \
+OMAKURE_NODE_TEST_MODE=1 "$bin" node --node-state-dir "$smoke_dir/node-state" \
+  --node-config "$smoke_dir/node.toml" serve \
   --bind "127.0.0.1:${port}" --workers 0 --no-scheduler \
   --tokens-file "$tokens_file" >"$log" 2>&1 &
 node_pid=$!
-
-cleanup() {
-  kill "$node_pid" 2>/dev/null || true
-  wait "$node_pid" 2>/dev/null || true
-}
-trap cleanup EXIT INT TERM
 
 for _ in {1..50}; do
   if curl -fsS --max-time 2 "$health_url" >/dev/null 2>&1; then

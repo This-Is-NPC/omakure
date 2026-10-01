@@ -29,7 +29,7 @@ use super::scripts::{
 };
 use super::secrets::list_secrets_metadata_handler;
 #[cfg(test)]
-use super::state::MAX_CONCURRENT_RUN_OPERATIONS;
+use super::state::MAX_CONCURRENT_BLOCKING_OPERATIONS;
 use super::state::{ApiPolicy, ApiState, ReadinessGate};
 use super::status::{
     admin_status_handler, config_handler, doctor_handler, health, ready_handler, workspace_handler,
@@ -95,16 +95,18 @@ pub(crate) fn health_plane_router(
 
 #[cfg(test)]
 pub(super) fn router(workspace: Workspace) -> Router {
-    router_with_run_gate(
+    router_with_blocking_gate(
         workspace,
-        Arc::new(tokio::sync::Semaphore::new(MAX_CONCURRENT_RUN_OPERATIONS)),
+        Arc::new(tokio::sync::Semaphore::new(
+            MAX_CONCURRENT_BLOCKING_OPERATIONS,
+        )),
     )
 }
 
 #[cfg(test)]
-pub(super) fn router_with_run_gate(
+pub(super) fn router_with_blocking_gate(
     workspace: Workspace,
-    run_operation_gate: Arc<tokio::sync::Semaphore>,
+    blocking_operation_gate: Arc<tokio::sync::Semaphore>,
 ) -> Router {
     // Test convenience: wildcard scope plus unrestricted secret refs.
     // Production scope `*` still requires explicit `--secret-ref`.
@@ -121,7 +123,7 @@ pub(super) fn router_with_run_gate(
         None,
         None,
         auth_gate,
-        run_operation_gate,
+        blocking_operation_gate,
         BODY_LIMIT_BYTES,
     )
 }
@@ -240,7 +242,9 @@ pub(super) fn router_with_policy(
         None,
         None,
         auth_gate,
-        Arc::new(tokio::sync::Semaphore::new(MAX_CONCURRENT_RUN_OPERATIONS)),
+        Arc::new(tokio::sync::Semaphore::new(
+            MAX_CONCURRENT_BLOCKING_OPERATIONS,
+        )),
         body_limit,
     )
 }
@@ -259,7 +263,7 @@ pub(super) fn router_with_transport(
     cues: Option<crate::direct_service::CueDispatcher>,
     baselines: Option<crate::direct_service::BaselineDispatcher>,
     auth_verification_gate: Arc<tokio::sync::Semaphore>,
-    run_operation_gate: Arc<tokio::sync::Semaphore>,
+    blocking_operation_gate: Arc<tokio::sync::Semaphore>,
     body_limit: usize,
 ) -> Router {
     let state = ApiState {
@@ -273,7 +277,7 @@ pub(super) fn router_with_transport(
         cues,
         baselines,
         auth_verification_gate,
-        run_operation_gate,
+        blocking_operation_gate,
     };
     // Route registration must stay aligned with `HTTP_ROUTE_INVENTORY`.
     Router::new()

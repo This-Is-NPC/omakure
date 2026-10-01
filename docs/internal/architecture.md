@@ -145,7 +145,7 @@ src/
 ├── cli/                     command adapters and JSON output
 │   ├── args/                clap command tree and long-form help
 │   ├── api/                 authenticated Axum management server (boot, router,
-│   │                        bearer auth, audit, and one module per route group)
+│   │                        bearer auth, bounded blocking work, audit, and route groups)
 │   ├── node_service.rs      HTTP + workers + scheduler lifecycle
 │   ├── run/                synchronous execution entry point and tests
 │   ├── queue/               queue dispatch, producers, worker, and tests

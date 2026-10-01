@@ -1,6 +1,7 @@
 use super::audit::safe_audit_run_id;
 use super::battery::default_actor;
 use super::bearer::{require_capability, require_scope};
+use super::blocking::run_bounded;
 use super::query::{query_bool, query_i64, query_pairs, query_value, query_values};
 use super::respond::{
     attach_audit_run_id, operation_error_response, operation_response_with_run_id, parse_json_body,
@@ -19,27 +20,12 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-async fn run_blocking<T: Send + 'static>(
-    gate: Arc<tokio::sync::Semaphore>,
-    task: impl FnOnce() -> T + Send + 'static,
-) -> Result<T, OperationError> {
-    let permit = gate.acquire_owned().await.map_err(|_| {
-        OperationError::new(OperationErrorCode::IoFailed, "run operation unavailable")
-    })?;
-    tokio::task::spawn_blocking(move || {
-        let _permit = permit;
-        task()
-    })
-    .await
-    .map_err(|_| OperationError::new(OperationErrorCode::IoFailed, "run operation failed"))
-}
-
 async fn run_operation_response<T: Serialize + Send + 'static>(
     gate: Arc<tokio::sync::Semaphore>,
     run_id: Option<String>,
     task: impl FnOnce() -> OperationResult<T> + Send + 'static,
 ) -> Response {
-    let result = run_blocking(gate, task)
+    let result = run_bounded("run", gate, task)
         .await
         .and_then(std::convert::identity);
     operation_response_with_run_id(result, run_id)
@@ -81,7 +67,7 @@ pub(super) async fn list_runs_handler(
         Ok(request) => request,
         Err(err) => return operation_error_response(err),
     };
-    let gate = Arc::clone(&state.run_operation_gate);
+    let gate = Arc::clone(&state.blocking_operation_gate);
     run_operation_response(gate, None, move || {
         core::list_runs(&state.workspace, request)
     })
@@ -96,7 +82,7 @@ pub(super) async fn show_run_handler(
     if let Some(response) = require_capability(&auth_ctx, ApiCapability::RunRead) {
         return response;
     }
-    let gate = Arc::clone(&state.run_operation_gate);
+    let gate = Arc::clone(&state.blocking_operation_gate);
     run_operation_response(gate, None, move || {
         core::show_run(&state.workspace, core::ShowRunRequest { run_id })
     })
@@ -116,7 +102,7 @@ pub(super) async fn list_traces_handler(
         Ok(request) => request,
         Err(err) => return operation_error_response(err),
     };
-    let gate = Arc::clone(&state.run_operation_gate);
+    let gate = Arc::clone(&state.blocking_operation_gate);
     run_operation_response(gate, None, move || {
         core::list_traces(&state.workspace, request)
     })
@@ -130,7 +116,7 @@ pub(super) async fn queue_stats_handler(
     if let Some(response) = require_capability(&auth_ctx, ApiCapability::RunRead) {
         return response;
     }
-    let gate = Arc::clone(&state.run_operation_gate);
+    let gate = Arc::clone(&state.blocking_operation_gate);
     run_operation_response(gate, None, move || core::queue_stats(&state.workspace)).await
 }
 
@@ -179,9 +165,9 @@ pub(super) async fn enqueue_run_handler(
             return attach_audit_run_id(response, requested_run_id);
         }
     }
-    let gate = Arc::clone(&state.run_operation_gate);
+    let gate = Arc::clone(&state.blocking_operation_gate);
     let fallback_run_id = requested_run_id.clone();
-    match run_blocking(gate, move || {
+    match run_bounded("run", gate, move || {
         enqueue_authorized(state, auth_ctx, body, requested_run_id)
     })
     .await
@@ -343,7 +329,7 @@ pub(super) async fn cancel_run_handler(
             Ok(body) => body,
             Err(err) => return operation_error_response(err),
         };
-    let gate = Arc::clone(&state.run_operation_gate);
+    let gate = Arc::clone(&state.blocking_operation_gate);
     let audit_run_id = run_id.clone();
     run_operation_response(gate, Some(audit_run_id), move || {
         core::cancel_run(
@@ -371,7 +357,7 @@ pub(super) async fn dead_letter_run_handler(
             Ok(body) => body,
             Err(err) => return operation_error_response(err),
         };
-    let gate = Arc::clone(&state.run_operation_gate);
+    let gate = Arc::clone(&state.blocking_operation_gate);
     let audit_run_id = run_id.clone();
     run_operation_response(gate, Some(audit_run_id), move || {
         core::dead_letter_run(
@@ -429,7 +415,7 @@ mod blocking_tests {
         )
         .expect("hold the SQLite write lock");
         let gate = Arc::new(tokio::sync::Semaphore::new(1));
-        let app = super::super::router::router_with_run_gate(workspace, Arc::clone(&gate));
+        let app = super::super::router::router_with_blocking_gate(workspace, Arc::clone(&gate));
         let mut list = tokio::spawn({
             let app = app.clone();
             async move {

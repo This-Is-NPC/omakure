@@ -1,5 +1,5 @@
 use super::router::router_with_transport;
-use super::state::{ApiPolicy, ReadinessGate, MAX_CONCURRENT_RUN_OPERATIONS};
+use super::state::{ApiPolicy, ReadinessGate, MAX_CONCURRENT_BLOCKING_OPERATIONS};
 use crate::auth::{self, Authenticator};
 use crate::cli::args::ApiArgs;
 use crate::direct_service::TransportStatusHandle;
@@ -124,7 +124,9 @@ pub(crate) async fn serve_http(
         cues,
         baselines,
         auth_verification_gate,
-        Arc::new(tokio::sync::Semaphore::new(MAX_CONCURRENT_RUN_OPERATIONS)),
+        Arc::new(tokio::sync::Semaphore::new(
+            MAX_CONCURRENT_BLOCKING_OPERATIONS,
+        )),
         body_limit,
     );
     let app = app.nest("/v1/node", health_plane);

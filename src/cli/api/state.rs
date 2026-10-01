@@ -5,7 +5,7 @@ use crate::workspace::Workspace;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-pub(super) const MAX_CONCURRENT_RUN_OPERATIONS: usize = 16;
+pub(super) const MAX_CONCURRENT_BLOCKING_OPERATIONS: usize = 16;
 
 /// Shared readiness gate for `GET /v1/ready`.
 ///
@@ -114,7 +114,7 @@ pub(super) struct ApiState {
     pub(super) cues: Option<crate::direct_service::CueDispatcher>,
     pub(super) baselines: Option<crate::direct_service::BaselineDispatcher>,
     pub(super) auth_verification_gate: Arc<tokio::sync::Semaphore>,
-    pub(super) run_operation_gate: Arc<tokio::sync::Semaphore>,
+    pub(super) blocking_operation_gate: Arc<tokio::sync::Semaphore>,
 }
 
 impl Clone for ApiState {
@@ -130,7 +130,7 @@ impl Clone for ApiState {
             cues: self.cues.clone(),
             baselines: self.baselines.clone(),
             auth_verification_gate: Arc::clone(&self.auth_verification_gate),
-            run_operation_gate: Arc::clone(&self.run_operation_gate),
+            blocking_operation_gate: Arc::clone(&self.blocking_operation_gate),
         }
     }
 }

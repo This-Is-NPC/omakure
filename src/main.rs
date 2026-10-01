@@ -67,7 +67,7 @@ fn expand_windows_env_vars(value: &str) -> String {
 
         let mut name = String::new();
         let mut found_end = false;
-        while let Some(next) = chars.next() {
+        for next in chars.by_ref() {
             if next == '%' {
                 found_end = true;
                 break;

@@ -154,7 +154,8 @@ pub fn default_layout(
 }
 
 pub(super) fn validate_absolute_path(
-    platform: NodePlatform,
+    #[cfg(not(windows))] platform: NodePlatform,
+    #[cfg(windows)] _platform: NodePlatform,
     field: &'static str,
     path: &Path,
     is_file: bool,

@@ -276,6 +276,7 @@ pub fn installing_battery(
     None
 }
 
+#[cfg(unix)]
 pub(super) fn installed_root_for_workspace(workspace: &Workspace) -> OperationResult<PathBuf> {
     let paths = BatteryPaths::for_workspace(workspace);
     safe_battery_metadata_dir(workspace, &paths.installed_root, "installed")

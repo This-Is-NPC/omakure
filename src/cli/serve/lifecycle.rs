@@ -1,3 +1,4 @@
+#[cfg(unix)]
 use super::logging::log_file;
 use super::scheduler::run_scheduler;
 use crate::cli::args::ServeArgs;
@@ -202,9 +203,7 @@ pub(super) fn acquire_lock(workspace: &Workspace) -> Result<WindowsLock, String>
         pid: std::process::id(),
         stop_event: stop_event_name,
     };
-    if let Err(error) = publish_windows_pid_file(&path, &identity) {
-        return Err(error);
-    }
+    publish_windows_pid_file(&path, &identity)?;
     Ok(WindowsLock {
         identity,
         stop_event,

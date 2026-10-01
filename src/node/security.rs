@@ -134,7 +134,7 @@ pub(super) fn owner_policy(
 pub(super) fn validate_directory_security(
     path: &Path,
     #[cfg(unix)] owner: UnixOwner,
-    #[cfg(not(unix))] owner: (),
+    #[cfg(not(unix))] _owner: (),
     _test_mode: bool,
 ) -> Result<(), NodeError> {
     #[cfg(unix)]
@@ -156,8 +156,6 @@ pub(super) fn validate_directory_security(
     }
     #[cfg(windows)]
     validate_windows_security(path, true, _test_mode)?;
-    #[cfg(not(unix))]
-    let _ = owner;
     let _ = path;
     Ok(())
 }
@@ -205,7 +203,7 @@ pub(super) fn validate_file_security_metadata(
     path: &Path,
     metadata: &fs::Metadata,
     #[cfg(unix)] owner: UnixOwner,
-    #[cfg(not(unix))] owner: (),
+    #[cfg(not(unix))] _owner: (),
     _test_mode: bool,
     expected_mode: u32,
 ) -> Result<(), NodeError> {
@@ -239,7 +237,5 @@ pub(super) fn validate_file_security_metadata(
         }
     }
     let _ = (path, metadata, _test_mode, expected_mode);
-    #[cfg(not(unix))]
-    let _ = owner;
     Ok(())
 }

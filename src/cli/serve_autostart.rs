@@ -12,6 +12,7 @@ use crate::cli::emit::exit_with_error;
 use crate::cli::json::codes;
 use crate::workspace::Workspace;
 use std::error::Error;
+#[cfg(any(target_os = "linux", test))]
 use std::path::{Path, PathBuf};
 
 #[cfg(target_os = "linux")]
@@ -80,6 +81,7 @@ fn unsupported(json_output: bool) -> Result<(), Box<dyn Error>> {
 /// multiple workspaces can each have their own service. Not
 /// cryptographic — we only need collision-resistance across a single
 /// user's machine.
+#[cfg(any(target_os = "linux", test))]
 fn path_hash(path: &Path) -> u64 {
     let mut hash: u64 = 0xcbf29ce484222325;
     for byte in path.to_string_lossy().as_bytes() {
@@ -89,25 +91,30 @@ fn path_hash(path: &Path) -> u64 {
     hash
 }
 
+#[cfg(any(target_os = "linux", test))]
 pub(crate) fn unit_name(workspace: &Workspace) -> String {
     let canonical =
         std::fs::canonicalize(workspace.root()).unwrap_or_else(|_| workspace.root().to_path_buf());
     format!("omakure-{:016x}.service", path_hash(&canonical))
 }
 
+#[cfg(any(target_os = "linux", test))]
 fn unit_dir() -> Result<PathBuf, String> {
     let home = std::env::var_os("HOME").ok_or_else(|| "HOME is not set".to_string())?;
     Ok(PathBuf::from(home).join(".config/systemd/user"))
 }
 
+#[cfg(any(target_os = "linux", test))]
 fn unit_path(workspace: &Workspace) -> Result<PathBuf, String> {
     Ok(unit_dir()?.join(unit_name(workspace)))
 }
 
+#[cfg(any(target_os = "linux", test))]
 fn current_binary() -> Result<PathBuf, String> {
     std::env::current_exe().map_err(|e| format!("current_exe: {e}"))
 }
 
+#[cfg(any(target_os = "linux", test))]
 fn render_unit(workspace: &Workspace) -> Result<String, String> {
     let canonical = std::fs::canonicalize(workspace.root())
         .map_err(|e| format!("canonicalize workspace {}: {e}", workspace.root().display()))?;

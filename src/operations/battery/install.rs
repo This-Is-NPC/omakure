@@ -48,10 +48,10 @@ pub fn install_battery_script(
     #[cfg(not(unix))]
     {
         let _ = (workspace, request);
-        return Err(OperationError::new(
+        Err(OperationError::new(
             OperationErrorCode::Conflict,
             "battery install is only supported on Unix until non-Unix no-follow install protections are implemented",
-        ));
+        ))
     }
     #[cfg(unix)]
     {
@@ -244,6 +244,7 @@ fn rewind_and_read_source_mode(source_file: &mut File) -> OperationResult<u32> {
 /// what lets it run outside Omakure at all. Write stays with the owner; the
 /// workspace is trusted content, and a cache checkout made under a loose
 /// umask is not a reason to let the group or the world edit it.
+#[cfg(unix)]
 pub(crate) const INSTALLED_MODE_MASK: u32 = 0o755;
 
 /// Install one already-verified script into the workspace, force-replacing
@@ -269,7 +270,8 @@ pub(crate) fn install_verified_script(
     workspace: &Workspace,
     relative: &Path,
     bytes: &[u8],
-    mode: u32,
+    #[cfg(unix)] mode: u32,
+    #[cfg(not(unix))] _mode: u32,
 ) -> OperationResult<InstallState> {
     let target = prepare_install_target(workspace, relative)?;
     let mut source = bytes;
@@ -280,6 +282,7 @@ pub(crate) fn install_verified_script(
         &target.operation_path,
         InstallSource {
             reader: &mut source,
+            #[cfg(unix)]
             mode,
         },
         true,
@@ -366,6 +369,7 @@ impl InstallState {
 /// together.
 struct InstallSource<'a> {
     reader: &'a mut dyn Read,
+    #[cfg(unix)]
     mode: u32,
 }
 

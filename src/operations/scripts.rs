@@ -193,7 +193,11 @@ fn resolve_workspace_path(path: &str, root: &Path) -> OperationResult<PathBuf> {
     }
 }
 
-fn open_script_file(path: &Path, root: &Path) -> OperationResult<std::fs::File> {
+fn open_script_file(
+    path: &Path,
+    #[cfg(unix)] root: &Path,
+    #[cfg(not(unix))] _root: &Path,
+) -> OperationResult<std::fs::File> {
     let file = open_no_follow(path)?;
     #[cfg(unix)]
     {

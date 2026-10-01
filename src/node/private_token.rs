@@ -97,16 +97,17 @@ impl PrivateTokenLease {
         Ok(())
     }
 
-    pub(crate) fn finish_success(mut self) -> PrivateFileCommitStatus {
+    pub(crate) fn finish_success(self) -> PrivateFileCommitStatus {
         let mut cleanup_required = false;
         #[cfg(not(windows))]
-        if self.file.seek(SeekFrom::Start(0)).is_err()
-            || self
-                .file
-                .write_all(&vec![0_u8; self.contents.len()])
-                .is_err()
-            || self.file.set_len(0).is_err()
-            || self.file.sync_all().is_err()
+        let mut file = self.file;
+        #[cfg(windows)]
+        let file = self.file;
+        #[cfg(not(windows))]
+        if file.seek(SeekFrom::Start(0)).is_err()
+            || file.write_all(&vec![0_u8; self.contents.len()]).is_err()
+            || file.set_len(0).is_err()
+            || file.sync_all().is_err()
         {
             cleanup_required = true;
         }
@@ -114,7 +115,7 @@ impl PrivateTokenLease {
         let delete_failed = private_token_fault(PrivateTokenFault::Delete);
         #[cfg(not(test))]
         let delete_failed = false;
-        drop(self.file);
+        drop(file);
         let deleted = !delete_failed && fs::remove_file(&self.tombstone_path).is_ok();
         let directory_sync_failed = deleted
             && self

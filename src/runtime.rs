@@ -206,7 +206,7 @@ pub(crate) fn resolve_bash_program(env: &[(String, String)]) -> Option<PathBuf> 
         let path = path_value(env)
             .map(str::to_owned)
             .or_else(|| std::env::var("PATH").ok())?;
-        return resolve_bash_in_path(&path);
+        resolve_bash_in_path(&path)
     }
     #[cfg(not(windows))]
     {

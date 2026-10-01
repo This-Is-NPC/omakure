@@ -22,6 +22,7 @@ enum Rule {
     HealthRegistry,
     HealthProcess,
     BatteryFilesystem,
+    NodeFilesystem,
     OperationInput,
     SearchStorage,
 }
@@ -313,7 +314,17 @@ impl<'ast> Visit<'ast> for ContractVisitor {
                 "unsafe filesystem calls belong in adapters/fs",
             );
         }
+        if self.rule == Rule::NodeFilesystem {
+            self.record("ARCH-NODE-FS", "platform syscalls belong in adapters/fs");
+        }
         visit::visit_expr_unsafe(self, node);
+    }
+
+    fn visit_item_foreign_mod(&mut self, node: &'ast syn::ItemForeignMod) {
+        if self.rule == Rule::NodeFilesystem {
+            self.record("ARCH-NODE-FS", "platform bindings belong in adapters/fs");
+        }
+        visit::visit_item_foreign_mod(self, node);
     }
 
     fn visit_expr_method_call(&mut self, node: &'ast ExprMethodCall) {
@@ -853,6 +864,30 @@ fn health_facts_process_execution_stays_in_adapter() {
         let contract = parse_contract(Rule::HealthProcess, "fixture:health.rs", source);
         assert_eq!(contract.findings.len(), 1);
         assert_eq!(contract.findings[0].rule, "ARCH-HEALTH-PROCESS");
+    }
+}
+
+#[test]
+fn node_filesystem_syscalls_stay_in_adapters() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    for module in ["fs_unix.rs", "fs_windows.rs"] {
+        let path = root.join("src/node").join(module);
+        let source = fs::read_to_string(&path).expect("read node filesystem policy");
+        let contract = parse_contract(Rule::NodeFilesystem, module, &source);
+        assert!(
+            contract.findings.is_empty(),
+            "node filesystem policy contains a platform binding: {:?}",
+            contract.findings
+        );
+    }
+
+    for source in [
+        "fn call() { unsafe { platform_call() }; }",
+        "unsafe extern \"C\" { fn platform_call(); }",
+    ] {
+        let contract = parse_contract(Rule::NodeFilesystem, "fixture:node_fs.rs", source);
+        assert_eq!(contract.findings.len(), 1);
+        assert_eq!(contract.findings[0].rule, "ARCH-NODE-FS");
     }
 }
 

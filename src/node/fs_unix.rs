@@ -1,5 +1,6 @@
 use super::NodeError;
 use super::layout::NodePlatform;
+use crate::adapters::fs::unix as fs_adapter;
 use std::fs;
 use std::io::{self};
 use std::path::Path;
@@ -39,12 +40,7 @@ pub(super) fn create_secure_directory(path: &Path) -> io::Result<()> {
     let path = CString::new(path.as_os_str().as_bytes()).map_err(|_| {
         io::Error::new(io::ErrorKind::InvalidInput, "node path contains a NUL byte")
     })?;
-    let result = unsafe { libc::mkdir(path.as_ptr(), 0o700) };
-    if result == 0 {
-        Ok(())
-    } else {
-        Err(io::Error::last_os_error())
-    }
+    fs_adapter::mkdir_private(&path)
 }
 
 #[cfg(unix)]
@@ -79,75 +75,35 @@ pub(super) fn lookup_unix_principal(
     user_name: &std::ffi::CStr,
     group_name: &std::ffi::CStr,
 ) -> Result<UnixOwner, NodeError> {
-    use std::ptr;
-
-    let uid = {
-        let mut entry = unsafe { std::mem::zeroed::<libc::passwd>() };
-        let mut result = ptr::null_mut();
-        let mut buffer = vec![0_u8; 16 * 1024];
-        loop {
-            let status = unsafe {
-                libc::getpwnam_r(
-                    user_name.as_ptr(),
-                    &mut entry,
-                    buffer.as_mut_ptr().cast(),
-                    buffer.len(),
-                    &mut result,
-                )
-            };
-            if status == libc::ERANGE {
-                grow_principal_lookup_buffer(&mut buffer)?;
-                continue;
-            }
-            if status != 0 {
-                return Err(NodeError::InsecurePath(format!(
-                    "failed to resolve configured node service user: {}",
-                    io::Error::from_raw_os_error(status)
-                )));
-            }
-            if result.is_null() {
-                return Err(NodeError::InsecurePath(
-                    "configured node service user does not exist".to_string(),
-                ));
-            }
-            break entry.pw_uid;
-        }
-    };
-
-    let gid = {
-        let mut entry = unsafe { std::mem::zeroed::<libc::group>() };
-        let mut result = ptr::null_mut();
-        let mut buffer = vec![0_u8; 16 * 1024];
-        loop {
-            let status = unsafe {
-                libc::getgrnam_r(
-                    group_name.as_ptr(),
-                    &mut entry,
-                    buffer.as_mut_ptr().cast(),
-                    buffer.len(),
-                    &mut result,
-                )
-            };
-            if status == libc::ERANGE {
-                grow_principal_lookup_buffer(&mut buffer)?;
-                continue;
-            }
-            if status != 0 {
-                return Err(NodeError::InsecurePath(format!(
-                    "failed to resolve configured node service group: {}",
-                    io::Error::from_raw_os_error(status)
-                )));
-            }
-            if result.is_null() {
-                return Err(NodeError::InsecurePath(
-                    "configured node service group does not exist".to_string(),
-                ));
-            }
-            break entry.gr_gid;
-        }
-    };
-
+    let uid = lookup_principal_id(user_name, "user", fs_adapter::user_id_by_name)?;
+    let gid = lookup_principal_id(group_name, "group", fs_adapter::group_id_by_name)?;
     Ok(UnixOwner { uid, gid })
+}
+
+#[cfg(unix)]
+fn lookup_principal_id(
+    name: &std::ffi::CStr,
+    kind: &str,
+    lookup: fn(&std::ffi::CStr, &mut [u8]) -> Result<Option<u32>, i32>,
+) -> Result<u32, NodeError> {
+    let mut buffer = vec![0_u8; 16 * 1024];
+    loop {
+        match lookup(name, &mut buffer) {
+            Ok(Some(id)) => return Ok(id),
+            Ok(None) => {
+                return Err(NodeError::InsecurePath(format!(
+                    "configured node service {kind} does not exist"
+                )));
+            }
+            Err(libc::ERANGE) => grow_principal_lookup_buffer(&mut buffer)?,
+            Err(status) => {
+                return Err(NodeError::InsecurePath(format!(
+                    "failed to resolve configured node service {kind}: {}",
+                    io::Error::from_raw_os_error(status)
+                )));
+            }
+        }
+    }
 }
 
 #[cfg(unix)]
@@ -159,10 +115,8 @@ pub(super) fn owner_policy(
     use std::ffi::CString;
 
     if custom_paths {
-        return Ok(UnixOwner {
-            uid: unsafe { libc::geteuid() },
-            gid: unsafe { libc::getegid() },
-        });
+        let (uid, gid) = fs_adapter::effective_owner();
+        return Ok(UnixOwner { uid, gid });
     }
     let service_name = match platform {
         NodePlatform::Linux => "omakure",

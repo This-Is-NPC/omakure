@@ -7,9 +7,7 @@ Guidelines for working in the Omakure codebase.
 Omakure is a headless Rust automation runner. Its supported surfaces are the
 CLI, the authenticated HTTP management API, and the machine-owned `node serve`
 process.
-The CLI and HTTP adapters call shared protocol-neutral operations. There is no
-interactive terminal application, theme subsystem, or directory widget
-runtime.
+The CLI and HTTP adapters call shared protocol-neutral operations.
 
 **Key concepts:**
 
@@ -81,8 +79,9 @@ src/
 │                            #   queue, history, serve, env, battery, help_ai,
 │                            #   command_metadata, json, …)
 ├── operations/              # protocol-neutral behavior shared by CLI and HTTP
-├── domain/                  # pure schemas, parsing, validation, cron, node config
-├── adapters/                # filesystem and process adapters
+├── domain/                  # pure schemas, parsing, validation, cron, node config,
+│                            #   Health Plane storage contract
+├── adapters/                # filesystem syscalls and ACL inspection, process adapters
 ├── runs/, run_executor/     # runs.sqlite state machine; shared child lifecycle
 ├── runtime.rs, search_index.rs, workspace.rs
 ├── auth/, policy.rs, secrets.rs, redaction.rs
@@ -90,12 +89,12 @@ src/
 ├── cli_http_parity/, operation_catalog/  # versioned parity and operation catalogs
 ├── installer.rs             # standalone installer binary
 └── fleet planes:
-    ├── node/, node_identity.rs, node_transport.rs  # node state and identity
+    ├── node/, node_identity.rs, node_transport.rs  # node state, identity, filesystem policy
     ├── node_registry/ (+ health/)        # node.sqlite trust/health persistence
     ├── direct_transport/, direct_service/  # Noise transport and listener
     ├── discovery/                       # trust-neutral LAN discovery
     ├── enrollment.rs, enrollment_authority.rs  # manual/signed enrollment
-    ├── health_plane/, direct_health.rs   # Health Plane domain and carriage
+    ├── health_plane.rs, health_plane/, direct_health.rs  # Health Plane and carriage
     ├── remote_cue/                       # Cue plane receive half
     └── baseline.rs, baseline_push/, baseline_publisher.rs  # Baseline plane
 ```
@@ -122,10 +121,7 @@ Runtime dependencies are exactly those in `Cargo.toml`: `mlua`, `serde`,
 `daemonize` and `libc`; Windows-only `winreg` and `windows-sys`. `clap_usage`
 and `usage-lib` are optional and enabled only by the `usage-generator` feature.
 The stack table in `docs/internal/architecture.md` records what each one is
-for. The headless package must not reintroduce `ratatui`, `crossterm`, or
-`rattles`. `mlua` is declared deliberately and must stay: it is the embedded
-runtime for the `.lua` script kind, which is a different Lua from the removed
-TUI widget runtime.
+for. `mlua` is the embedded runtime for the `.lua` script kind.
 
 ## Script schema
 
@@ -177,8 +173,7 @@ cargo test --lib --locked test_dependency_checks
 
 Unit tests are inline. Integration tests launch the compiled binary and use
 temporary workspaces. Keep secrets out of test output. Packaging tests verify
-that removed UI/theme/widget assets and dependencies are absent and that
-release archives contain only the binary. See `docs/internal/development.md`
+that release archives contain only the binary. See `docs/internal/development.md`
 for hook routing and platform suite layout.
 
 ## Release

@@ -1,5 +1,5 @@
 pub mod environments;
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 pub(crate) mod fs;
 pub(crate) mod git;
 pub mod script_runner;

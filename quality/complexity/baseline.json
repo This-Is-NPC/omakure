@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "62be12dd38255a835209bf77f1e5339c015a2019f0ca7df5d47f95fedf32b2ff",
+  "canonical_sha256": "67c3c115ee31727b51c7e4ecf76ab98d26d2fbd421c3e52b7e6ac47bd3524911",
   "config_identity": "no-config",
   "files": [
     {
@@ -2626,12 +2626,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 4,
+        "invocations": 3,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 25,
-        "cyclomatic": 27
+        "cognitive": 12,
+        "cyclomatic": 24
       },
       "path": "src/node/fs_unix.rs",
       "source_class": "handwritten"
@@ -2644,8 +2644,8 @@
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 40,
-        "cyclomatic": 43
+        "cognitive": 25,
+        "cyclomatic": 40
       },
       "path": "src/node/fs_windows.rs",
       "source_class": "handwritten"
@@ -4846,6 +4846,34 @@
         "cyclomatic": 30
       },
       "path": "src/node_registry/health/store.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 7,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 15,
+        "cyclomatic": 22
+      },
+      "path": "src/adapters/fs/unix.rs",
+      "source_class": "handwritten"
+    },
+    {
+      "macro": {
+        "declarations": 0,
+        "expansion": "not_measured",
+        "invocations": 0,
+        "score_inclusion": "native_source_ast_only"
+      },
+      "native": {
+        "cognitive": 13,
+        "cyclomatic": 20
+      },
+      "path": "src/adapters/fs/windows.rs",
       "source_class": "handwritten"
     }
   ],
@@ -62946,14 +62974,14 @@
       },
       "identity": "crate::node::fs_unix::validate_open_file_identity",
       "kind": "function",
-      "line": 8,
+      "line": 9,
       "name": "validate_open_file_identity",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 4,
         "kind": "function",
-        "line": 8,
+        "line": 9,
         "name": "validate_open_file_identity"
       },
       "path": "src/node/fs_unix.rs",
@@ -62972,14 +63000,14 @@
       },
       "identity": "crate::node::fs_unix::same_file_identity",
       "kind": "function",
-      "line": 28,
+      "line": 29,
       "name": "same_file_identity",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 28,
+        "line": 29,
         "name": "same_file_identity"
       },
       "path": "src/node/fs_unix.rs",
@@ -62987,29 +63015,549 @@
       "source_class": "handwritten"
     },
     {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node::fs_unix::create_secure_directory",
+        "macro_expansion": "not_measured",
+        "path": "src/node/fs_unix.rs",
+        "signature": "pub(super) fn create_secure_directory(path: &Path) -> io::Result<()>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node::fs_unix::create_secure_directory",
+      "kind": "function",
+      "line": 36,
+      "name": "create_secure_directory",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 36,
+        "name": "create_secure_directory"
+      },
+      "path": "src/node/fs_unix.rs",
+      "signature": "pub(super) fn create_secure_directory(path: &Path) -> io::Result<()>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node::fs_unix::create_secure_directory::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node/fs_unix.rs",
+        "signature": "let path = CString::new(path.as_os_str().as_bytes()).map_err(|_| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node::fs_unix::create_secure_directory::<closure>",
+      "kind": "closure",
+      "line": 40,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 40,
+        "name": "<closure>"
+      },
+      "path": "src/node/fs_unix.rs",
+      "signature": "let path = CString::new(path.as_os_str().as_bytes()).map_err(|_| {",
+      "source_class": "handwritten"
+    },
+    {
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::node::fs_windows::windows_file_identity",
+        "identity": "crate::node::fs_unix::grow_principal_lookup_buffer",
         "macro_expansion": "not_measured",
-        "path": "src/node/fs_windows.rs",
-        "signature": "fn windows_file_identity(file: &fs::File) -> Result<WindowsFileIdentity, NodeError>",
+        "path": "src/node/fs_unix.rs",
+        "signature": "pub(super) fn grow_principal_lookup_buffer(buffer: &mut Vec<u8>) -> Result<(), NodeError>",
         "source_class": "handwritten"
       },
-      "identity": "crate::node::fs_windows::windows_file_identity",
+      "identity": "crate::node::fs_unix::grow_principal_lookup_buffer",
       "kind": "function",
-      "line": 65,
-      "name": "windows_file_identity",
+      "line": 57,
+      "name": "grow_principal_lookup_buffer",
       "native": {
         "analyzer": "cccc",
         "cognitive": 1,
         "cyclomatic": 2,
         "kind": "function",
-        "line": 65,
-        "name": "windows_file_identity"
+        "line": 57,
+        "name": "grow_principal_lookup_buffer"
+      },
+      "path": "src/node/fs_unix.rs",
+      "signature": "pub(super) fn grow_principal_lookup_buffer(buffer: &mut Vec<u8>) -> Result<(), NodeError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node::fs_unix::lookup_unix_principal",
+        "macro_expansion": "not_measured",
+        "path": "src/node/fs_unix.rs",
+        "signature": "pub(super) fn lookup_unix_principal( user_name: &std::ffi::CStr, group_name: &std::ffi::CStr, ) -> Result<UnixOwner, NodeError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node::fs_unix::lookup_unix_principal",
+      "kind": "function",
+      "line": 74,
+      "name": "lookup_unix_principal",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 74,
+        "name": "lookup_unix_principal"
+      },
+      "path": "src/node/fs_unix.rs",
+      "signature": "pub(super) fn lookup_unix_principal( user_name: &std::ffi::CStr, group_name: &std::ffi::CStr, ) -> Result<UnixOwner, NodeError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 3,
+      "cyclomatic": 6,
+      "derived": {
+        "identity": "crate::node::fs_unix::lookup_principal_id",
+        "macro_expansion": "not_measured",
+        "path": "src/node/fs_unix.rs",
+        "signature": "fn lookup_principal_id( name: &std::ffi::CStr, kind: &str, lookup: fn(&std::ffi::CStr, &mut [u8]) -> Result<Option<u32>, i32>, ) -> Result<u32, NodeError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node::fs_unix::lookup_principal_id",
+      "kind": "function",
+      "line": 84,
+      "name": "lookup_principal_id",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 3,
+        "cyclomatic": 6,
+        "kind": "function",
+        "line": 84,
+        "name": "lookup_principal_id"
+      },
+      "path": "src/node/fs_unix.rs",
+      "signature": "fn lookup_principal_id( name: &std::ffi::CStr, kind: &str, lookup: fn(&std::ffi::CStr, &mut [u8]) -> Result<Option<u32>, i32>, ) -> Result<u32, NodeError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 4,
+      "cyclomatic": 6,
+      "derived": {
+        "identity": "crate::node::fs_unix::owner_policy",
+        "macro_expansion": "not_measured",
+        "path": "src/node/fs_unix.rs",
+        "signature": "pub(super) fn owner_policy( platform: NodePlatform, custom_paths: bool, state: bool, ) -> Result<UnixOwner, NodeError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node::fs_unix::owner_policy",
+      "kind": "function",
+      "line": 110,
+      "name": "owner_policy",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 4,
+        "cyclomatic": 6,
+        "kind": "function",
+        "line": 110,
+        "name": "owner_policy"
+      },
+      "path": "src/node/fs_unix.rs",
+      "signature": "pub(super) fn owner_policy( platform: NodePlatform, custom_paths: bool, state: bool, ) -> Result<UnixOwner, NodeError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node::fs_unix::mode_is_no_broader_than",
+        "macro_expansion": "not_measured",
+        "path": "src/node/fs_unix.rs",
+        "signature": "pub(super) fn mode_is_no_broader_than(mode: u32, allowed: u32) -> bool",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node::fs_unix::mode_is_no_broader_than",
+      "kind": "function",
+      "line": 152,
+      "name": "mode_is_no_broader_than",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 152,
+        "name": "mode_is_no_broader_than"
+      },
+      "path": "src/node/fs_unix.rs",
+      "signature": "pub(super) fn mode_is_no_broader_than(mode: u32, allowed: u32) -> bool",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 6,
+      "cyclomatic": 7,
+      "derived": {
+        "identity": "crate::node::fs_windows::validate_open_file_identity",
+        "macro_expansion": "not_measured",
+        "path": "src/node/fs_windows.rs",
+        "signature": "pub(super) fn validate_open_file_identity( path: &Path, opened_file: &fs::File, ) -> Result<(), NodeError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node::fs_windows::validate_open_file_identity",
+      "kind": "function",
+      "line": 7,
+      "name": "validate_open_file_identity",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 6,
+        "cyclomatic": 7,
+        "kind": "function",
+        "line": 7,
+        "name": "validate_open_file_identity"
       },
       "path": "src/node/fs_windows.rs",
-      "signature": "fn windows_file_identity(file: &fs::File) -> Result<WindowsFileIdentity, NodeError>",
+      "signature": "pub(super) fn validate_open_file_identity( path: &Path, opened_file: &fs::File, ) -> Result<(), NodeError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node::fs_windows::windows_has_reparse_point",
+        "macro_expansion": "not_measured",
+        "path": "src/node/fs_windows.rs",
+        "signature": "pub(super) fn windows_has_reparse_point(path: &Path) -> Result<bool, NodeError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node::fs_windows::windows_has_reparse_point",
+      "kind": "function",
+      "line": 40,
+      "name": "windows_has_reparse_point",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 40,
+        "name": "windows_has_reparse_point"
+      },
+      "path": "src/node/fs_windows.rs",
+      "signature": "pub(super) fn windows_has_reparse_point(path: &Path) -> Result<bool, NodeError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node::fs_windows::windows_has_reparse_point::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node/fs_windows.rs",
+        "signature": "fs_adapter::has_reparse_point(path).map_err(|err| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node::fs_windows::windows_has_reparse_point::<closure>",
+      "kind": "closure",
+      "line": 41,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 41,
+        "name": "<closure>"
+      },
+      "path": "src/node/fs_windows.rs",
+      "signature": "fs_adapter::has_reparse_point(path).map_err(|err| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::node::fs_windows::validate_windows_security",
+        "macro_expansion": "not_measured",
+        "path": "src/node/fs_windows.rs",
+        "signature": "pub(super) fn validate_windows_security( path: &Path, directory: bool, test_mode: bool, ) -> Result<(), NodeError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node::fs_windows::validate_windows_security",
+      "kind": "function",
+      "line": 49,
+      "name": "validate_windows_security",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 49,
+        "name": "validate_windows_security"
+      },
+      "path": "src/node/fs_windows.rs",
+      "signature": "pub(super) fn validate_windows_security( path: &Path, directory: bool, test_mode: bool, ) -> Result<(), NodeError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node::fs_windows::validate_windows_security::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node/fs_windows.rs",
+        "signature": "let descriptor = SecurityDescriptor::named(path).map_err(|status| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node::fs_windows::validate_windows_security::<closure>",
+      "kind": "closure",
+      "line": 57,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 57,
+        "name": "<closure>"
+      },
+      "path": "src/node/fs_windows.rs",
+      "signature": "let descriptor = SecurityDescriptor::named(path).map_err(|status| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node::fs_windows::validate_windows_security_handle",
+        "macro_expansion": "not_measured",
+        "path": "src/node/fs_windows.rs",
+        "signature": "pub(super) fn validate_windows_security_handle( path: &Path, file: &fs::File, test_mode: bool, ) -> Result<(), NodeError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node::fs_windows::validate_windows_security_handle",
+      "kind": "function",
+      "line": 66,
+      "name": "validate_windows_security_handle",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 66,
+        "name": "validate_windows_security_handle"
+      },
+      "path": "src/node/fs_windows.rs",
+      "signature": "pub(super) fn validate_windows_security_handle( path: &Path, file: &fs::File, test_mode: bool, ) -> Result<(), NodeError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node::fs_windows::validate_windows_security_handle::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node/fs_windows.rs",
+        "signature": "let descriptor = SecurityDescriptor::from_handle(file).map_err(|status| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node::fs_windows::validate_windows_security_handle::<closure>",
+      "kind": "closure",
+      "line": 71,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 71,
+        "name": "<closure>"
+      },
+      "path": "src/node/fs_windows.rs",
+      "signature": "let descriptor = SecurityDescriptor::from_handle(file).map_err(|status| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 11,
+      "cyclomatic": 10,
+      "derived": {
+        "identity": "crate::node::fs_windows::validate_windows_security_descriptor",
+        "macro_expansion": "not_measured",
+        "path": "src/node/fs_windows.rs",
+        "signature": "fn validate_windows_security_descriptor( path: &Path, directory: bool, test_mode: bool, descriptor: &SecurityDescriptor, ) -> Result<(), NodeError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node::fs_windows::validate_windows_security_descriptor",
+      "kind": "function",
+      "line": 80,
+      "name": "validate_windows_security_descriptor",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 11,
+        "cyclomatic": 10,
+        "kind": "function",
+        "line": 80,
+        "name": "validate_windows_security_descriptor"
+      },
+      "path": "src/node/fs_windows.rs",
+      "signature": "fn validate_windows_security_descriptor( path: &Path, directory: bool, test_mode: bool, descriptor: &SecurityDescriptor, ) -> Result<(), NodeError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node::fs_windows::validate_windows_security_descriptor::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/node/fs_windows.rs",
+        "signature": ".filter(|count| *count > 0)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node::fs_windows::validate_windows_security_descriptor::<closure>",
+      "kind": "closure",
+      "line": 98,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 98,
+        "name": "<closure>"
+      },
+      "path": "src/node/fs_windows.rs",
+      "signature": ".filter(|count| *count > 0)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node::fs_windows::validate_windows_security_descriptor::<closure>@99#2",
+        "macro_expansion": "not_measured",
+        "path": "src/node/fs_windows.rs",
+        "signature": ".ok_or_else(|| unreadable_or_empty_dacl(path))?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node::fs_windows::validate_windows_security_descriptor::<closure>@99#2",
+      "kind": "closure",
+      "line": 99,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 99,
+        "name": "<closure>"
+      },
+      "path": "src/node/fs_windows.rs",
+      "signature": ".ok_or_else(|| unreadable_or_empty_dacl(path))?;",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node::fs_windows::validate_windows_security_descriptor::<closure>@100#3",
+        "macro_expansion": "not_measured",
+        "path": "src/node/fs_windows.rs",
+        "signature": "let mut allowed = SecurityDescriptor::allowed_sids().ok_or_else(|| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node::fs_windows::validate_windows_security_descriptor::<closure>@100#3",
+      "kind": "closure",
+      "line": 100,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 100,
+        "name": "<closure>"
+      },
+      "path": "src/node/fs_windows.rs",
+      "signature": "let mut allowed = SecurityDescriptor::allowed_sids().ok_or_else(|| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 5,
+      "derived": {
+        "identity": "crate::node::fs_windows::validated_ace",
+        "macro_expansion": "not_measured",
+        "path": "src/node/fs_windows.rs",
+        "signature": "fn validated_ace( path: &Path, descriptor: &SecurityDescriptor, index: u32, allowed: &mut AllowedSids, ) -> Result<(u32, bool, bool), NodeError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node::fs_windows::validated_ace",
+      "kind": "function",
+      "line": 138,
+      "name": "validated_ace",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 5,
+        "kind": "function",
+        "line": 138,
+        "name": "validated_ace"
+      },
+      "path": "src/node/fs_windows.rs",
+      "signature": "fn validated_ace( path: &Path, descriptor: &SecurityDescriptor, index: u32, allowed: &mut AllowedSids, ) -> Result<(u32, bool, bool), NodeError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::node::fs_windows::unreadable_or_empty_dacl",
+        "macro_expansion": "not_measured",
+        "path": "src/node/fs_windows.rs",
+        "signature": "fn unreadable_or_empty_dacl(path: &Path) -> NodeError",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node::fs_windows::unreadable_or_empty_dacl",
+      "kind": "function",
+      "line": 165,
+      "name": "unreadable_or_empty_dacl",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 165,
+        "name": "unreadable_or_empty_dacl"
+      },
+      "path": "src/node/fs_windows.rs",
+      "signature": "fn unreadable_or_empty_dacl(path: &Path) -> NodeError",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 6,
+      "cyclomatic": 7,
+      "derived": {
+        "identity": "crate::node::fs_windows::windows_security_access_allowed",
+        "macro_expansion": "not_measured",
+        "path": "src/node/fs_windows.rs",
+        "signature": "pub(super) fn windows_security_access_allowed( directory: bool, is_system: bool, is_service: bool, mask: u32, ) -> bool",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::node::fs_windows::windows_security_access_allowed",
+      "kind": "function",
+      "line": 172,
+      "name": "windows_security_access_allowed",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 6,
+        "cyclomatic": 7,
+        "kind": "function",
+        "line": 172,
+        "name": "windows_security_access_allowed"
+      },
+      "path": "src/node/fs_windows.rs",
+      "signature": "pub(super) fn windows_security_access_allowed( directory: bool, is_system: bool, is_service: bool, mask: u32, ) -> bool",
       "source_class": "handwritten"
     },
     {
@@ -63117,110 +63665,6 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 2,
-      "cyclomatic": 2,
-      "derived": {
-        "identity": "crate::node::fs_unix::create_secure_directory",
-        "macro_expansion": "not_measured",
-        "path": "src/node/fs_unix.rs",
-        "signature": "pub(super) fn create_secure_directory(path: &Path) -> io::Result<()>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node::fs_unix::create_secure_directory",
-      "kind": "function",
-      "line": 35,
-      "name": "create_secure_directory",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 2,
-        "cyclomatic": 2,
-        "kind": "function",
-        "line": 35,
-        "name": "create_secure_directory"
-      },
-      "path": "src/node/fs_unix.rs",
-      "signature": "pub(super) fn create_secure_directory(path: &Path) -> io::Result<()>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::node::fs_unix::create_secure_directory::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/node/fs_unix.rs",
-        "signature": "let path = CString::new(path.as_os_str().as_bytes()).map_err(|_| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node::fs_unix::create_secure_directory::<closure>",
-      "kind": "closure",
-      "line": 39,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 39,
-        "name": "<closure>"
-      },
-      "path": "src/node/fs_unix.rs",
-      "signature": "let path = CString::new(path.as_os_str().as_bytes()).map_err(|_| {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 2,
-      "derived": {
-        "identity": "crate::node::fs_unix::grow_principal_lookup_buffer",
-        "macro_expansion": "not_measured",
-        "path": "src/node/fs_unix.rs",
-        "signature": "pub(super) fn grow_principal_lookup_buffer(buffer: &mut Vec<u8>) -> Result<(), NodeError>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node::fs_unix::grow_principal_lookup_buffer",
-      "kind": "function",
-      "line": 61,
-      "name": "grow_principal_lookup_buffer",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 2,
-        "kind": "function",
-        "line": 61,
-        "name": "grow_principal_lookup_buffer"
-      },
-      "path": "src/node/fs_unix.rs",
-      "signature": "pub(super) fn grow_principal_lookup_buffer(buffer: &mut Vec<u8>) -> Result<(), NodeError>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 4,
-      "cyclomatic": 6,
-      "derived": {
-        "identity": "crate::node::fs_unix::owner_policy",
-        "macro_expansion": "not_measured",
-        "path": "src/node/fs_unix.rs",
-        "signature": "pub(super) fn owner_policy( platform: NodePlatform, custom_paths: bool, state: bool, ) -> Result<UnixOwner, NodeError>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node::fs_unix::owner_policy",
-      "kind": "function",
-      "line": 154,
-      "name": "owner_policy",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 4,
-        "cyclomatic": 6,
-        "kind": "function",
-        "line": 154,
-        "name": "owner_policy"
-      },
-      "path": "src/node/fs_unix.rs",
-      "signature": "pub(super) fn owner_policy( platform: NodePlatform, custom_paths: bool, state: bool, ) -> Result<UnixOwner, NodeError>",
-      "source_class": "handwritten"
-    },
-    {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
@@ -63244,188 +63688,6 @@
       },
       "path": "src/node/security.rs",
       "signature": "pub(super) fn owner_policy( _platform: NodePlatform, _custom_paths: bool, _state: bool, ) -> Result<(), NodeError>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::node::fs_unix::mode_is_no_broader_than",
-        "macro_expansion": "not_measured",
-        "path": "src/node/fs_unix.rs",
-        "signature": "pub(super) fn mode_is_no_broader_than(mode: u32, allowed: u32) -> bool",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node::fs_unix::mode_is_no_broader_than",
-      "kind": "function",
-      "line": 198,
-      "name": "mode_is_no_broader_than",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 198,
-        "name": "mode_is_no_broader_than"
-      },
-      "path": "src/node/fs_unix.rs",
-      "signature": "pub(super) fn mode_is_no_broader_than(mode: u32, allowed: u32) -> bool",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 2,
-      "derived": {
-        "identity": "crate::node::fs_windows::windows_has_reparse_point",
-        "macro_expansion": "not_measured",
-        "path": "src/node/fs_windows.rs",
-        "signature": "pub(super) fn windows_has_reparse_point(path: &Path) -> Result<bool, NodeError>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node::fs_windows::windows_has_reparse_point",
-      "kind": "function",
-      "line": 82,
-      "name": "windows_has_reparse_point",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 2,
-        "kind": "function",
-        "line": 82,
-        "name": "windows_has_reparse_point"
-      },
-      "path": "src/node/fs_windows.rs",
-      "signature": "pub(super) fn windows_has_reparse_point(path: &Path) -> Result<bool, NodeError>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 2,
-      "cyclomatic": 3,
-      "derived": {
-        "identity": "crate::node::fs_windows::validate_windows_security",
-        "macro_expansion": "not_measured",
-        "path": "src/node/fs_windows.rs",
-        "signature": "pub(super) fn validate_windows_security( path: &Path, directory: bool, test_mode: bool, ) -> Result<(), NodeError>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node::fs_windows::validate_windows_security",
-      "kind": "function",
-      "line": 107,
-      "name": "validate_windows_security",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 2,
-        "cyclomatic": 3,
-        "kind": "function",
-        "line": 107,
-        "name": "validate_windows_security"
-      },
-      "path": "src/node/fs_windows.rs",
-      "signature": "pub(super) fn validate_windows_security( path: &Path, directory: bool, test_mode: bool, ) -> Result<(), NodeError>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 1,
-      "cyclomatic": 2,
-      "derived": {
-        "identity": "crate::node::fs_windows::validate_windows_security_handle",
-        "macro_expansion": "not_measured",
-        "path": "src/node/fs_windows.rs",
-        "signature": "pub(super) fn validate_windows_security_handle( path: &Path, file: &fs::File, test_mode: bool, ) -> Result<(), NodeError>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node::fs_windows::validate_windows_security_handle",
-      "kind": "function",
-      "line": 151,
-      "name": "validate_windows_security_handle",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 2,
-        "kind": "function",
-        "line": 151,
-        "name": "validate_windows_security_handle"
-      },
-      "path": "src/node/fs_windows.rs",
-      "signature": "pub(super) fn validate_windows_security_handle( path: &Path, file: &fs::File, test_mode: bool, ) -> Result<(), NodeError>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::node::fs_windows::validate_windows_security_descriptor",
-        "macro_expansion": "not_measured",
-        "path": "src/node/fs_windows.rs",
-        "signature": "fn validate_windows_security_descriptor( path: &Path, directory: bool, test_mode: bool, owner_sid: *mut std::ffi::c_void, dacl: *mut std::ffi::c_void, security_descriptor: *mut std::ffi::c_void, ) -> Result<(), NodeError>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node::fs_windows::validate_windows_security_descriptor",
-      "kind": "function",
-      "line": 191,
-      "name": "validate_windows_security_descriptor",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 191,
-        "name": "validate_windows_security_descriptor"
-      },
-      "path": "src/node/fs_windows.rs",
-      "signature": "fn validate_windows_security_descriptor( path: &Path, directory: bool, test_mode: bool, owner_sid: *mut std::ffi::c_void, dacl: *mut std::ffi::c_void, security_descriptor: *mut std::ffi::c_void, ) -> Result<(), NodeError>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 23,
-      "cyclomatic": 19,
-      "derived": {
-        "identity": "crate::node::fs_windows::validate_windows_security_descriptor::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/node/fs_windows.rs",
-        "signature": "let result = (|| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node::fs_windows::validate_windows_security_descriptor::<closure>",
-      "kind": "closure",
-      "line": 220,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 23,
-        "cyclomatic": 19,
-        "kind": "closure",
-        "line": 220,
-        "name": "<closure>"
-      },
-      "path": "src/node/fs_windows.rs",
-      "signature": "let result = (|| {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 6,
-      "cyclomatic": 7,
-      "derived": {
-        "identity": "crate::node::fs_windows::windows_security_access_allowed",
-        "macro_expansion": "not_measured",
-        "path": "src/node/fs_windows.rs",
-        "signature": "pub(super) fn windows_security_access_allowed( directory: bool, is_system: bool, is_service: bool, mask: u32, ) -> bool",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::node::fs_windows::windows_security_access_allowed",
-      "kind": "function",
-      "line": 353,
-      "name": "windows_security_access_allowed",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 6,
-        "cyclomatic": 7,
-        "kind": "function",
-        "line": 353,
-        "name": "windows_security_access_allowed"
-      },
-      "path": "src/node/fs_windows.rs",
-      "signature": "pub(super) fn windows_security_access_allowed( directory: bool, is_system: bool, is_service: bool, mask: u32, ) -> bool",
       "source_class": "handwritten"
     },
     {
@@ -113320,6 +113582,604 @@
       },
       "path": "src/node_registry/health/store.rs",
       "signature": "fn record_audit(&self, input: HealthAuditInput<'_>) -> Result<(), Self::Error>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::adapters::fs::unix::cstring",
+        "macro_expansion": "not_measured",
+        "path": "src/adapters/fs/unix.rs",
+        "signature": "fn cstring(value: &OsStr) -> Result<CString, FsError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::adapters::fs::unix::cstring",
+      "kind": "function",
+      "line": 14,
+      "name": "cstring",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 14,
+        "name": "cstring"
+      },
+      "path": "src/adapters/fs/unix.rs",
+      "signature": "fn cstring(value: &OsStr) -> Result<CString, FsError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::adapters::fs::unix::cstring::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/adapters/fs/unix.rs",
+        "signature": "CString::new(value.as_bytes()).map_err(|_| FsError::Nul)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::adapters::fs::unix::cstring::<closure>",
+      "kind": "closure",
+      "line": 15,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 15,
+        "name": "<closure>"
+      },
+      "path": "src/adapters/fs/unix.rs",
+      "signature": "CString::new(value.as_bytes()).map_err(|_| FsError::Nul)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::adapters::fs::unix::open_dir_no_follow",
+        "macro_expansion": "not_measured",
+        "path": "src/adapters/fs/unix.rs",
+        "signature": "pub(crate) fn open_dir_no_follow(path: &Path) -> Result<File, FsError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::adapters::fs::unix::open_dir_no_follow",
+      "kind": "function",
+      "line": 18,
+      "name": "open_dir_no_follow",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 18,
+        "name": "open_dir_no_follow"
+      },
+      "path": "src/adapters/fs/unix.rs",
+      "signature": "pub(crate) fn open_dir_no_follow(path: &Path) -> Result<File, FsError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::adapters::fs::unix::create_new_file_at",
+        "macro_expansion": "not_measured",
+        "path": "src/adapters/fs/unix.rs",
+        "signature": "pub(crate) fn create_new_file_at(parent: &File, name: &OsStr) -> Result<File, FsError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::adapters::fs::unix::create_new_file_at",
+      "kind": "function",
+      "line": 32,
+      "name": "create_new_file_at",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 32,
+        "name": "create_new_file_at"
+      },
+      "path": "src/adapters/fs/unix.rs",
+      "signature": "pub(crate) fn create_new_file_at(parent: &File, name: &OsStr) -> Result<File, FsError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::adapters::fs::unix::open_existing_file_at_no_follow",
+        "macro_expansion": "not_measured",
+        "path": "src/adapters/fs/unix.rs",
+        "signature": "pub(crate) fn open_existing_file_at_no_follow( parent: &File, name: &OsStr, ) -> Result<File, FsError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::adapters::fs::unix::open_existing_file_at_no_follow",
+      "kind": "function",
+      "line": 48,
+      "name": "open_existing_file_at_no_follow",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 48,
+        "name": "open_existing_file_at_no_follow"
+      },
+      "path": "src/adapters/fs/unix.rs",
+      "signature": "pub(crate) fn open_existing_file_at_no_follow( parent: &File, name: &OsStr, ) -> Result<File, FsError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::adapters::fs::unix::renameat_file",
+        "macro_expansion": "not_measured",
+        "path": "src/adapters/fs/unix.rs",
+        "signature": "pub(crate) fn renameat_file(parent: &File, from: &OsStr, to: &OsStr) -> Result<(), FsError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::adapters::fs::unix::renameat_file",
+      "kind": "function",
+      "line": 66,
+      "name": "renameat_file",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 66,
+        "name": "renameat_file"
+      },
+      "path": "src/adapters/fs/unix.rs",
+      "signature": "pub(crate) fn renameat_file(parent: &File, from: &OsStr, to: &OsStr) -> Result<(), FsError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::adapters::fs::unix::linkat_file",
+        "macro_expansion": "not_measured",
+        "path": "src/adapters/fs/unix.rs",
+        "signature": "pub(crate) fn linkat_file(parent: &File, from: &OsStr, to: &OsStr) -> Result<(), FsError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::adapters::fs::unix::linkat_file",
+      "kind": "function",
+      "line": 84,
+      "name": "linkat_file",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 84,
+        "name": "linkat_file"
+      },
+      "path": "src/adapters/fs/unix.rs",
+      "signature": "pub(crate) fn linkat_file(parent: &File, from: &OsStr, to: &OsStr) -> Result<(), FsError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::adapters::fs::unix::unlinkat_file",
+        "macro_expansion": "not_measured",
+        "path": "src/adapters/fs/unix.rs",
+        "signature": "pub(crate) fn unlinkat_file(parent: &File, name: &OsStr) -> Result<(), FsError>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::adapters::fs::unix::unlinkat_file",
+      "kind": "function",
+      "line": 103,
+      "name": "unlinkat_file",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 103,
+        "name": "unlinkat_file"
+      },
+      "path": "src/adapters/fs/unix.rs",
+      "signature": "pub(crate) fn unlinkat_file(parent: &File, name: &OsStr) -> Result<(), FsError>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::adapters::fs::unix::mkdir_private",
+        "macro_expansion": "not_measured",
+        "path": "src/adapters/fs/unix.rs",
+        "signature": "pub(crate) fn mkdir_private(path: &CStr) -> io::Result<()>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::adapters::fs::unix::mkdir_private",
+      "kind": "function",
+      "line": 114,
+      "name": "mkdir_private",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 114,
+        "name": "mkdir_private"
+      },
+      "path": "src/adapters/fs/unix.rs",
+      "signature": "pub(crate) fn mkdir_private(path: &CStr) -> io::Result<()>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::adapters::fs::unix::effective_owner",
+        "macro_expansion": "not_measured",
+        "path": "src/adapters/fs/unix.rs",
+        "signature": "pub(crate) fn effective_owner() -> (u32, u32)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::adapters::fs::unix::effective_owner",
+      "kind": "function",
+      "line": 123,
+      "name": "effective_owner",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 123,
+        "name": "effective_owner"
+      },
+      "path": "src/adapters/fs/unix.rs",
+      "signature": "pub(crate) fn effective_owner() -> (u32, u32)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::adapters::fs::unix::user_id_by_name",
+        "macro_expansion": "not_measured",
+        "path": "src/adapters/fs/unix.rs",
+        "signature": "pub(crate) fn user_id_by_name(name: &CStr, buffer: &mut [u8]) -> Result<Option<u32>, i32>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::adapters::fs::unix::user_id_by_name",
+      "kind": "function",
+      "line": 128,
+      "name": "user_id_by_name",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 128,
+        "name": "user_id_by_name"
+      },
+      "path": "src/adapters/fs/unix.rs",
+      "signature": "pub(crate) fn user_id_by_name(name: &CStr, buffer: &mut [u8]) -> Result<Option<u32>, i32>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::adapters::fs::unix::group_id_by_name",
+        "macro_expansion": "not_measured",
+        "path": "src/adapters/fs/unix.rs",
+        "signature": "pub(crate) fn group_id_by_name(name: &CStr, buffer: &mut [u8]) -> Result<Option<u32>, i32>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::adapters::fs::unix::group_id_by_name",
+      "kind": "function",
+      "line": 148,
+      "name": "group_id_by_name",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 148,
+        "name": "group_id_by_name"
+      },
+      "path": "src/adapters/fs/unix.rs",
+      "signature": "pub(crate) fn group_id_by_name(name: &CStr, buffer: &mut [u8]) -> Result<Option<u32>, i32>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::adapters::fs::unix::no_follow_open_rejects_symlinks_and_nul_components",
+        "macro_expansion": "not_measured",
+        "path": "src/adapters/fs/unix.rs",
+        "signature": "fn no_follow_open_rejects_symlinks_and_nul_components()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::adapters::fs::unix::no_follow_open_rejects_symlinks_and_nul_components",
+      "kind": "function",
+      "line": 173,
+      "name": "no_follow_open_rejects_symlinks_and_nul_components",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 173,
+        "name": "no_follow_open_rejects_symlinks_and_nul_components"
+      },
+      "path": "src/adapters/fs/unix.rs",
+      "signature": "fn no_follow_open_rejects_symlinks_and_nul_components()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::adapters::fs::windows::file_identity",
+        "macro_expansion": "not_measured",
+        "path": "src/adapters/fs/windows.rs",
+        "signature": "pub(crate) fn file_identity(file: &File) -> io::Result<WindowsFileIdentity>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::adapters::fs::windows::file_identity",
+      "kind": "function",
+      "line": 29,
+      "name": "file_identity",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 29,
+        "name": "file_identity"
+      },
+      "path": "src/adapters/fs/windows.rs",
+      "signature": "pub(crate) fn file_identity(file: &File) -> io::Result<WindowsFileIdentity>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::adapters::fs::windows::has_reparse_point",
+        "macro_expansion": "not_measured",
+        "path": "src/adapters/fs/windows.rs",
+        "signature": "pub(crate) fn has_reparse_point(path: &Path) -> io::Result<bool>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::adapters::fs::windows::has_reparse_point",
+      "kind": "function",
+      "line": 43,
+      "name": "has_reparse_point",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 2,
+        "kind": "function",
+        "line": 43,
+        "name": "has_reparse_point"
+      },
+      "path": "src/adapters/fs/windows.rs",
+      "signature": "pub(crate) fn has_reparse_point(path: &Path) -> io::Result<bool>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::adapters::fs::windows::named",
+        "macro_expansion": "not_measured",
+        "path": "src/adapters/fs/windows.rs",
+        "signature": "pub(crate) fn named(path: &Path) -> Result<Self, u32>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::adapters::fs::windows::named",
+      "kind": "method",
+      "line": 65,
+      "name": "named",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 2,
+        "kind": "method",
+        "line": 65,
+        "name": "named"
+      },
+      "path": "src/adapters/fs/windows.rs",
+      "signature": "pub(crate) fn named(path: &Path) -> Result<Self, u32>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::adapters::fs::windows::from_handle",
+        "macro_expansion": "not_measured",
+        "path": "src/adapters/fs/windows.rs",
+        "signature": "pub(crate) fn from_handle(file: &File) -> Result<Self, u32>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::adapters::fs::windows::from_handle",
+      "kind": "method",
+      "line": 87,
+      "name": "from_handle",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 2,
+        "kind": "method",
+        "line": 87,
+        "name": "from_handle"
+      },
+      "path": "src/adapters/fs/windows.rs",
+      "signature": "pub(crate) fn from_handle(file: &File) -> Result<Self, u32>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::adapters::fs::windows::has_dacl",
+        "macro_expansion": "not_measured",
+        "path": "src/adapters/fs/windows.rs",
+        "signature": "pub(crate) fn has_dacl(&self) -> bool",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::adapters::fs::windows::has_dacl",
+      "kind": "method",
+      "line": 108,
+      "name": "has_dacl",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 108,
+        "name": "has_dacl"
+      },
+      "path": "src/adapters/fs/windows.rs",
+      "signature": "pub(crate) fn has_dacl(&self) -> bool",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::adapters::fs::windows::ace_count",
+        "macro_expansion": "not_measured",
+        "path": "src/adapters/fs/windows.rs",
+        "signature": "pub(crate) fn ace_count(&self) -> Option<u32>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::adapters::fs::windows::ace_count",
+      "kind": "method",
+      "line": 112,
+      "name": "ace_count",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 112,
+        "name": "ace_count"
+      },
+      "path": "src/adapters/fs/windows.rs",
+      "signature": "pub(crate) fn ace_count(&self) -> Option<u32>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::adapters::fs::windows::allowed_sids",
+        "macro_expansion": "not_measured",
+        "path": "src/adapters/fs/windows.rs",
+        "signature": "pub(crate) fn allowed_sids() -> Option<AllowedSids>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::adapters::fs::windows::allowed_sids",
+      "kind": "method",
+      "line": 136,
+      "name": "allowed_sids",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "method",
+        "line": 136,
+        "name": "allowed_sids"
+      },
+      "path": "src/adapters/fs/windows.rs",
+      "signature": "pub(crate) fn allowed_sids() -> Option<AllowedSids>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "derived": {
+        "identity": "crate::adapters::fs::windows::owner_is_system",
+        "macro_expansion": "not_measured",
+        "path": "src/adapters/fs/windows.rs",
+        "signature": "pub(crate) fn owner_is_system(&self, allowed: &mut AllowedSids) -> bool",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::adapters::fs::windows::owner_is_system",
+      "kind": "method",
+      "line": 162,
+      "name": "owner_is_system",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 1,
+        "cyclomatic": 2,
+        "kind": "method",
+        "line": 162,
+        "name": "owner_is_system"
+      },
+      "path": "src/adapters/fs/windows.rs",
+      "signature": "pub(crate) fn owner_is_system(&self, allowed: &mut AllowedSids) -> bool",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 4,
+      "cyclomatic": 5,
+      "derived": {
+        "identity": "crate::adapters::fs::windows::ace",
+        "macro_expansion": "not_measured",
+        "path": "src/adapters/fs/windows.rs",
+        "signature": "pub(crate) fn ace(&self, index: u32, allowed: &mut AllowedSids) -> AceRead",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::adapters::fs::windows::ace",
+      "kind": "method",
+      "line": 167,
+      "name": "ace",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 4,
+        "cyclomatic": 5,
+        "kind": "method",
+        "line": 167,
+        "name": "ace"
+      },
+      "path": "src/adapters/fs/windows.rs",
+      "signature": "pub(crate) fn ace(&self, index: u32, allowed: &mut AllowedSids) -> AceRead",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::adapters::fs::windows::drop",
+        "macro_expansion": "not_measured",
+        "path": "src/adapters/fs/windows.rs",
+        "signature": "fn drop(&mut self)",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::adapters::fs::windows::drop",
+      "kind": "method",
+      "line": 201,
+      "name": "drop",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "method",
+        "line": 201,
+        "name": "drop"
+      },
+      "path": "src/adapters/fs/windows.rs",
+      "signature": "fn drop(&mut self)",
       "source_class": "handwritten"
     }
   ],

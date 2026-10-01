@@ -176,11 +176,11 @@ src/
 │   ├── cue.rs               Cue service dispatch validation and outcomes
 │   ├── baseline/            baseline delivery, install, status, and rollback
 │   └── worker.rs            queue worker lifecycle, Cue recovery, preflight, and finalization
-├── adapters/                filesystem, process, environment, and checks
+├── adapters/                platform filesystem, process, environment, and checks
 │   ├── environments/        managed environment files, parsing, and adapter errors
 │   ├── git.rs               isolated Git process execution and bounded probes
 │   ├── system_checks.rs     interpreter checks and bounded runtime version probes
-│   ├── fs/                  no-follow Unix file operations for Battery installs
+│   ├── fs/                  Battery file operations and node platform syscalls/ACL inspection
 │   └── signals.rs           process shutdown signal registration
 ├── error.rs                 shared script and schema adapter errors
 ├── util/                    shared filesystem, process, path, encoding, and OS entropy helpers
@@ -197,7 +197,7 @@ src/
 ├── policy.rs                deploy-time route and runtime policy
 ├── secrets.rs               secret references and provider resolution
 ├── redaction.rs             output and trace redaction
-├── node/                    node paths, platform rules, and state validation
+├── node/                    node paths, filesystem security policy, and state validation
 ├── node_identity.rs         BIP-340 machine identity and node ID derivation
 ├── node_key.rs              shared private-key custody and file validation
 ├── node_registry/           node-owned trust and delivery persistence boundary
@@ -221,6 +221,12 @@ src/
 ├── node_transport.rs        node-owned transport state and static peers
 └── installer.rs             standalone installer binary
 ```
+
+Node filesystem policy stays in `src/node/fs_unix.rs` and
+`src/node/fs_windows.rs`: those modules choose ownership, permissions, path
+identity, and ACL rules and map failures to `NodeError`. The platform calls and
+unsafe bindings live in `src/adapters/fs/`. This keeps the node's platform
+policy together while sharing one filesystem I/O boundary with Battery.
 
 ## Boundaries and invariants
 

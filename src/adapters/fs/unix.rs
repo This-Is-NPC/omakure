@@ -1,4 +1,4 @@
-use std::ffi::{CString, OsStr};
+use std::ffi::{CStr, CString, OsStr};
 use std::fs::File;
 use std::io;
 use std::os::fd::{AsRawFd, FromRawFd};
@@ -107,6 +107,60 @@ pub(crate) fn unlinkat_file(parent: &File, name: &OsStr) -> Result<(), FsError> 
         Ok(())
     } else {
         Err(FsError::Io(io::Error::last_os_error()))
+    }
+}
+
+/// Create a private directory with the platform's atomic creation mode.
+pub(crate) fn mkdir_private(path: &CStr) -> io::Result<()> {
+    let status = unsafe { libc::mkdir(path.as_ptr(), 0o700) };
+    if status == 0 {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error())
+    }
+}
+
+pub(crate) fn effective_owner() -> (u32, u32) {
+    (unsafe { libc::geteuid() }, unsafe { libc::getegid() })
+}
+
+/// Perform one reentrant passwd lookup. The caller owns retry bounds and errors.
+pub(crate) fn user_id_by_name(name: &CStr, buffer: &mut [u8]) -> Result<Option<u32>, i32> {
+    let mut entry = unsafe { std::mem::zeroed::<libc::passwd>() };
+    let mut result = std::ptr::null_mut();
+    let status = unsafe {
+        libc::getpwnam_r(
+            name.as_ptr(),
+            &mut entry,
+            buffer.as_mut_ptr().cast(),
+            buffer.len(),
+            &mut result,
+        )
+    };
+    if status != 0 {
+        Err(status)
+    } else {
+        Ok((!result.is_null()).then_some(entry.pw_uid))
+    }
+}
+
+/// Perform one reentrant group lookup. The caller owns retry bounds and errors.
+pub(crate) fn group_id_by_name(name: &CStr, buffer: &mut [u8]) -> Result<Option<u32>, i32> {
+    let mut entry = unsafe { std::mem::zeroed::<libc::group>() };
+    let mut result = std::ptr::null_mut();
+    let status = unsafe {
+        libc::getgrnam_r(
+            name.as_ptr(),
+            &mut entry,
+            buffer.as_mut_ptr().cast(),
+            buffer.len(),
+            &mut result,
+        )
+    };
+    if status != 0 {
+        Err(status)
+    } else {
+        Ok((!result.is_null()).then_some(entry.gr_gid))
     }
 }
 

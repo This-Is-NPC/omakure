@@ -1372,19 +1372,13 @@ fn revoking_a_peer_ends_the_session_this_node_is_already_holding() {
     // And it must stay down. The revoker will not redial a peer it revoked, and
     // the revoked node's own dials are refused with `revoked`, which retires
     // its dialer.
-    let deadline = Instant::now() + Duration::from_secs(3);
-    loop {
+    support::assert_throughout(Duration::from_secs(3), Duration::from_millis(100), || {
         let transport = first_server.get("/v1/node/status").json()["data"]["transport"].clone();
         assert_eq!(
             transport["connected_peer_count"], 0,
             "a revoked peer reconnected: {transport}"
         );
-        let remaining = deadline.saturating_duration_since(Instant::now());
-        if remaining.is_zero() {
-            break;
-        }
-        std::thread::sleep(remaining.min(Duration::from_millis(100)));
-    }
+    });
 
     let _ = second_server.terminate();
     let _ = first_server.terminate();

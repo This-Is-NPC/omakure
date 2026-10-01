@@ -580,10 +580,11 @@ fn an_undeclared_script_is_refused_by_a_fully_trusted_conductor() {
 
     // The dispatch itself succeeds — it is one-shot and does not wait for a
     // verdict. What must not happen is the script running.
-    std::thread::sleep(Duration::from_secs(5));
-    assert_eq!(
-        effect_count(&marker),
-        0,
-        "an undeclared script must not run, however trusted the sender is"
-    );
+    support::assert_throughout(Duration::from_secs(5), Duration::from_millis(250), || {
+        assert_eq!(
+            effect_count(&marker),
+            0,
+            "an undeclared script must not run, however trusted the sender is"
+        );
+    });
 }

@@ -121,6 +121,18 @@ pub fn wait_for_standing_session(service: &HttpServer) -> bool {
     false
 }
 
+pub fn assert_throughout(duration: Duration, interval: Duration, mut check: impl FnMut()) {
+    let deadline = Instant::now() + duration;
+    loop {
+        check();
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            break;
+        }
+        thread::sleep(remaining.min(interval));
+    }
+}
+
 fn run_node_with_paths(
     workspace: &Path,
     args: &[String],

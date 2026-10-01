@@ -179,6 +179,7 @@ src/
 │   └── worker.rs            queue worker lifecycle, Cue recovery, preflight, and finalization
 ├── adapters/                filesystem, process, environment, and checks
 │   ├── git.rs               isolated Git process execution and bounded probes
+│   ├── system_checks.rs     interpreter checks and bounded runtime version probes
 │   ├── fs/                  no-follow Unix file operations for Battery installs
 │   └── signals.rs           process shutdown signal registration
 ├── ports/                   repository and environment interfaces

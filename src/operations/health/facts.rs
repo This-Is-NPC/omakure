@@ -7,7 +7,6 @@ use crate::health_plane::report::{
 };
 use crate::runs::{self, RunState, RunStateSet, RunStore};
 use crate::workspace::Workspace;
-use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -403,49 +402,20 @@ fn probe_runtimes() -> Vec<RuntimeFact> {
 /// How long one interpreter gets to answer `--version`.
 ///
 /// A Profile is built on the Performer's own session loop, the loop that also
-/// has to read frames off the transport socket. `Command::output()` waits for
-/// as long as the child takes, so one wedged interpreter would park the link
+/// has to read frames off the transport socket. A child that never exits would park the link
 /// for as long as it stayed wedged. An interpreter that cannot say its version
 /// in five seconds is reported unavailable, which is the same answer as one
 /// that is not installed and is the honest one either way.
 const RUNTIME_PROBE_TIMEOUT: Duration = Duration::from_secs(5);
 
 fn probe_version(program: &str, args: &[&str]) -> Option<String> {
-    use std::io::Read;
-
-    let mut child = Command::new(program)
-        .args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .ok()?;
-
-    let deadline = Instant::now() + RUNTIME_PROBE_TIMEOUT;
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break status,
-            Ok(None) if Instant::now() >= deadline => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return None;
-            }
-            Ok(None) => std::thread::sleep(Duration::from_millis(25)),
-            Err(_) => return None,
-        }
-    };
-    if !status.success() {
-        return None;
-    }
-
-    let mut banner = String::new();
-    child
-        .stdout
-        .take()?
-        .take(MAX_VERSION_BANNER_BYTES as u64)
-        .read_to_string(&mut banner)
-        .ok()?;
-    Some(version_token(&banner))
+    crate::adapters::system_checks::runtime_version_banner(
+        program,
+        args,
+        RUNTIME_PROBE_TIMEOUT,
+        MAX_VERSION_BANNER_BYTES,
+    )
+    .map(|banner| version_token(&banner))
 }
 
 /// Extract the first dotted version token from a `--version` banner.

@@ -1,12 +1,54 @@
 use std::ffi::{OsStr, OsString};
-use std::io;
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 use crate::error::ScriptError;
 #[cfg(windows)]
 use crate::runtime::BASH_MISSING_HINT;
 use crate::runtime::{powershell_program, python_program};
+
+pub(crate) fn runtime_version_banner(
+    program: &str,
+    args: &[&str],
+    timeout: Duration,
+    max_bytes: usize,
+) -> Option<String> {
+    let mut child = Command::new(program)
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+
+    let deadline = Instant::now() + timeout;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(25)),
+            Err(_) => return None,
+        }
+    };
+    if !status.success() {
+        return None;
+    }
+
+    let mut banner = String::new();
+    child
+        .stdout
+        .take()?
+        .take(max_bytes as u64)
+        .read_to_string(&mut banner)
+        .ok()?;
+    Some(banner)
+}
 
 /// Check that a command is available and runs successfully using the effective
 /// injected PATH. If no PATH override is supplied, preserve the normal parent

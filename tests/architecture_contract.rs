@@ -18,6 +18,7 @@ enum Rule {
     Executor,
     GitProcess,
     HealthLifecycle,
+    HealthProcess,
     BatteryFilesystem,
     OperationInput,
 }
@@ -97,6 +98,12 @@ impl ContractVisitor {
             self.record(
                 "ARCH-HEALTH-LIFECYCLE-REGISTRY",
                 "lifecycle projection must consume domain transition values",
+            );
+        }
+        if self.rule == Rule::HealthProcess && Self::starts_with(path, &["std", "process"]) {
+            self.record(
+                "ARCH-HEALTH-PROCESS",
+                "runtime process execution belongs in adapters/system_checks",
             );
         }
         if self.rule == Rule::Http && path.first().map(String::as_str) == Some("rusqlite") {
@@ -205,6 +212,17 @@ impl<'ast> Visit<'ast> for ContractVisitor {
     }
 
     fn visit_expr_call(&mut self, node: &'ast ExprCall) {
+        if self.rule == Rule::HealthProcess {
+            if let syn::Expr::Path(ExprPath { path, .. }) = node.func.as_ref() {
+                let segments = Self::path_segments(path);
+                if segments.ends_with(&["Command".into(), "new".into()]) {
+                    self.record(
+                        "ARCH-HEALTH-PROCESS",
+                        "runtime process execution belongs in adapters/system_checks",
+                    );
+                }
+            }
+        }
         if self.rule == Rule::BatteryFilesystem {
             if let syn::Expr::Path(ExprPath { path, .. }) = node.func.as_ref() {
                 let segments = Self::path_segments(path);
@@ -765,6 +783,27 @@ fn battery_git_operations_reject_process_execution() {
         .findings
         .iter()
         .any(|finding| finding.rule == "ARCH-GIT-PROCESS"));
+}
+
+#[test]
+fn health_facts_process_execution_stays_in_adapter() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let path = "src/operations/health/facts.rs";
+    let source = fs::read_to_string(root.join(path)).expect("read Health facts source");
+    let contract = parse_contract(Rule::HealthProcess, path, &source);
+    assert!(
+        contract.findings.is_empty(),
+        "Health facts must not launch processes: {:?}",
+        contract.findings
+    );
+    for source in [
+        "use std::process::Command;",
+        "fn probe() { Command::new(\"bash\"); }",
+    ] {
+        let contract = parse_contract(Rule::HealthProcess, "fixture:health.rs", source);
+        assert_eq!(contract.findings.len(), 1);
+        assert_eq!(contract.findings[0].rule, "ARCH-HEALTH-PROCESS");
+    }
 }
 
 #[test]

@@ -1006,12 +1006,23 @@ fn hooks_and_mise_use_one_canonical_script_without_dependencies() {
             suffix.trim().is_empty(),
             "mise run must not append inline commands: {line}"
         );
-        assert_eq!(
-            value.split_whitespace().count(),
-            1,
-            "mise run must contain one script path: {value}"
-        );
-        let path = repo_root().join(value);
+        let words = value.split_whitespace().collect::<Vec<_>>();
+        let script = match words.as_slice() {
+            [script] => script,
+            ["scripts/tasks/atomic/run-bounded", "5m", script]
+                if ["scripts/tasks/usage-kdl", "scripts/tasks/usage-docs"].contains(script) =>
+            {
+                assert!(
+                    repo_root()
+                        .join("scripts/tasks/atomic/run-bounded")
+                        .is_file(),
+                    "bounded mise route must point to an existing wrapper"
+                );
+                script
+            }
+            _ => panic!("mise run must name one supported script route: {value}"),
+        };
+        let path = repo_root().join(script);
         assert!(path.is_file(), "mise route points to no script: {value}");
         #[cfg(unix)]
         assert_ne!(

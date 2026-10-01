@@ -141,8 +141,7 @@ fn test_resolve_active_env_reads_active_conf_case_preserving() {
     fs::write(envs.join("dev.conf"), "PATH=/usr/bin\nMY_VAR=hello").unwrap();
     fs::write(envs.join("active"), "dev.conf\n").unwrap();
 
-    // Keys are preserved verbatim (unlike the lowercasing prefill path)
-    // and order is stable.
+    // Active environment injection preserves key case and entry order.
     assert_eq!(
         resolve_active_env(&envs),
         vec![

@@ -55,10 +55,7 @@ fn test_parse_env_defaults(#[case] input: &str, #[case] expected: Vec<(&str, &st
     assert_eq!(result, expected_map);
 }
 
-// CHARACTERIZATION: pins the CURRENT behavior of `parse_env_defaults`
-// (TUI schema-field prefill). Keys are LOWERCASED, quotes/`export ` are
-// stripped, and empty values are skipped. This guards the prefill path
-// against silent regression when the case-preserving parser is added.
+// Default lookups lowercase keys, strip quotes and `export `, and skip empty values.
 #[test]
 fn test_parse_env_defaults_characterization_lowercases_and_strips() {
     let input = concat!(
@@ -72,7 +69,7 @@ fn test_parse_env_defaults_characterization_lowercases_and_strips() {
     );
     let result = parse_env_defaults(input);
 
-    // Keys are lowercased verbatim (the behavior injection must NOT use).
+    // Default lookups use lowercase keys.
     assert_eq!(result.get("path").map(String::as_str), Some("/usr/bin"));
     assert_eq!(
         result.get("virtual_env").map(String::as_str),

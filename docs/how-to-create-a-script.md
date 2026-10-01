@@ -40,8 +40,7 @@ and `--body-stdin` to supply the script body. Existing files require `--force`.
 ## Script contract
 
 Scripts should parse their declared `Arg` values and remain usable outside
-Omakure. Do not assume a form UI or a Lua directory widget exists. A script can
-emit structured progress from an Omakure run:
+Omakure. A script can emit structured progress from an Omakure run:
 
 ```bash
 omakure trace "started" --level info --data '{"target":"prod"}'

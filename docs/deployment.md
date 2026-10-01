@@ -172,9 +172,8 @@ Private HTTPS Batteries need scopes `batteries:write` (or add/sync) **and**
 > refs — those must be enumerated by exact name (`--secret-ref
 > secret://env/GIT_TOKEN`). This prevents a token holder from reading arbitrary
 > process env (e.g. `AWS_SECRET_ACCESS_KEY`) via a Battery `token_ref`. A bare
-> `--secret-ref 'secret://env/*'` is ignored for the same reason. If you
-> previously relied on `*` to resolve env secrets, list each `secret://env/NAME`
-> explicitly.
+> `--secret-ref 'secret://env/*'` is ignored for the same reason. List each
+> `secret://env/NAME` explicitly.
 
 ### Network egress (SSRF containment)
 

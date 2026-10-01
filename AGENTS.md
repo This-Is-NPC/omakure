@@ -59,8 +59,9 @@ help; operational commands must be explicit (`omakure scripts`, `omakure run`,
 
 `--scripts-dir` is the supported explicit override. Resolution then considers
 `OMAKURE_SCRIPTS_DIR`, the debug `scripts/workspace` fixture, and the platform
-default `~/Documents/omakure-scripts`. Positional script paths are not
-accepted.
+default `~/Documents/omakure-scripts`. A bare positional argument never
+selects the workspace root. Script commands accept names or paths confined to
+the selected workspace.
 
 The debug build uses `scripts/workspace` when it exists. Omakure creates
 `.omakure/`, `.history/`, and `omakure.toml` only below the selected workspace.

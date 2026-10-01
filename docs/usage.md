@@ -20,8 +20,9 @@ omakure --scripts-dir /path/to/workspace --json scripts
 ```
 
 The workspace is selected by `--scripts-dir`, then `OMAKURE_SCRIPTS_DIR`, then
-the debug `scripts/workspace` fixture and platform defaults. A positional path is not accepted and must not be
-reintroduced as a headless alias.
+the debug `scripts/workspace` fixture and platform defaults. A bare positional
+argument does not select the workspace root; script commands accept names and
+paths confined to the selected workspace.
 
 `check` is the visible alias for the same workspace diagnostics:
 

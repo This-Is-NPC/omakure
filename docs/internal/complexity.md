@@ -27,7 +27,7 @@ cyclomatic-complexity measurement.
 reviewed baseline. A row's key is its normalized repository-relative path plus
 its qualified source signature. A path or signature rename is intentionally a
 delete plus an add, so the replacement receives the new-function policy.
-Unchanged legacy hotspots remain informational and do not fail the gate.
+Unchanged baseline hotspots remain informational and do not fail the gate.
 Generated and dependency-classified sources are retained in evidence but are
 not changed-function gates; unclassified source fails closed.
 

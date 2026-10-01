@@ -794,7 +794,7 @@ fn generated_documentation_checks_are_read_only_and_fresh() {
 }
 
 #[test]
-fn current_headless_docs_and_tooling_exist_without_obsolete_ui_docs() {
+fn headless_docs_and_tooling_match_package_contract() {
     let root = repo_root();
     for doc in [
         "docs/README.md",
@@ -820,10 +820,10 @@ fn current_headless_docs_and_tooling_exist_without_obsolete_ui_docs() {
             "headless documentation is missing {doc}"
         );
     }
-    for obsolete in ["docs/tui-screens-and-widgets.md", "docs/lua-widgets.md"] {
+    for unsupported_doc in ["docs/tui-screens-and-widgets.md", "docs/lua-widgets.md"] {
         assert!(
-            !root.join(obsolete).exists(),
-            "obsolete current surface remains {obsolete}"
+            !root.join(unsupported_doc).exists(),
+            "headless documentation contains unsupported page {unsupported_doc}"
         );
     }
     assert!(!read("mise.toml").contains("[tasks.tui]"));
@@ -853,9 +853,9 @@ raw = true"
 }
 
 #[test]
-fn headless_source_tree_has_no_tui_theme_or_widget_assets() {
+fn headless_source_tree_excludes_nonproduct_assets() {
     let root = repo_root();
-    for removed in [
+    for unsupported_asset in [
         "src/adapters/tui/app.rs",
         "src/adapters/tui/mod.rs",
         "src/adapters/tui/widgets/mod.rs",
@@ -865,21 +865,18 @@ fn headless_source_tree_has_no_tui_theme_or_widget_assets() {
         "themes/default.toml",
     ] {
         assert!(
-            !root.join(removed).exists(),
-            "headless package must not retain removed asset {removed}"
+            !root.join(unsupported_asset).exists(),
+            "headless package contains unsupported asset {unsupported_asset}"
         );
     }
 
     let cargo = read("Cargo.toml").to_lowercase();
     assert!(cargo.contains("name = \"omakure-installer\""));
     assert!(root.join("src/installer.rs").is_file());
-    // `mlua` does not belong to this list. This test guards the removal of the
-    // TUI *widget* runtime, which is distinct from the script runtime. The
-    // widget stays gone; the script runtime is asserted present separately.
-    for removed_dependency in ["crossterm", "ratatui", "rattles"] {
+    for unsupported_dependency in ["crossterm", "ratatui", "rattles"] {
         assert!(
-            !cargo.contains(removed_dependency),
-            "headless package must not declare {removed_dependency}"
+            !cargo.contains(unsupported_dependency),
+            "headless package must not declare {unsupported_dependency}"
         );
     }
 
@@ -972,15 +969,15 @@ fn hooks_and_mise_use_one_canonical_script_without_dependencies() {
     let root = repo_root();
     assert!(
         !root.join("scripts/mise").exists(),
-        "removed scripts/mise directory must stay absent"
+        "noncanonical scripts/mise directory must stay absent"
     );
     assert!(
         !root.join("scripts/tasks/check/shared").exists(),
-        "removed check/shared route must stay absent"
+        "noncanonical check/shared route must stay absent"
     );
     assert!(
         !mise.contains("scripts/mise/") && !mise.contains("check/shared"),
-        "removed script routes must stay absent from Mise"
+        "noncanonical script routes must stay absent from Mise"
     );
     let routes = mise
         .lines()
@@ -1680,16 +1677,7 @@ fn packaging_bash_skips_wsl_launcher_when_git_bash_exists() {
     assert!(!is_packaging_wsl_launcher(&resolved));
 }
 
-/// The embedded Lua runtime must stay declared and vendored.
-///
-/// Deliberately separate from the TUI-removal test above. That one guards the
-/// `lua_widget` runtime, which is still gone; this one guards the script kind,
-/// which is shipped. Conflating them would let this check pass by breaking the
-/// other contract.
-///
-/// `vendored` is the load-bearing half: without it the binary would link
-/// against a system Lua and the whole point — a node that needs no Lua
-/// installed — would quietly disappear.
+/// The `.lua` script kind uses an embedded, vendored Lua runtime.
 #[test]
 fn headless_package_declares_the_vendored_lua_script_runtime() {
     let cargo = read("Cargo.toml").to_lowercase();
@@ -1700,9 +1688,5 @@ fn headless_package_declares_the_vendored_lua_script_runtime() {
     assert!(
         cargo.contains("vendored"),
         "mlua must be vendored, or the binary depends on a system Lua"
-    );
-    assert!(
-        !std::path::Path::new("src/lua_widget.rs").exists(),
-        "the TUI Lua widget runtime must stay removed"
     );
 }

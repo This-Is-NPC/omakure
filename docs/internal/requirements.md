@@ -9,7 +9,7 @@ must be updated in the same change.
 | ID | Requirement | Source |
 |---|---|---|
 | FR-001 | No-argument invocation prints CLI help; JSON mode returns one `invalid_argument` envelope. | `src/main.rs`, `tests/cli_no_subcommand.rs` |
-| FR-002 | Global `--scripts-dir` and environment overrides resolve one workspace root; positional paths are rejected. | `src/main.rs`, `src/cli/args/`, `tests/cli_surface_e2e.rs` |
+| FR-002 | Global `--scripts-dir` and environment overrides resolve one workspace root. | `src/main.rs`, `src/cli/args/`, `tests/cli_surface_e2e.rs` |
 | FR-003 | Recursive script listing supports `.bash`, `.sh`, `.ps1`, `.py`, and `.lua`, nested `.omakureignore`, and repeatable AND tag filters. | `src/adapters/workspace_repository.rs`, `src/runtime.rs`, `src/cli/list.rs` |
 | FR-004 | Embedded PascalCase schemas parse and validate fields, secret fields, and schedules. | `src/domain/schema.rs`, `src/domain/parsing.rs` |
 | FR-005 | `describe` returns a complete parsed schema and resolved path; malformed schemas and missing scripts have stable errors. | `src/cli/describe.rs`, `src/operations/core/scripts.rs` |
@@ -51,7 +51,7 @@ must be updated in the same change.
 | NFR-004 | HTTP request bodies and script/tree responses are bounded, and unsafe paths/symlinks/metadata paths are rejected. | `src/cli/api/`, `src/operations/scripts.rs` |
 | NFR-005 | Bearer tokens are hashed, scopes are explicit, token values are redacted from logs/responses, and auth failures do not reveal secrets. | `src/auth/`, `src/cli/api/` |
 | NFR-006 | Release CI tests the eight x86_64/aarch64 target assets, denies clippy warnings, checks formatting, and verifies binary-only archives; GitHub generates release notes from commits. | `.github/workflows/ci.yml`, `.github/workflows/release.yml`, `tests/packaging_smoke.rs` |
-| NFR-007 | The shipped package contains no TUI/theme/widget code or removed direct dependencies, and does declare the vendored Lua runtime that makes `.lua` need no system Lua. | `tests/packaging_smoke.rs`, `Cargo.toml` |
+| NFR-007 | The `.lua` script kind uses an embedded, vendored Lua runtime. | `Cargo.toml`, `tests/packaging_smoke.rs` |
 | NFR-008 | Linux CI runs the bounded four-service transport certification; Linux, macOS, and Windows CI run native protocol/build/lifecycle coverage without Docker assumptions. | `scripts/tasks/cert/transport`, `.github/workflows/ci.yml` |
 | NFR-009 | Linux CI runs the bounded four-node Health Plane certification over production Noise, with management HTTP loopback-only so it can never be the node-to-node data path; macOS and Windows CI run the native Health Plane protocol, schema, and lifecycle suites without Docker assumptions. | `scripts/tasks/cert/health`, `ci/compose/compose.health-plane-certification.e2e.yaml`, `tests/docker_health_plane_adversary.rs`, `tests/docker_health_plane_exhaustion.rs`, `.github/workflows/ci.yml` |
 | NFR-010 | Every certification wait, retry, Docker command, curl, and sqlite query is explicitly bounded, and cleanup is verified after success, failure, interrupt, and partial startup; inspection errors fail closed. | `scripts/tasks/cert/health`, `scripts/tasks/cert/health-cleanup` |
@@ -70,7 +70,7 @@ must be updated in the same change.
 | BR-006 | Omakure-reserved `OMAKURE_RUN_ID` and `OMAKURE_SCRIPTS_DIR` values cannot be overridden by managed or per-run environments. | `src/run_executor/` |
 | BR-007 | HTTP Battery registration is HTTPS-only and cached repositories are never executed directly. | `src/operations/battery/`, `src/cli/api/` |
 | BR-008 | Non-loopback HTTP binding requires explicit opt-in and route policy cannot be bypassed by token scope. | `src/cli/api/`, `src/policy.rs` |
-| BR-009 | No positional script path, TUI launch, theme configuration/assets, or directory `index.lua` widget behavior is part of the current product contract. | `src/cli/args/`, `src/main.rs`, `tests/packaging_smoke.rs` |
+| BR-009 | A bare positional argument never selects the workspace root; script names and paths resolve within the selected workspace. | `src/main.rs`, `src/cli/args/`, `src/operations/core/script_path.rs` |
 | BR-010 | Machine identity and trust are independent of script workspaces; normal update, replacement, restart, and uninstall preserve node state, while `node reset --confirmed` removes it and creates no replacement until the next service start. | `src/node/`, `src/node_identity.rs`, `src/operations/node/`, `src/cli/node.rs` |
 | BR-011 | Direct transport never grants trust or authorization by handshake alone; only explicit enrollment/trust operations may mutate active peer state, and malformed, oversized, downgraded, spoofed, wrong-target, replayed, expired, or revoked inputs fail closed. | `src/direct_service/`, `src/node_registry/`, `tests/direct_transport_contract.rs` |
 | BR-012 | Remote management may select among code a node already has and can never introduce more: a Cue carries no script content, Battery installation is a Unix-only local act that authenticated HTTP may initiate but peers and Cues may not, and a Cue-origin run has an explicit deny-all secret policy while a script declaring secret fields is refused at the gate rather than run without them. | `src/remote_cue/`, `src/operations/core/enqueue.rs`, `docs/internal/remote-cue-contract.md` |

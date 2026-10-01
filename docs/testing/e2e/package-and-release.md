@@ -36,7 +36,7 @@ forward their remaining arguments, and long-running workflow gates use
 - Compose and installers document loopback management HTTP, workspace/state volumes, fixed uid/gid, token-file auth, and service installation paths.
 - Release matrices route Linux GNU/musl, Linux ARM64 GNU/musl, macOS Intel/ARM64, and Windows Intel/ARM64 through the four platform suites without naming collisions.
 - `binary-smoke` owns release `--version` execution; `musl-static` owns static-link verification; archives contain exactly one root binary.
-- Removed TUI dependencies/assets stay absent while vendored `mlua` remains for the `.lua` script kind.
+- `Cargo.toml` declares vendored `mlua` for the `.lua` script kind.
 
 ## Does Not Prove
 

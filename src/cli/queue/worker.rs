@@ -1,5 +1,7 @@
 use crate::cli::args::QueueWorkerArgs;
 use crate::cli::json;
+use crate::node_identity::NodeIdentityError;
+use crate::node_registry::RegistryError;
 use crate::run_executor::ExecutionTerminal;
 use crate::runs::{self, ClaimFilters, RunCompletion, RunRow};
 use crate::workspace::Workspace;
@@ -196,7 +198,7 @@ fn execute_and_finalize(
             }
         };
         if let Err(error) = cue_worker_preflight(context, workspace, row) {
-            cancel_without_execution(workspace, row, error);
+            cancel_without_execution(workspace, row, error.to_string());
             return;
         }
         execute_and_finalize_inner(workspace, row, cancel_flag, Some(guard));
@@ -277,26 +279,46 @@ fn execute_and_finalize_inner(
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+enum CuePreflightError {
+    #[error("Cue trust preflight could not load identity: {0}")]
+    Identity(#[source] NodeIdentityError),
+    #[error("Cue trust preflight could not open registry: {0}")]
+    RegistryOpen(#[source] RegistryError),
+    #[error("Cue trust preflight could not read peer trust: {0}")]
+    TrustLookup(#[source] RegistryError),
+    #[error("Cue sender is no longer an active trusted peer")]
+    SenderNotTrusted,
+    #[error("Cue sender is no longer an active conductor")]
+    SenderNotConductor,
+    #[error("Cue sender no longer passes local authorization policy")]
+    LocalPolicyDenied,
+    #[error("Cue run has no recorded script name")]
+    MissingScriptName,
+    #[error("Cue script is no longer declared by local policy")]
+    ScriptNotDeclared,
+}
+
 fn cue_worker_preflight(
     context: &crate::node::NodeContext,
     workspace: &Workspace,
     row: &RunRow,
-) -> Result<(), String> {
+) -> Result<(), CuePreflightError> {
     let identity = crate::node_identity::NodeIdentity::load_existing(context)
-        .map_err(|error| format!("Cue trust preflight could not load identity: {error}"))?;
+        .map_err(CuePreflightError::Identity)?;
     let registry =
         crate::node_registry::NodeRegistry::open_existing(context, identity.public_status())
-            .map_err(|error| format!("Cue trust preflight could not open registry: {error}"))?;
+            .map_err(CuePreflightError::RegistryOpen)?;
     let authorization = registry
         .health_authorization(&row.actor)
-        .map_err(|error| format!("Cue trust preflight could not read peer trust: {error}"))?;
+        .map_err(CuePreflightError::TrustLookup)?;
     let Some(authorization) = authorization else {
-        return Err("Cue sender is no longer an active trusted peer".to_string());
+        return Err(CuePreflightError::SenderNotTrusted);
     };
     if authorization.state != crate::node_registry::PeerState::Active
         || authorization.role != crate::node_registry::PeerRole::Conductor
     {
-        return Err("Cue sender is no longer an active conductor".to_string());
+        return Err(CuePreflightError::SenderNotConductor);
     }
     let policy = crate::remote_cue::read_policy(context);
     let authority = crate::remote_cue::LocalAuthority {
@@ -306,19 +328,19 @@ fn cue_worker_preflight(
         declared_batteries: policy.declared_batteries.clone(),
     };
     if crate::remote_cue::evaluate_gates(&authority) != crate::remote_cue::GateDecision::Accepted {
-        return Err("Cue sender no longer passes local authorization policy".to_string());
+        return Err(CuePreflightError::LocalPolicyDenied);
     }
     let script_name = row
         .script_name
         .as_deref()
-        .ok_or_else(|| "Cue run has no recorded script name".to_string())?;
+        .ok_or(CuePreflightError::MissingScriptName)?;
     crate::remote_cue::is_declared_or_from_declared_battery(
         script_name,
         std::path::Path::new(&row.script_path),
         &policy,
         workspace,
     )
-    .map_err(|_| "Cue script is no longer declared by local policy".to_string())?;
+    .map_err(|_| CuePreflightError::ScriptNotDeclared)?;
     Ok(())
 }
 
@@ -348,4 +370,51 @@ fn fail_without_execution(workspace: &Workspace, row: &RunRow, error: String) {
             error: Some(error),
         },
     );
+}
+
+#[cfg(test)]
+mod cue_preflight_tests {
+    use super::*;
+    use crate::node_identity::NodeIdentity;
+    use crate::node_registry::NodeRegistry;
+    use crate::runs::EnqueueOptions;
+    use crate::test_support::{node_context, workspace_in, write_bash_script};
+
+    #[test]
+    fn cue_preflight_distinguishes_identity_failure_from_untrusted_sender() {
+        let temp = tempfile::tempdir().unwrap();
+        let workspace = workspace_in(&temp);
+        let context = node_context(temp.path());
+        let script = write_bash_script(&workspace, "cue.sh", "true");
+        let connection = runs::open(&workspace).unwrap();
+        let row = runs::enqueue(
+            &connection,
+            script.to_str().unwrap(),
+            &[],
+            EnqueueOptions {
+                actor: format!("omk1_{}", "a".repeat(64)),
+                omakure_version: "test".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let error = cue_worker_preflight(&context, &workspace, &row).unwrap_err();
+        assert!(matches!(error, CuePreflightError::Identity(_)));
+        assert!(error
+            .to_string()
+            .starts_with("Cue trust preflight could not load identity: "));
+
+        let identity = NodeIdentity::load_or_initialize(&context).unwrap();
+        drop(NodeRegistry::open(&context, identity.public_status()).unwrap());
+        let error = cue_worker_preflight(&context, &workspace, &row).unwrap_err();
+        assert!(
+            matches!(error, CuePreflightError::SenderNotTrusted),
+            "{error:?}"
+        );
+        assert_eq!(
+            error.to_string(),
+            "Cue sender is no longer an active trusted peer"
+        );
+    }
 }

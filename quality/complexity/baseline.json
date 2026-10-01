@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "247bf91025121fcb3417cc740400cfd2e202d0d253193c8cdd755421182a0548",
+  "canonical_sha256": "4684996168c1314215f30af21ae9e09ad9646d12364d20c4e66e7ed824b095dd",
   "config_identity": "no-config",
   "files": [
     {
@@ -1212,12 +1212,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 10,
+        "invocations": 14,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
         "cognitive": 36,
-        "cyclomatic": 49
+        "cyclomatic": 46
       },
       "path": "src/cli/queue/worker.rs",
       "source_class": "handwritten"
@@ -30710,14 +30710,14 @@
       },
       "identity": "crate::cli::queue::worker::worker",
       "kind": "function",
-      "line": 16,
+      "line": 18,
       "name": "worker",
       "native": {
         "analyzer": "cccc",
         "cognitive": 4,
         "cyclomatic": 4,
         "kind": "function",
-        "line": 16,
+        "line": 18,
         "name": "worker"
       },
       "path": "src/cli/queue/worker.rs",
@@ -30736,14 +30736,14 @@
       },
       "identity": "crate::cli::queue::worker::worker::<closure>",
       "kind": "closure",
-      "line": 34,
+      "line": 36,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 34,
+        "line": 36,
         "name": "<closure>"
       },
       "path": "src/cli/queue/worker.rs",
@@ -30762,14 +30762,14 @@
       },
       "identity": "crate::cli::queue::worker::install_signal_handlers",
       "kind": "function",
-      "line": 57,
+      "line": 59,
       "name": "install_signal_handlers",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 57,
+        "line": 59,
         "name": "install_signal_handlers"
       },
       "path": "src/cli/queue/worker.rs",
@@ -30788,14 +30788,14 @@
       },
       "identity": "crate::cli::queue::worker::worker_loop",
       "kind": "function",
-      "line": 65,
+      "line": 67,
       "name": "worker_loop",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 65,
+        "line": 67,
         "name": "worker_loop"
       },
       "path": "src/cli/queue/worker.rs",
@@ -30814,14 +30814,14 @@
       },
       "identity": "crate::cli::queue::worker::worker_loop_with_context",
       "kind": "function",
-      "line": 88,
+      "line": 90,
       "name": "worker_loop_with_context",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 88,
+        "line": 90,
         "name": "worker_loop_with_context"
       },
       "path": "src/cli/queue/worker.rs",
@@ -30840,14 +30840,14 @@
       },
       "identity": "crate::cli::queue::worker::worker_loop_inner",
       "kind": "function",
-      "line": 108,
+      "line": 110,
       "name": "worker_loop_inner",
       "native": {
         "analyzer": "cccc",
         "cognitive": 17,
         "cyclomatic": 12,
         "kind": "function",
-        "line": 108,
+        "line": 110,
         "name": "worker_loop_inner"
       },
       "path": "src/cli/queue/worker.rs",
@@ -30866,14 +30866,14 @@
       },
       "identity": "crate::cli::queue::worker::execute_and_finalize",
       "kind": "function",
-      "line": 183,
+      "line": 185,
       "name": "execute_and_finalize",
       "native": {
         "analyzer": "cccc",
         "cognitive": 5,
         "cyclomatic": 5,
         "kind": "function",
-        "line": 183,
+        "line": 185,
         "name": "execute_and_finalize"
       },
       "path": "src/cli/queue/worker.rs",
@@ -30892,14 +30892,14 @@
       },
       "identity": "crate::cli::queue::worker::execute_and_finalize_inner",
       "kind": "function",
-      "line": 208,
+      "line": 210,
       "name": "execute_and_finalize_inner",
       "native": {
         "analyzer": "cccc",
         "cognitive": 7,
         "cyclomatic": 12,
         "kind": "function",
-        "line": 208,
+        "line": 210,
         "name": "execute_and_finalize_inner"
       },
       "path": "src/cli/queue/worker.rs",
@@ -30918,14 +30918,14 @@
       },
       "identity": "crate::cli::queue::worker::execute_and_finalize_inner::<closure>",
       "kind": "closure",
-      "line": 220,
+      "line": 222,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 220,
+        "line": 222,
         "name": "<closure>"
       },
       "path": "src/cli/queue/worker.rs",
@@ -30939,23 +30939,23 @@
         "identity": "crate::cli::queue::worker::cue_worker_preflight",
         "macro_expansion": "not_measured",
         "path": "src/cli/queue/worker.rs",
-        "signature": "fn cue_worker_preflight( context: &crate::node::NodeContext, workspace: &Workspace, row: &RunRow, ) -> Result<(), String>",
+        "signature": "fn cue_worker_preflight( context: &crate::node::NodeContext, workspace: &Workspace, row: &RunRow, ) -> Result<(), CuePreflightError>",
         "source_class": "handwritten"
       },
       "identity": "crate::cli::queue::worker::cue_worker_preflight",
       "kind": "function",
-      "line": 280,
+      "line": 302,
       "name": "cue_worker_preflight",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 4,
         "kind": "function",
-        "line": 280,
+        "line": 302,
         "name": "cue_worker_preflight"
       },
       "path": "src/cli/queue/worker.rs",
-      "signature": "fn cue_worker_preflight( context: &crate::node::NodeContext, workspace: &Workspace, row: &RunRow, ) -> Result<(), String>",
+      "signature": "fn cue_worker_preflight( context: &crate::node::NodeContext, workspace: &Workspace, row: &RunRow, ) -> Result<(), CuePreflightError>",
       "source_class": "handwritten"
     },
     {
@@ -30965,127 +30965,23 @@
         "identity": "crate::cli::queue::worker::cue_worker_preflight::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/cli/queue/worker.rs",
-        "signature": ".map_err(|error| format!(\"Cue trust preflight could not load identity: {error}\"))?;",
+        "signature": ".map_err(|_| CuePreflightError::ScriptNotDeclared)?;",
         "source_class": "handwritten"
       },
       "identity": "crate::cli::queue::worker::cue_worker_preflight::<closure>",
       "kind": "closure",
-      "line": 286,
+      "line": 343,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 286,
+        "line": 343,
         "name": "<closure>"
       },
       "path": "src/cli/queue/worker.rs",
-      "signature": ".map_err(|error| format!(\"Cue trust preflight could not load identity: {error}\"))?;",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::cli::queue::worker::cue_worker_preflight::<closure>@289#2",
-        "macro_expansion": "not_measured",
-        "path": "src/cli/queue/worker.rs",
-        "signature": ".map_err(|error| format!(\"Cue trust preflight could not open registry: {error}\"))?;",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::cli::queue::worker::cue_worker_preflight::<closure>@289#2",
-      "kind": "closure",
-      "line": 289,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 289,
-        "name": "<closure>"
-      },
-      "path": "src/cli/queue/worker.rs",
-      "signature": ".map_err(|error| format!(\"Cue trust preflight could not open registry: {error}\"))?;",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::cli::queue::worker::cue_worker_preflight::<closure>@292#3",
-        "macro_expansion": "not_measured",
-        "path": "src/cli/queue/worker.rs",
-        "signature": ".map_err(|error| format!(\"Cue trust preflight could not read peer trust: {error}\"))?;",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::cli::queue::worker::cue_worker_preflight::<closure>@292#3",
-      "kind": "closure",
-      "line": 292,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 292,
-        "name": "<closure>"
-      },
-      "path": "src/cli/queue/worker.rs",
-      "signature": ".map_err(|error| format!(\"Cue trust preflight could not read peer trust: {error}\"))?;",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::cli::queue::worker::cue_worker_preflight::<closure>@314#4",
-        "macro_expansion": "not_measured",
-        "path": "src/cli/queue/worker.rs",
-        "signature": ".ok_or_else(|| \"Cue run has no recorded script name\".to_string())?;",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::cli::queue::worker::cue_worker_preflight::<closure>@314#4",
-      "kind": "closure",
-      "line": 314,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 314,
-        "name": "<closure>"
-      },
-      "path": "src/cli/queue/worker.rs",
-      "signature": ".ok_or_else(|| \"Cue run has no recorded script name\".to_string())?;",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::cli::queue::worker::cue_worker_preflight::<closure>@321#5",
-        "macro_expansion": "not_measured",
-        "path": "src/cli/queue/worker.rs",
-        "signature": ".map_err(|_| \"Cue script is no longer declared by local policy\".to_string())?;",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::cli::queue::worker::cue_worker_preflight::<closure>@321#5",
-      "kind": "closure",
-      "line": 321,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 321,
-        "name": "<closure>"
-      },
-      "path": "src/cli/queue/worker.rs",
-      "signature": ".map_err(|_| \"Cue script is no longer declared by local policy\".to_string())?;",
+      "signature": ".map_err(|_| CuePreflightError::ScriptNotDeclared)?;",
       "source_class": "handwritten"
     },
     {
@@ -31100,14 +30996,14 @@
       },
       "identity": "crate::cli::queue::worker::cancel_without_execution",
       "kind": "function",
-      "line": 325,
+      "line": 347,
       "name": "cancel_without_execution",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 325,
+        "line": 347,
         "name": "cancel_without_execution"
       },
       "path": "src/cli/queue/worker.rs",
@@ -31126,18 +31022,44 @@
       },
       "identity": "crate::cli::queue::worker::fail_without_execution",
       "kind": "function",
-      "line": 336,
+      "line": 358,
       "name": "fail_without_execution",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 336,
+        "line": 358,
         "name": "fail_without_execution"
       },
       "path": "src/cli/queue/worker.rs",
       "signature": "fn fail_without_execution(workspace: &Workspace, row: &RunRow, error: String)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli::queue::worker::cue_preflight_distinguishes_identity_failure_from_untrusted_sender",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/queue/worker.rs",
+        "signature": "fn cue_preflight_distinguishes_identity_failure_from_untrusted_sender()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::queue::worker::cue_preflight_distinguishes_identity_failure_from_untrusted_sender",
+      "kind": "function",
+      "line": 384,
+      "name": "cue_preflight_distinguishes_identity_failure_from_untrusted_sender",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 384,
+        "name": "cue_preflight_distinguishes_identity_failure_from_untrusted_sender"
+      },
+      "path": "src/cli/queue/worker.rs",
+      "signature": "fn cue_preflight_distinguishes_identity_failure_from_untrusted_sender()",
       "source_class": "handwritten"
     },
     {

@@ -10,13 +10,12 @@ use crate::domain::{MAX_CAPABILITIES, MAX_CAPABILITY_BYTES};
 use crate::node_identity::NodeIdentity;
 use crate::util::bytes::ByteReader;
 use crate::util::digest::sha256_domain;
+use crate::util::entropy;
 use crate::util::hex;
 use k256::schnorr::{
     signature::hazmat::{PrehashSigner, PrehashVerifier},
     Signature, SigningKey, VerifyingKey,
 };
-use rand::rngs::OsRng;
-use rand::RngCore;
 use std::fmt;
 use subtle::ConstantTimeEq;
 use thiserror::Error;
@@ -437,7 +436,7 @@ impl ManualEnrollmentRequest {
         lifetime_seconds: u64,
     ) -> Result<ManualEnrollmentOffer, EnrollmentError> {
         let mut pairing_id = [0u8; PAIRING_ID_BYTES];
-        OsRng.fill_bytes(&mut pairing_id);
+        entropy::fill_bytes(&mut pairing_id);
         Self::create_with_pairing_id(
             identity,
             proposer_transport_x25519,
@@ -465,8 +464,8 @@ impl ManualEnrollmentRequest {
         }
         let mut request_id = [0u8; REQUEST_ID_BYTES];
         let mut code = [0u8; CODE_BYTES];
-        OsRng.fill_bytes(&mut request_id);
-        OsRng.fill_bytes(&mut code);
+        entropy::fill_bytes(&mut request_id);
+        entropy::fill_bytes(&mut code);
         Self::create_with_material(
             identity,
             proposer_transport_x25519,

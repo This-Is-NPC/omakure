@@ -1,5 +1,6 @@
 pub mod bytes;
 pub mod digest;
+pub mod entropy;
 pub mod exec;
 pub mod fs;
 pub mod hex;

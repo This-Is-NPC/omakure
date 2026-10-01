@@ -4,9 +4,8 @@ use super::error::DirectServiceError;
 use super::outbox::dispatch_answer_deadline;
 use crate::direct_transport::{unix_seconds, TransportError};
 use crate::node_identity::NodeIdentity;
+use crate::util::entropy;
 use crate::util::hex;
-use rand::rngs::OsRng;
-use rand::RngCore;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -264,7 +263,7 @@ pub(super) fn sign_pending_baseline(
     }
     let now = unix_seconds();
     let mut nonce = [0u8; 16];
-    OsRng.fill_bytes(&mut nonce);
+    entropy::fill_bytes(&mut nonce);
     crate::direct_transport::sign_baseline_envelope(
         identity,
         crate::baseline_push::KIND_PUSH,

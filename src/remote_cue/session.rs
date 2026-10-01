@@ -10,8 +10,7 @@ use super::{
     MAX_RETAINED_CUE_RECORDS,
 };
 use crate::ports::ScriptRepository;
-use rand::rngs::OsRng;
-use rand::RngCore;
+use crate::util::entropy;
 use std::collections::VecDeque;
 
 /// The receive-side Cue session.
@@ -399,7 +398,7 @@ impl<'a> CueSession<'a> {
             return;
         };
         let mut nonce = [0u8; 16];
-        OsRng.fill_bytes(&mut nonce);
+        entropy::fill_bytes(&mut nonce);
         // The shape is the frozen reference vector in
         // `tests/remote_cue_contract.rs`: flat, with `error` present only on a
         // refusal, so "accepted" is never expressed as a code of zero.

@@ -5,9 +5,8 @@ use super::fs_windows::{validate_windows_security, windows_has_reparse_point};
 #[cfg(not(unix))]
 use super::layout::NodePlatform;
 use super::NodeError;
+use crate::util::entropy;
 use crate::util::hex;
-use rand::rngs::OsRng;
-use rand::RngCore;
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -65,7 +64,7 @@ pub(crate) fn write_new_file_atomically(
         .parent()
         .ok_or_else(|| NodeError::UnsafePath(path.display().to_string()))?;
     let mut random = [0u8; 8];
-    OsRng.fill_bytes(&mut random);
+    entropy::fill_bytes(&mut random);
     let suffix = hex::encode(&random);
     let temp = parent.join(format!(
         ".{}.tmp-{}-{suffix}",

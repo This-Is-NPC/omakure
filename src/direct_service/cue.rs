@@ -15,9 +15,8 @@ use crate::node_identity::NodeIdentity;
 use crate::node_registry::NodeRegistry;
 use crate::node_transport::LocalTransport;
 use crate::remote_cue::CueCode;
+use crate::util::entropy;
 use crate::util::hex;
-use rand::rngs::OsRng;
-use rand::RngCore;
 use std::net::{SocketAddr, TcpStream};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -234,7 +233,7 @@ pub(super) fn sign_pending_cue(
 ) -> Result<Vec<u8>, TransportError> {
     let now = unix_seconds();
     let mut nonce = [0u8; 16];
-    OsRng.fill_bytes(&mut nonce);
+    entropy::fill_bytes(&mut nonce);
     Ok(crate::direct_transport::sign_cue_envelope(
         identity,
         crate::remote_cue::KIND_DISPATCH,
@@ -310,7 +309,7 @@ pub fn dispatch_cue(
     // not a new way to open one, so the ritual is performed unchanged rather
     // than given a second door that would need its own review.
     let mut probe_nonce = [0u8; 16];
-    OsRng.fill_bytes(&mut probe_nonce);
+    entropy::fill_bytes(&mut probe_nonce);
     let probe = sign_probe(&identity, session.session_id(), probe_nonce, unix_seconds())?;
     write_bytes(
         &mut stream,
@@ -336,7 +335,7 @@ pub fn dispatch_cue(
     let cue_id = resolve_cue_id(cue_id)?;
     let now = unix_seconds();
     let mut nonce = [0u8; 16];
-    OsRng.fill_bytes(&mut nonce);
+    entropy::fill_bytes(&mut nonce);
     let dispatch = crate::direct_transport::sign_cue_envelope(
         &identity,
         crate::remote_cue::KIND_DISPATCH,
@@ -592,7 +591,7 @@ pub(super) fn resolve_cue_id(cue_id: Option<&str>) -> Result<String, DirectServi
         Some(_) => Err(TransportError::InvalidFrame.into()),
         None => {
             let mut cue_id_bytes = [0u8; 16];
-            OsRng.fill_bytes(&mut cue_id_bytes);
+            entropy::fill_bytes(&mut cue_id_bytes);
             Ok(hex::encode(&cue_id_bytes))
         }
     }

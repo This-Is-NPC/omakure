@@ -10,8 +10,7 @@ use crate::node::NodeContext;
 use crate::node_identity::NodeIdentity;
 use crate::node_registry::NodeRegistry;
 use crate::node_transport::LocalTransport;
-use rand::rngs::OsRng;
-use rand::RngCore;
+use crate::util::entropy;
 use std::net::{SocketAddr, TcpStream};
 use std::time::Instant;
 
@@ -48,7 +47,7 @@ pub fn request_manual_enrollment(
     }
     let mut session = handshake.into_session()?;
     let mut nonce = [0u8; 16];
-    OsRng.fill_bytes(&mut nonce);
+    entropy::fill_bytes(&mut nonce);
     let message = sign_manual_request(
         &identity,
         session.session_id(),

@@ -1,8 +1,7 @@
 use super::file::{load_tokens_file, parse_tokens_toml, MAX_TOKENS_PER_FILE};
 use super::types::AuthError;
+use crate::util::entropy;
 use crate::util::hex;
-use rand::rngs::OsRng;
-use rand::RngCore;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -69,7 +68,7 @@ fn write_staged_token_file(path: &Path, staged: &str) -> Result<PathBuf, AuthErr
     // never collide on the path, and so the path is unpredictable (an attacker
     // cannot pre-plant a file/symlink at a guessable tmp name).
     let mut tmp_rand = [0u8; 8];
-    OsRng.fill_bytes(&mut tmp_rand);
+    entropy::fill_bytes(&mut tmp_rand);
     let tmp_rand: String = hex::encode(&tmp_rand);
     let tmp = parent.join(format!(
         ".{}.tmp-{}-{}",

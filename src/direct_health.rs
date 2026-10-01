@@ -38,8 +38,7 @@ use crate::health_plane::{
 use crate::node_identity::NodeIdentity;
 use crate::node_registry::health::HealthOutboxEntry;
 use crate::node_registry::{NodeRegistry, PeerRole, PeerState};
-use rand::rngs::OsRng;
-use rand::RngCore;
+use crate::util::entropy;
 use serde_json::Value;
 use std::sync::Arc;
 use std::time::Duration;
@@ -587,7 +586,7 @@ impl<'a> HealthSession<'a> {
 
     fn sign(&self, kind: HealthKind, payload: Value, now: i64) -> Option<Vec<u8>> {
         let mut nonce = [0u8; 16];
-        OsRng.fill_bytes(&mut nonce);
+        entropy::fill_bytes(&mut nonce);
         let created_at = u64::try_from(now).ok()?;
         sign_health_envelope(
             self.identity,
@@ -717,7 +716,7 @@ fn transport_failure_code(error: TransportError) -> HealthCode {
 /// A fresh 16-byte CSPRNG identifier as 32 lowercase hex characters.
 fn fresh_id() -> String {
     let mut bytes = [0u8; 16];
-    OsRng.fill_bytes(&mut bytes);
+    entropy::fill_bytes(&mut bytes);
     crate::util::hex::encode(&bytes)
 }
 

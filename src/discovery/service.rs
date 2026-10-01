@@ -3,9 +3,8 @@ use super::*;
 use crate::domain::DiscoverySettings;
 use crate::node::NodeContext;
 use crate::node_identity::NodeIdentity;
+use crate::util::entropy;
 use crate::util::time::unix_seconds;
-use rand::rngs::OsRng;
-use rand::RngCore;
 use std::io;
 use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -175,7 +174,7 @@ fn discovery_loop(
 ) {
     let mut buffer = [0_u8; MAX_DATAGRAM_BYTES];
     let mut beacon_id = [0_u8; BEACON_ID_BYTES];
-    OsRng.fill_bytes(&mut beacon_id);
+    entropy::fill_bytes(&mut beacon_id);
     let mut sequence = 0_u64;
     let local_node_id = identity.public_status().node_id.clone();
     let mut next_send = Instant::now();

@@ -10,9 +10,8 @@ use crate::direct_transport::{
 };
 use crate::node::{write_new_file_atomically, NodeContext, NodeError};
 use crate::node_identity::NodeIdentity;
+use crate::util::entropy;
 use crate::util::hex;
-use rand::rngs::OsRng;
-use rand::RngCore;
 use std::fs;
 use std::io;
 use thiserror::Error;
@@ -82,7 +81,7 @@ impl LocalTransport {
 
     fn create(context: &NodeContext, identity: &NodeIdentity) -> Result<Self, NodeTransportError> {
         let mut private_key = [0u8; 32];
-        OsRng.fill_bytes(&mut private_key);
+        entropy::fill_bytes(&mut private_key);
         let public_key = x25519_public_from_private(&private_key)?;
         let now = unix_seconds();
         let certificate = TransportCertificate::issue(
@@ -143,7 +142,7 @@ impl LocalTransport {
 
 fn random_certificate_id() -> [u8; 16] {
     let mut id = [0u8; 16];
-    OsRng.fill_bytes(&mut id);
+    entropy::fill_bytes(&mut id);
     id
 }
 

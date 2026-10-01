@@ -16,9 +16,8 @@ use crate::node::NodeContext;
 use crate::node_identity::NodeIdentity;
 use crate::node_registry::NodeRegistry;
 use crate::node_transport::LocalTransport;
+use crate::util::entropy;
 use crate::util::hex;
-use rand::rngs::OsRng;
-use rand::RngCore;
 use std::io;
 use std::net::{SocketAddr, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -99,7 +98,9 @@ pub(super) fn retry_backoff(failures: usize) -> Duration {
 }
 
 fn retry_jitter() -> Duration {
-    Duration::from_millis(u64::from(OsRng.next_u32()) % (RETRY_JITTER_MAX.as_millis() as u64 + 1))
+    Duration::from_millis(
+        u64::from(entropy::next_u32()) % (RETRY_JITTER_MAX.as_millis() as u64 + 1),
+    )
 }
 
 fn sleep_or_stop(duration: Duration, stop: &AtomicBool) {
@@ -204,7 +205,7 @@ pub(super) fn connect_and_hold(
         .migrate_node(&mut reservation, remote.node_id())?;
     let mut session = handshake.into_session()?;
     let mut nonce = [0u8; 16];
-    OsRng.fill_bytes(&mut nonce);
+    entropy::fill_bytes(&mut nonce);
     let probe = sign_probe(&identity, session.session_id(), nonce, unix_seconds())?;
     write_bytes(
         &mut stream,
@@ -338,7 +339,7 @@ pub fn probe(
     }
     let mut session = handshake.into_session()?;
     let mut nonce = [0u8; 16];
-    OsRng.fill_bytes(&mut nonce);
+    entropy::fill_bytes(&mut nonce);
     let probe = sign_probe(&identity, session.session_id(), nonce, unix_seconds())?;
     write_bytes(
         &mut stream,

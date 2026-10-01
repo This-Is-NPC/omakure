@@ -268,6 +268,17 @@ fn generate_token_uses_prefix_and_verifiable_hash() {
     assert!(gen.tokens_file_entry.contains("id = \"ci\""));
     assert!(verify_argon2(&gen.hash, &gen.token));
     assert!(!gen.tokens_file_entry.contains(&gen.token));
+    let parsed = argon2::password_hash::PasswordHash::new(&gen.hash).unwrap();
+    let mut salt_bytes = [0u8; argon2::password_hash::Salt::RECOMMENDED_LENGTH];
+    assert_eq!(
+        parsed
+            .salt
+            .unwrap()
+            .decode_b64(&mut salt_bytes)
+            .unwrap()
+            .len(),
+        salt_bytes.len()
+    );
 }
 
 #[test]

@@ -4,8 +4,7 @@ use super::frame::Frame;
 use super::session::TransportSession;
 use super::x25519::{x25519_probe, x25519_public_from_private};
 use super::{HANDSHAKE_KIND, MAX_HANDSHAKE_MESSAGE_BYTES, NOISE_NAME, PROLOGUE};
-use rand::rngs::OsRng;
-use rand::RngCore;
+use crate::util::entropy;
 use snow::{params::NoiseParams, Builder, HandshakeState};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,7 +34,7 @@ impl NoiseHandshake {
             return Err(TransportError::IdentityMismatch);
         }
         let mut fixed_ephemeral = [0u8; 32];
-        OsRng.fill_bytes(&mut fixed_ephemeral);
+        entropy::fill_bytes(&mut fixed_ephemeral);
         let state = build_handshake_state(role, local_private, &fixed_ephemeral)?;
         let staged_state = build_handshake_state(role, local_private, &fixed_ephemeral)?;
         Ok(Self {

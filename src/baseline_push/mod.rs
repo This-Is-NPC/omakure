@@ -35,9 +35,8 @@ use crate::baseline::{
 };
 use crate::node_registry::health::HealthAuthorization;
 use crate::node_registry::{PeerRole, PeerState};
+use crate::util::entropy;
 use crate::util::hex;
-use rand::rngs::OsRng;
-use rand::RngCore;
 
 /// The two kinds of the baseline plane. There is no third.
 pub const KIND_PUSH: &str = "baseline_push";
@@ -582,7 +581,7 @@ impl<'a> BaselineSession<'a> {
         now: u64,
     ) {
         let mut nonce = [0u8; 16];
-        OsRng.fill_bytes(&mut nonce);
+        entropy::fill_bytes(&mut nonce);
         let mut payload = serde_json::json!({
             "version": 1,
             "baseline_id": hex::encode(baseline_id),

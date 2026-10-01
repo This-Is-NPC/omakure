@@ -128,7 +128,7 @@ pub fn issue_enrollment_bundle(
         .map_err(map_authority_error)?;
 
     let mut bundle_id = [0u8; crate::enrollment::REQUEST_ID_BYTES];
-    rand::RngCore::fill_bytes(&mut rand::rngs::OsRng, &mut bundle_id);
+    crate::util::entropy::fill_bytes(&mut bundle_id);
     let issued_at = crate::util::time::unix_seconds();
     let expires_at = issued_at.saturating_add(request.lifetime_seconds);
 

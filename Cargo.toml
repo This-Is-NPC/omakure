@@ -60,7 +60,7 @@ subtle = "2.6"
 sha2 = "0.10"
 k256 = { version = "0.14.0", default-features = false, features = ["schnorr", "getrandom"] }
 argon2 = { version = "0.5.3", features = ["std"] }
-rand = "0.8"
+rand = "0.9.5"
 fs2 = "0.4"
 snow = { version = "0.10.0", default-features = false, features = ["use-curve25519", "use-chacha20poly1305", "use-sha2", "use-getrandom"] }
 hickory-resolver = { version = "0.25.2", default-features = false, features = ["system-config", "tokio"] }

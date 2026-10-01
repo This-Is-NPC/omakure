@@ -11,10 +11,9 @@ use super::security::{
     validate_file_security_mode,
 };
 use super::NodeError;
+use crate::util::entropy;
 use crate::util::hex;
 use fs2::FileExt;
-use rand::rngs::OsRng;
-use rand::RngCore;
 use std::fs;
 #[cfg(test)]
 use std::io;
@@ -310,7 +309,7 @@ fn private_token_tombstone_path(path: &Path) -> Result<PathBuf, NodeError> {
         .ok_or_else(|| NodeError::UnsafePath(path.display().to_string()))?
         .to_string_lossy();
     let mut random = [0_u8; 16];
-    OsRng.fill_bytes(&mut random);
+    entropy::fill_bytes(&mut random);
     let suffix = hex::encode(&random);
     Ok(parent.join(format!(
         "{PRIVATE_TOKEN_TOMBSTONE_PREFIX}{suffix}-{file_name}"

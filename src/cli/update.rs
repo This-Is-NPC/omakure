@@ -13,9 +13,9 @@ use tempfile::TempDir;
 const DEFAULT_REPO: &str = "This-Is-NPC/omakure";
 
 pub fn run(_scripts_dir: PathBuf, args: UpdateArgs) -> Result<(), Box<dyn Error>> {
-    let repo = resolve_repo(args.repo);
+    let repo = resolve_repo(args.repo, env_value);
     validate_repo(&repo)?;
-    let version = match resolve_version(args.version) {
+    let version = match resolve_version(args.version, env_value) {
         Some(version) => normalize_version_tag(&version),
         None => fetch_latest_version(&repo)?,
     };
@@ -186,14 +186,28 @@ fn validate_version(version: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn resolve_repo(repo: Option<String>) -> String {
-    repo.or_else(|| env::var("OMAKURE_REPO").ok())
-        .or_else(|| env::var("REPO").ok())
+fn env_value(name: &str) -> Option<String> {
+    env::var(name).ok()
+}
+
+fn resolve_override(
+    explicit: Option<String>,
+    names: &[&str],
+    mut lookup: impl FnMut(&str) -> Option<String>,
+) -> Option<String> {
+    explicit.or_else(|| names.iter().find_map(|name| lookup(name)))
+}
+
+fn resolve_repo(repo: Option<String>, lookup: impl FnMut(&str) -> Option<String>) -> String {
+    resolve_override(repo, &["OMAKURE_REPO", "REPO"], lookup)
         .unwrap_or_else(|| DEFAULT_REPO.to_string())
 }
 
-fn resolve_version(version: Option<String>) -> Option<String> {
-    version.or_else(|| env::var("VERSION").ok())
+fn resolve_version(
+    version: Option<String>,
+    lookup: impl FnMut(&str) -> Option<String>,
+) -> Option<String> {
+    resolve_override(version, &["VERSION"], lookup)
 }
 
 pub(crate) fn normalize_version_tag(version: &str) -> String {
@@ -580,27 +594,55 @@ mod tests {
 
     #[test]
     fn test_resolve_repo_default() {
-        env::remove_var("OMAKURE_REPO");
-        env::remove_var("REPO");
-        assert_eq!(resolve_repo(None), DEFAULT_REPO);
+        assert_eq!(resolve_repo(None, |_| None), DEFAULT_REPO);
     }
 
     #[test]
     fn test_resolve_repo_explicit() {
-        assert_eq!(resolve_repo(Some("user/repo".to_string())), "user/repo");
+        assert_eq!(
+            resolve_repo(Some("user/repo".to_string()), |_| panic!(
+                "explicit repo must win"
+            )),
+            "user/repo"
+        );
+    }
+
+    #[test]
+    fn test_resolve_repo_env_precedence() {
+        let lookup = |name: &str| match name {
+            "OMAKURE_REPO" => Some("preferred/repo".to_string()),
+            "REPO" => Some("fallback/repo".to_string()),
+            _ => None,
+        };
+        assert_eq!(resolve_repo(None, lookup), "preferred/repo");
+        assert_eq!(
+            resolve_repo(None, |name| (name == "REPO")
+                .then(|| "fallback/repo".to_string())),
+            "fallback/repo"
+        );
     }
 
     #[test]
     fn test_resolve_version_none() {
-        env::remove_var("VERSION");
-        assert_eq!(resolve_version(None), None);
+        assert_eq!(resolve_version(None, |_| None), None);
     }
 
     #[test]
     fn test_resolve_version_explicit() {
         assert_eq!(
-            resolve_version(Some("1.0.0".to_string())),
+            resolve_version(Some("1.0.0".to_string()), |_| panic!(
+                "explicit version must win"
+            )),
             Some("1.0.0".to_string())
+        );
+    }
+
+    #[test]
+    fn test_resolve_version_from_env() {
+        assert_eq!(
+            resolve_version(None, |name| (name == "VERSION")
+                .then(|| "2.0.0".to_string())),
+            Some("2.0.0".to_string())
         );
     }
 

@@ -658,6 +658,28 @@ mod tests {
         }
     }
 
+    #[rstest]
+    #[case::repo("../untrusted", "v1.2.3", "owner/name pair")]
+    #[case::version(DEFAULT_REPO, "v../untrusted", "simple version tag")]
+    fn security_update_rejects_remote_path_inputs_before_workspace_access(
+        #[case] repo: &str,
+        #[case] version: &str,
+        #[case] error_fragment: &str,
+    ) {
+        let root = TempDir::new().unwrap();
+        let workspace = root.path().join("not-created");
+        let error = run(
+            workspace.clone(),
+            UpdateArgs {
+                repo: Some(repo.into()),
+                version: Some(version.into()),
+            },
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains(error_fragment));
+        assert!(!workspace.exists());
+    }
+
     #[test]
     fn security_update_same_version_never_creates_or_syncs_workspace() {
         let root = TempDir::new().unwrap();
@@ -732,29 +754,100 @@ mod tests {
         let binary = source.join("omakure");
         fs::write(&binary, b"release payload").unwrap();
         let archive = root.path().join("payload.tar.gz");
-        let pack = || {
-            assert!(
-                Command::new("tar")
-                    .arg("-czf")
-                    .arg(&archive)
-                    .arg("-C")
-                    .arg(&source)
-                    .arg("omakure")
-                    .status()
-                    .unwrap()
-                    .success()
-            );
-        };
-        pack();
+        pack_release_archive(&source, &archive, &["omakure"]);
         let staging = update_staging_in(root.path()).unwrap();
         let extracted = extract_release_binary(&archive, staging.path(), "omakure").unwrap();
         assert_eq!(fs::read(extracted).unwrap(), b"release payload");
         fs::remove_file(&binary).unwrap();
         symlink("../outside", &binary).unwrap();
-        pack();
+        pack_release_archive(&source, &archive, &["omakure"]);
         let staging = update_staging_in(root.path()).unwrap();
         assert!(extract_release_binary(&archive, staging.path(), "omakure").is_err());
         assert!(!staging.path().join("omakure").exists());
+    }
+
+    #[cfg(unix)]
+    fn pack_release_archive(source: &Path, archive: &Path, members: &[&str]) {
+        assert!(
+            Command::new("tar")
+                .arg("-czf")
+                .arg(archive)
+                .arg("-C")
+                .arg(source)
+                .args(members)
+                .status()
+                .unwrap()
+                .success()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn security_update_rejects_extra_and_empty_tar_members() {
+        let root = TempDir::new().unwrap();
+        let source = root.path().join("source");
+        fs::create_dir(&source).unwrap();
+        fs::write(source.join("omakure"), b"release payload").unwrap();
+        fs::write(source.join("extra"), b"unexpected payload").unwrap();
+        let archive = root.path().join("payload.tar.gz");
+        pack_release_archive(&source, &archive, &["omakure", "extra"]);
+        let staging = update_staging_in(root.path()).unwrap();
+        assert!(extract_release_binary(&archive, staging.path(), "omakure").is_err());
+        assert!(!staging.path().join("omakure").exists());
+
+        fs::write(source.join("omakure"), b"").unwrap();
+        pack_release_archive(&source, &archive, &["omakure"]);
+        let staging = update_staging_in(root.path()).unwrap();
+        let error = extract_release_binary(&archive, staging.path(), "omakure").unwrap_err();
+        assert_eq!(error.to_string(), "Release binary is empty");
+    }
+
+    #[cfg(unix)]
+    fn assert_no_update_staging(parent: &Path) {
+        assert!(!fs::read_dir(parent).unwrap().any(|entry| {
+            entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .starts_with(".omakure-update-")
+        }));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn security_update_atomic_install_keeps_previous_open_binary() {
+        use std::io::Read;
+        let root = TempDir::new().unwrap();
+        let target = root.path().join("omakure");
+        let source = root.path().join("release");
+        fs::write(&target, b"old binary").unwrap();
+        fs::write(&source, b"new binary").unwrap();
+        let mut previous = fs::File::open(&target).unwrap();
+
+        install_binary_unix(&source, &target).unwrap();
+
+        let mut previous_bytes = Vec::new();
+        previous.read_to_end(&mut previous_bytes).unwrap();
+        assert_eq!(previous_bytes, b"old binary");
+        assert_eq!(fs::read(&target).unwrap(), b"new binary");
+        assert_no_update_staging(root.path());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn security_update_create_new_file_never_follows_staging_symlink() {
+        use std::os::unix::fs::symlink;
+        let root = TempDir::new().unwrap();
+        let victim = root.path().join("victim");
+        let staged = root.path().join("replacement");
+        fs::write(&victim, b"untouched").unwrap();
+        symlink(&victim, &staged).unwrap();
+
+        assert_eq!(
+            create_binary_file(&staged).unwrap_err().kind(),
+            io::ErrorKind::AlreadyExists
+        );
+        assert_eq!(fs::read(&victim).unwrap(), b"untouched");
     }
 
     #[cfg(unix)]
@@ -778,13 +871,7 @@ mod tests {
                 .is_symlink()
         );
         assert_updated_binary_executes(&target);
-        assert!(!fs::read_dir(root.path()).unwrap().any(|entry| {
-            entry
-                .unwrap()
-                .file_name()
-                .to_string_lossy()
-                .starts_with(".omakure-update-")
-        }));
+        assert_no_update_staging(root.path());
     }
 
     #[cfg(unix)]

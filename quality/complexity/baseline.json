@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "05c7fc9d78917fefe1f9a09399eaf61c753aa7d0921bcc3471a489eeaaa0ffd0",
+  "canonical_sha256": "359d4c185f8b82c32058034f6e33c2c81b1f047d2d27a7fee669212ca90ab2ab",
   "config_identity": "no-config",
   "files": [
     {
@@ -29501,8 +29501,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 1,
-      "cyclomatic": 7,
+      "cognitive": 0,
+      "cyclomatic": 1,
       "derived": {
         "identity": "crate::cli::node::map_node_error",
         "macro_expansion": "not_measured",
@@ -29512,18 +29512,122 @@
       },
       "identity": "crate::cli::node::map_node_error",
       "kind": "function",
-      "line": 623,
+      "line": 580,
       "name": "map_node_error",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 1,
-        "cyclomatic": 7,
+        "cognitive": 0,
+        "cyclomatic": 1,
         "kind": "function",
-        "line": 623,
+        "line": 580,
         "name": "map_node_error"
       },
       "path": "src/cli/node.rs",
       "signature": "fn map_node_error(error: NodeError) -> OperationError",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli::node::map_node_error::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/node.rs",
+        "signature": ".then(|| OperationError::new(OperationErrorCode::InvalidInput, error.to_string()))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::node::map_node_error::<closure>",
+      "kind": "closure",
+      "line": 582,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 582,
+        "name": "<closure>"
+      },
+      "path": "src/cli/node.rs",
+      "signature": ".then(|| OperationError::new(OperationErrorCode::InvalidInput, error.to_string()))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli::node::map_node_error::<closure>@583#2",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/node.rs",
+        "signature": ".unwrap_or_else(|| node_ops::map_node_error(error))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::node::map_node_error::<closure>@583#2",
+      "kind": "closure",
+      "line": 583,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 583,
+        "name": "<closure>"
+      },
+      "path": "src/cli/node.rs",
+      "signature": ".unwrap_or_else(|| node_ops::map_node_error(error))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli::node::node_error_mapping_preserves_cli_test_mode_message",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/node.rs",
+        "signature": "fn node_error_mapping_preserves_cli_test_mode_message()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::node::node_error_mapping_preserves_cli_test_mode_message",
+      "kind": "function",
+      "line": 591,
+      "name": "node_error_mapping_preserves_cli_test_mode_message",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 591,
+        "name": "node_error_mapping_preserves_cli_test_mode_message"
+      },
+      "path": "src/cli/node.rs",
+      "signature": "fn node_error_mapping_preserves_cli_test_mode_message()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::cli::node::node_error_mapping_delegates_shared_variants",
+        "macro_expansion": "not_measured",
+        "path": "src/cli/node.rs",
+        "signature": "fn node_error_mapping_delegates_shared_variants()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::cli::node::node_error_mapping_delegates_shared_variants",
+      "kind": "function",
+      "line": 615,
+      "name": "node_error_mapping_delegates_shared_variants",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 615,
+        "name": "node_error_mapping_delegates_shared_variants"
+      },
+      "path": "src/cli/node.rs",
+      "signature": "fn node_error_mapping_delegates_shared_variants()",
       "source_class": "handwritten"
     },
     {

@@ -578,36 +578,42 @@ fn emit_result<T: serde::Serialize>(
 }
 
 fn map_node_error(error: NodeError) -> OperationError {
-    match error {
-        NodeError::InvalidPath { .. }
-        | NodeError::IncompleteTestOverrides
-        | NodeError::TestOverrideOutsideTestMode
-        | NodeError::TestModeUnavailable => {
-            OperationError::new(OperationErrorCode::InvalidInput, error.to_string())
-        }
-        NodeError::Config(error) => {
-            OperationError::new(OperationErrorCode::InvalidInput, error.to_string())
-        }
-        NodeError::InsecurePath(_) => {
-            OperationError::new(OperationErrorCode::RegistryInvalid, error.to_string())
-        }
-        NodeError::UnsafePath(_)
-        | NodeError::UnexpectedFileType(_)
-        | NodeError::ExistingConfig(_) => {
-            OperationError::new(OperationErrorCode::RegistryInvalid, error.to_string())
-        }
-        NodeError::LifecycleBusy => OperationError::new(
-            OperationErrorCode::Conflict,
-            "node service is active; stop it before resetting",
-        ),
-        NodeError::Io(error) => {
-            OperationError::new(OperationErrorCode::IoFailed, error.to_string())
-        }
-    }
+    matches!(error, NodeError::TestModeUnavailable)
+        .then(|| OperationError::new(OperationErrorCode::InvalidInput, error.to_string()))
+        .unwrap_or_else(|| node_ops::map_node_error(error))
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn node_error_mapping_preserves_cli_test_mode_message() {
+        let unavailable = map_node_error(NodeError::TestModeUnavailable);
+        assert_eq!(unavailable.code, OperationErrorCode::InvalidInput);
+        assert_eq!(
+            unavailable.message,
+            "node test mode is unavailable in this build"
+        );
+    }
+
+    #[test]
+    fn node_error_mapping_delegates_shared_variants() {
+        let error = map_node_error(NodeError::InvalidPath {
+            field: "config",
+            reason: "missing".to_string(),
+        });
+        assert_eq!(error.code, OperationErrorCode::InvalidInput);
+        assert_eq!(error.message, "invalid node path for config: missing");
+
+        let override_error = map_node_error(NodeError::TestOverrideOutsideTestMode);
+        assert_eq!(override_error.code, OperationErrorCode::InvalidInput);
+        assert_eq!(
+            override_error.message,
+            "OMAKURE_NODE_STATE_DIR and OMAKURE_NODE_CONFIG are only allowed with OMAKURE_NODE_TEST_MODE=1"
+        );
+    }
+
     /// No wait-bounded command may set its own client timeout.
     ///
     /// `--wait-seconds` is the budget the *peer* is given to answer in. The

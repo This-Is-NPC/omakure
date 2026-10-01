@@ -21,6 +21,7 @@ enum Rule {
     HealthProcess,
     BatteryFilesystem,
     OperationInput,
+    SearchStorage,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -80,6 +81,12 @@ impl ContractVisitor {
         }
         if self.rule == Rule::Catalog && Self::starts_with(path, &["crate", "cli"]) {
             self.record("ARCH-CATALOG-CLI", "catalogs must use shared inventories");
+        }
+        if self.rule == Rule::SearchStorage && Self::starts_with(path, &["crate", "operations"]) {
+            self.record(
+                "ARCH-SEARCH-OPERATIONS",
+                "search storage must not depend on operations",
+            );
         }
         if self.rule == Rule::OperationInput
             && (Self::starts_with(path, &["crate", "cli"])
@@ -732,6 +739,27 @@ fn shared_catalogs_do_not_depend_on_cli_adapters() {
     );
     assert_eq!(contract.findings.len(), 1);
     assert_eq!(contract.findings[0].rule, "ARCH-CATALOG-CLI");
+}
+
+#[test]
+fn search_storage_does_not_depend_on_operations() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let path = root.join("src/search_index.rs");
+    let source = fs::read_to_string(&path).expect("read search storage source");
+    let contract = parse_contract(Rule::SearchStorage, "src/search_index.rs", &source);
+    assert!(
+        contract.findings.is_empty(),
+        "search storage boundary violations: {:?}",
+        contract.findings
+    );
+
+    let contract = parse_contract(
+        Rule::SearchStorage,
+        "fixture:search_index.rs",
+        "use crate::operations::path::logical_relative_path;",
+    );
+    assert_eq!(contract.findings.len(), 1);
+    assert_eq!(contract.findings[0].rule, "ARCH-SEARCH-OPERATIONS");
 }
 
 #[test]

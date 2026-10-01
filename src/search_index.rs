@@ -1,6 +1,6 @@
 use crate::adapters::workspace_repository::FsWorkspaceRepository;
-use crate::operations::path::logical_relative_path;
 use crate::ports::ScriptRepository;
+use crate::util::path::logical_relative_path;
 use crate::util::sqlite::WalDatabase;
 use rusqlite::{params, params_from_iter, Connection, TransactionBehavior};
 use std::path::{Path, PathBuf};

@@ -184,7 +184,7 @@ src/
 │   └── signals.rs           process shutdown signal registration
 ├── ports/                   repository and environment interfaces
 ├── error.rs                 schema and environment application errors
-├── util/                    shared filesystem, process, encoding, and OS entropy helpers
+├── util/                    shared filesystem, process, path, encoding, and OS entropy helpers
 ├── app_meta.rs              package version constant
 ├── inventory/               Clap-derived command inventory, CLI reference, and HTTP routes
 ├── cli_http_parity/         CLI/HTTP parity manifest and observable comparator

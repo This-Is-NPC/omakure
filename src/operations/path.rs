@@ -1,7 +1,7 @@
-//! Script-path helpers shared by the listing, describe, content, and search
-//! operations.
+//! Script-path helpers shared by the listing, describe, and content operations.
 
 use super::{OperationError, OperationErrorCode, OperationResult};
+use crate::util::path::logical_relative_path;
 use std::path::{Path, PathBuf};
 
 pub(crate) fn canonical_scripts_root(scripts_root: &Path) -> OperationResult<PathBuf> {
@@ -11,22 +11,6 @@ pub(crate) fn canonical_scripts_root(scripts_root: &Path) -> OperationResult<Pat
             format!("failed to canonicalize scripts root: {err}"),
         )
     })
-}
-
-/// `path` relative to `root` with `/` separators, compared as text; the whole
-/// path when it is not under `root`.
-pub(crate) fn logical_relative_path(path: &Path, root: &Path) -> String {
-    let path_text = path.to_string_lossy().replace('\\', "/");
-    let root_text = root
-        .to_string_lossy()
-        .replace('\\', "/")
-        .trim_end_matches('/')
-        .to_string();
-    path_text
-        .strip_prefix(&root_text)
-        .and_then(|rest| rest.strip_prefix('/'))
-        .unwrap_or(&path_text)
-        .to_string()
 }
 
 /// [`logical_relative_path`] after resolving both paths, so two spellings of
@@ -66,22 +50,8 @@ mod tests {
             ),
         ] {
             let (root, path) = (Path::new(root), Path::new(path));
-            assert_eq!(logical_relative_path(path, root), "tools/deploy.cmd");
             assert_eq!(canonical_relative_path(path, root), "tools/deploy.cmd");
         }
-    }
-
-    #[test]
-    fn a_path_outside_the_root_is_returned_whole() {
-        let root = Path::new("/workspace/scripts");
-        assert_eq!(
-            logical_relative_path(Path::new("/elsewhere/deploy.sh"), root),
-            "/elsewhere/deploy.sh"
-        );
-        assert_eq!(
-            logical_relative_path(Path::new("/workspace/scripts-old/deploy.sh"), root),
-            "/workspace/scripts-old/deploy.sh"
-        );
     }
 
     #[test]

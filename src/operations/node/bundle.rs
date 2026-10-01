@@ -78,44 +78,7 @@ fn apply_signed_bundle_with_actor(
     let identity = NodeIdentity::load_existing(context).map_err(map_identity_error)?;
     let registry = NodeRegistry::open_existing(context, identity.public_status())
         .map_err(map_registry_error)?;
-    let mut token_lease = if let Some(path) = request.bootstrap_token_path.as_deref() {
-        recover_private_token_tombstones(context, &registry, &config.organization.id, path)?;
-        let lease = context
-            .stage_private_bounded_file(path, enrollment::MAX_BOOTSTRAP_TOKEN_BYTES)
-            .map_err(map_node_error)?;
-        let token = match String::from_utf8(lease.contents().to_vec()) {
-            Ok(token) => token,
-            Err(_) => {
-                let mut lease = Some(lease);
-                return Err(restore_token_lease(
-                    &mut lease,
-                    OperationError::new(
-                        OperationErrorCode::EnrollmentDenied,
-                        "bootstrap token is invalid",
-                    ),
-                ));
-            }
-        };
-        request.bootstrap_token = token.trim().to_string();
-        Some(lease)
-    } else {
-        None
-    };
-    if request.bootstrap_token.len() < 32
-        || request.bootstrap_token.len() > enrollment::MAX_BOOTSTRAP_TOKEN_BYTES
-        || request
-            .bootstrap_token
-            .bytes()
-            .any(|byte| byte.is_ascii_control())
-    {
-        return Err(restore_token_lease(
-            &mut token_lease,
-            OperationError::new(
-                OperationErrorCode::EnrollmentDenied,
-                "bootstrap token is invalid",
-            ),
-        ));
-    }
+    let mut token_lease = prepare_bootstrap_token(context, &registry, &config, &mut request)?;
     let bundle_bytes = match decode_bundle(&request.bundle_hex) {
         Ok(bytes) => bytes,
         Err(error) => {
@@ -138,93 +101,13 @@ fn apply_signed_bundle_with_actor(
             )
         }
     };
-    let preflight = (|| {
-        let authority = config
-            .trust
-            .authorities
-            .iter()
-            .find(|authority| authority.key_id == hex::encode(&bundle.authority_key_id))
-            .ok_or_else(|| {
-                OperationError::new(
-                    OperationErrorCode::EnrollmentInvalid,
-                    "signed enrollment authority is not configured",
-                )
-            })?;
-        let authority = enrollment::BundleAuthority {
-            key_id: enrollment::parse_hex(&authority.key_id, 16)
-                .map_err(|_| {
-                    OperationError::new(
-                        OperationErrorCode::EnrollmentInvalid,
-                        "authority key ID is invalid",
-                    )
-                })?
-                .try_into()
-                .map_err(|_| {
-                    OperationError::new(
-                        OperationErrorCode::EnrollmentInvalid,
-                        "authority key ID is invalid",
-                    )
-                })?,
-            public_key: enrollment::parse_hex(&authority.public_key, 32)
-                .map_err(|_| {
-                    OperationError::new(
-                        OperationErrorCode::EnrollmentInvalid,
-                        "authority public key is invalid",
-                    )
-                })?
-                .try_into()
-                .map_err(|_| {
-                    OperationError::new(
-                        OperationErrorCode::EnrollmentInvalid,
-                        "authority public key is invalid",
-                    )
-                })?,
-            revoked: authority.revoked,
-        };
-        let now = crate::util::time::unix_seconds();
-        bundle
-            .verify(
-                &authority,
-                &config.organization.id,
-                identity.public_status().node_id.as_str(),
-                now,
-            )
-            .map_err(map_enrollment_error)?;
-        let certificate =
-            crate::direct_transport::TransportCertificate::from_bytes(&bundle.subject_certificate)
-                .map_err(|_| {
-                    OperationError::new(
-                        OperationErrorCode::EnrollmentInvalid,
-                        "signed enrollment certificate is invalid",
-                    )
-                })?;
-        certificate.verify_time(now).map_err(|_| {
-            OperationError::new(
-                OperationErrorCode::EnrollmentExpired,
-                "signed enrollment certificate is expired",
-            )
-        })?;
-        let token_hash = enrollment::hash_bootstrap_token(request.bootstrap_token.as_bytes());
-        let nonce_hash = enrollment::hash_bootstrap_nonce(&nonce);
-        if hex::encode(&token_hash)
-            .as_bytes()
-            .ct_eq(config.trust.bootstrap_token_hash.as_bytes())
-            .unwrap_u8()
-            != 1
-            || hex::encode(&nonce_hash)
-                .as_bytes()
-                .ct_eq(config.trust.bootstrap_nonce_hash.as_bytes())
-                .unwrap_u8()
-                != 1
-        {
-            return Err(OperationError::new(
-                OperationErrorCode::EnrollmentDenied,
-                "bootstrap proof does not match local policy",
-            ));
-        }
-        Ok((now, token_hash, nonce_hash))
-    })();
-    let (now, token_hash, nonce_hash) = match preflight {
+    let (now, token_hash, nonce_hash) = match preflight_signed_bundle(
+        &config,
+        &identity,
+        &bundle,
+        &request.bootstrap_token,
+        &nonce,
+    ) {
         Ok(value) => value,
         Err(error) => {
             return record_signed_bundle_failure_with_token(
@@ -269,6 +152,131 @@ fn apply_signed_bundle_with_actor(
         );
     }
     Ok(peer)
+}
+
+fn invalid_bootstrap_token() -> OperationError {
+    OperationError::new(
+        OperationErrorCode::EnrollmentDenied,
+        "bootstrap token is invalid",
+    )
+}
+
+fn prepare_bootstrap_token(
+    context: &NodeContext,
+    registry: &NodeRegistry,
+    config: &NodeConfig,
+    request: &mut SignedBundleApplyRequest,
+) -> OperationResult<Option<PrivateTokenLease>> {
+    let mut token_lease = if let Some(path) = request.bootstrap_token_path.as_deref() {
+        recover_private_token_tombstones(context, registry, &config.organization.id, path)?;
+        let lease = context
+            .stage_private_bounded_file(path, enrollment::MAX_BOOTSTRAP_TOKEN_BYTES)
+            .map_err(map_node_error)?;
+        let token = match String::from_utf8(lease.contents().to_vec()) {
+            Ok(token) => token,
+            Err(_) => {
+                let mut lease = Some(lease);
+                return Err(restore_token_lease(&mut lease, invalid_bootstrap_token()));
+            }
+        };
+        request.bootstrap_token = token.trim().to_string();
+        Some(lease)
+    } else {
+        None
+    };
+    if request.bootstrap_token.len() < 32
+        || request.bootstrap_token.len() > enrollment::MAX_BOOTSTRAP_TOKEN_BYTES
+        || request
+            .bootstrap_token
+            .bytes()
+            .any(|byte| byte.is_ascii_control())
+    {
+        return Err(restore_token_lease(
+            &mut token_lease,
+            invalid_bootstrap_token(),
+        ));
+    }
+    Ok(token_lease)
+}
+
+fn parse_authority_bytes<const N: usize>(
+    value: &str,
+    message: &'static str,
+) -> OperationResult<[u8; N]> {
+    enrollment::parse_hex(value, N)
+        .ok()
+        .and_then(|bytes| bytes.try_into().ok())
+        .ok_or_else(|| OperationError::new(OperationErrorCode::EnrollmentInvalid, message))
+}
+
+fn preflight_signed_bundle(
+    config: &NodeConfig,
+    identity: &NodeIdentity,
+    bundle: &enrollment::SignedEnrollmentBundle,
+    bootstrap_token: &str,
+    nonce: &[u8],
+) -> OperationResult<(u64, [u8; 32], [u8; 32])> {
+    let authority = config
+        .trust
+        .authorities
+        .iter()
+        .find(|authority| authority.key_id == hex::encode(&bundle.authority_key_id))
+        .ok_or_else(|| {
+            OperationError::new(
+                OperationErrorCode::EnrollmentInvalid,
+                "signed enrollment authority is not configured",
+            )
+        })?;
+    let authority = enrollment::BundleAuthority {
+        key_id: parse_authority_bytes(&authority.key_id, "authority key ID is invalid")?,
+        public_key: parse_authority_bytes(
+            &authority.public_key,
+            "authority public key is invalid",
+        )?,
+        revoked: authority.revoked,
+    };
+    let now = crate::util::time::unix_seconds();
+    bundle
+        .verify(
+            &authority,
+            &config.organization.id,
+            identity.public_status().node_id.as_str(),
+            now,
+        )
+        .map_err(map_enrollment_error)?;
+    let certificate =
+        crate::direct_transport::TransportCertificate::from_bytes(&bundle.subject_certificate)
+            .map_err(|_| {
+                OperationError::new(
+                    OperationErrorCode::EnrollmentInvalid,
+                    "signed enrollment certificate is invalid",
+                )
+            })?;
+    certificate.verify_time(now).map_err(|_| {
+        OperationError::new(
+            OperationErrorCode::EnrollmentExpired,
+            "signed enrollment certificate is expired",
+        )
+    })?;
+    let token_hash = enrollment::hash_bootstrap_token(bootstrap_token.as_bytes());
+    let nonce_hash = enrollment::hash_bootstrap_nonce(nonce);
+    if hex::encode(&token_hash)
+        .as_bytes()
+        .ct_eq(config.trust.bootstrap_token_hash.as_bytes())
+        .unwrap_u8()
+        != 1
+        || hex::encode(&nonce_hash)
+            .as_bytes()
+            .ct_eq(config.trust.bootstrap_nonce_hash.as_bytes())
+            .unwrap_u8()
+            != 1
+    {
+        return Err(OperationError::new(
+            OperationErrorCode::EnrollmentDenied,
+            "bootstrap proof does not match local policy",
+        ));
+    }
+    Ok((now, token_hash, nonce_hash))
 }
 
 pub fn apply_signed_bundle_from_local_token(

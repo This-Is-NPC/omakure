@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "b9ede46e2346c15c40fea8b10d9e123a77ab847eac3a1d1a3aa92f7e7d4ce026",
+  "canonical_sha256": "c3e11187ebe0fcbcf28cb0eff3e5757ca79df1d9f0faf1abac8f830a60b4a89a",
   "config_identity": "no-config",
   "files": [
     {
@@ -3947,7 +3947,7 @@
       },
       "native": {
         "cognitive": 41,
-        "cyclomatic": 72
+        "cyclomatic": 73
       },
       "path": "src/operations/node/bundle.rs",
       "source_class": "handwritten"
@@ -4026,12 +4026,12 @@
       "macro": {
         "declarations": 0,
         "expansion": "not_measured",
-        "invocations": 33,
+        "invocations": 39,
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
         "cognitive": 0,
-        "cyclomatic": 15
+        "cyclomatic": 17
       },
       "path": "src/operations/node/tests/bundle.rs",
       "source_class": "handwritten"
@@ -85987,8 +85987,8 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 13,
-      "cyclomatic": 19,
+      "cognitive": 7,
+      "cyclomatic": 13,
       "derived": {
         "identity": "crate::operations::node::bundle::apply_signed_bundle_with_actor",
         "macro_expansion": "not_measured",
@@ -86002,8 +86002,8 @@
       "name": "apply_signed_bundle_with_actor",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 13,
-        "cyclomatic": 19,
+        "cognitive": 7,
+        "cyclomatic": 13,
         "kind": "function",
         "line": 63,
         "name": "apply_signed_bundle_with_actor"
@@ -86016,22 +86016,74 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::node::bundle::apply_signed_bundle_with_actor::<closure>",
+        "identity": "crate::operations::node::bundle::invalid_bootstrap_token",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/node/bundle.rs",
+        "signature": "fn invalid_bootstrap_token() -> OperationError",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::node::bundle::invalid_bootstrap_token",
+      "kind": "function",
+      "line": 157,
+      "name": "invalid_bootstrap_token",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 157,
+        "name": "invalid_bootstrap_token"
+      },
+      "path": "src/operations/node/bundle.rs",
+      "signature": "fn invalid_bootstrap_token() -> OperationError",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 6,
+      "cyclomatic": 7,
+      "derived": {
+        "identity": "crate::operations::node::bundle::prepare_bootstrap_token",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/node/bundle.rs",
+        "signature": "fn prepare_bootstrap_token( context: &NodeContext, registry: &NodeRegistry, config: &NodeConfig, request: &mut SignedBundleApplyRequest, ) -> OperationResult<Option<PrivateTokenLease>>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::node::bundle::prepare_bootstrap_token",
+      "kind": "function",
+      "line": 164,
+      "name": "prepare_bootstrap_token",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 6,
+        "cyclomatic": 7,
+        "kind": "function",
+        "line": 164,
+        "name": "prepare_bootstrap_token"
+      },
+      "path": "src/operations/node/bundle.rs",
+      "signature": "fn prepare_bootstrap_token( context: &NodeContext, registry: &NodeRegistry, config: &NodeConfig, request: &mut SignedBundleApplyRequest, ) -> OperationResult<Option<PrivateTokenLease>>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::node::bundle::prepare_bootstrap_token::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/operations/node/bundle.rs",
         "signature": ".any(|byte| byte.is_ascii_control())",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::node::bundle::apply_signed_bundle_with_actor::<closure>",
+      "identity": "crate::operations::node::bundle::prepare_bootstrap_token::<closure>",
       "kind": "closure",
-      "line": 109,
+      "line": 192,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 109,
+        "line": 192,
         "name": "<closure>"
       },
       "path": "src/operations/node/bundle.rs",
@@ -86039,51 +86091,155 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 2,
-      "cyclomatic": 3,
+      "cognitive": 0,
+      "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::node::bundle::apply_signed_bundle_with_actor::<closure>@141#2",
+        "identity": "crate::operations::node::bundle::parse_authority_bytes",
         "macro_expansion": "not_measured",
         "path": "src/operations/node/bundle.rs",
-        "signature": "let preflight = (|| {",
+        "signature": "fn parse_authority_bytes<const N: usize>( value: &str, message: &'static str, ) -> OperationResult<[u8",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::node::bundle::apply_signed_bundle_with_actor::<closure>@141#2",
-      "kind": "closure",
-      "line": 141,
-      "name": "<closure>",
+      "identity": "crate::operations::node::bundle::parse_authority_bytes",
+      "kind": "function",
+      "line": 202,
+      "name": "parse_authority_bytes",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 2,
-        "cyclomatic": 3,
-        "kind": "closure",
-        "line": 141,
-        "name": "<closure>"
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 202,
+        "name": "parse_authority_bytes"
       },
       "path": "src/operations/node/bundle.rs",
-      "signature": "let preflight = (|| {",
+      "signature": "fn parse_authority_bytes<const N: usize>( value: &str, message: &'static str, ) -> OperationResult<[u8",
       "source_class": "handwritten"
     },
     {
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::node::bundle::apply_signed_bundle_with_actor::<closure>::<closure>@147#2",
+        "identity": "crate::operations::node::bundle::parse_authority_bytes::<closure>",
         "macro_expansion": "not_measured",
         "path": "src/operations/node/bundle.rs",
-        "signature": ".ok_or_else(|| {",
+        "signature": ".and_then(|bytes| bytes.try_into().ok())",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::node::bundle::apply_signed_bundle_with_actor::<closure>::<closure>@147#2",
+      "identity": "crate::operations::node::bundle::parse_authority_bytes::<closure>",
       "kind": "closure",
-      "line": 147,
+      "line": 208,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 147,
+        "line": 208,
+        "name": "<closure>"
+      },
+      "path": "src/operations/node/bundle.rs",
+      "signature": ".and_then(|bytes| bytes.try_into().ok())",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::node::bundle::parse_authority_bytes::<closure>@209#2",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/node/bundle.rs",
+        "signature": ".ok_or_else(|| OperationError::new(OperationErrorCode::EnrollmentInvalid, message))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::node::bundle::parse_authority_bytes::<closure>@209#2",
+      "kind": "closure",
+      "line": 209,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 209,
+        "name": "<closure>"
+      },
+      "path": "src/operations/node/bundle.rs",
+      "signature": ".ok_or_else(|| OperationError::new(OperationErrorCode::EnrollmentInvalid, message))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::operations::node::bundle::preflight_signed_bundle",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/node/bundle.rs",
+        "signature": "fn preflight_signed_bundle( config: &NodeConfig, identity: &NodeIdentity, bundle: &enrollment::SignedEnrollmentBundle, bootstrap_token: &str, nonce: &[u8], ) -> OperationResult<(u64, [u8",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::node::bundle::preflight_signed_bundle",
+      "kind": "function",
+      "line": 212,
+      "name": "preflight_signed_bundle",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 3,
+        "kind": "function",
+        "line": 212,
+        "name": "preflight_signed_bundle"
+      },
+      "path": "src/operations/node/bundle.rs",
+      "signature": "fn preflight_signed_bundle( config: &NodeConfig, identity: &NodeIdentity, bundle: &enrollment::SignedEnrollmentBundle, bootstrap_token: &str, nonce: &[u8], ) -> OperationResult<(u64, [u8",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::node::bundle::preflight_signed_bundle::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/node/bundle.rs",
+        "signature": ".find(|authority| authority.key_id == hex::encode(&bundle.authority_key_id))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::node::bundle::preflight_signed_bundle::<closure>",
+      "kind": "closure",
+      "line": 223,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 223,
+        "name": "<closure>"
+      },
+      "path": "src/operations/node/bundle.rs",
+      "signature": ".find(|authority| authority.key_id == hex::encode(&bundle.authority_key_id))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::node::bundle::preflight_signed_bundle::<closure>@224#2",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/node/bundle.rs",
+        "signature": ".ok_or_else(|| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::node::bundle::preflight_signed_bundle::<closure>@224#2",
+      "kind": "closure",
+      "line": 224,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 224,
         "name": "<closure>"
       },
       "path": "src/operations/node/bundle.rs",
@@ -86094,22 +86250,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::node::bundle::apply_signed_bundle_with_actor::<closure>::<closure>@155#3",
+        "identity": "crate::operations::node::bundle::preflight_signed_bundle::<closure>@249#3",
         "macro_expansion": "not_measured",
         "path": "src/operations/node/bundle.rs",
         "signature": ".map_err(|_| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::node::bundle::apply_signed_bundle_with_actor::<closure>::<closure>@155#3",
+      "identity": "crate::operations::node::bundle::preflight_signed_bundle::<closure>@249#3",
       "kind": "closure",
-      "line": 155,
+      "line": 249,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 155,
+        "line": 249,
         "name": "<closure>"
       },
       "path": "src/operations/node/bundle.rs",
@@ -86120,22 +86276,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::node::bundle::apply_signed_bundle_with_actor::<closure>::<closure>@201#8",
+        "identity": "crate::operations::node::bundle::preflight_signed_bundle::<closure>@255#4",
         "macro_expansion": "not_measured",
         "path": "src/operations/node/bundle.rs",
         "signature": "certificate.verify_time(now).map_err(|_| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::node::bundle::apply_signed_bundle_with_actor::<closure>::<closure>@201#8",
+      "identity": "crate::operations::node::bundle::preflight_signed_bundle::<closure>@255#4",
       "kind": "closure",
-      "line": 201,
+      "line": 255,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 201,
+        "line": 255,
         "name": "<closure>"
       },
       "path": "src/operations/node/bundle.rs",
@@ -86154,14 +86310,14 @@
       },
       "identity": "crate::operations::node::bundle::apply_signed_bundle_from_local_token",
       "kind": "function",
-      "line": 274,
+      "line": 282,
       "name": "apply_signed_bundle_from_local_token",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 274,
+        "line": 282,
         "name": "apply_signed_bundle_from_local_token"
       },
       "path": "src/operations/node/bundle.rs",
@@ -86180,14 +86336,14 @@
       },
       "identity": "crate::operations::node::bundle::apply_signed_bundle_from_local_token::<closure>",
       "kind": "closure",
-      "line": 281,
+      "line": 289,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 281,
+        "line": 289,
         "name": "<closure>"
       },
       "path": "src/operations/node/bundle.rs",
@@ -86206,14 +86362,14 @@
       },
       "identity": "crate::operations::node::bundle::restore_token_lease",
       "kind": "function",
-      "line": 292,
+      "line": 300,
       "name": "restore_token_lease",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 3,
         "kind": "function",
-        "line": 292,
+        "line": 300,
         "name": "restore_token_lease"
       },
       "path": "src/operations/node/bundle.rs",
@@ -86232,14 +86388,14 @@
       },
       "identity": "crate::operations::node::bundle::record_signed_bundle_failure_with_token",
       "kind": "function",
-      "line": 307,
+      "line": 315,
       "name": "record_signed_bundle_failure_with_token",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 307,
+        "line": 315,
         "name": "record_signed_bundle_failure_with_token"
       },
       "path": "src/operations/node/bundle.rs",
@@ -86258,14 +86414,14 @@
       },
       "identity": "crate::operations::node::bundle::recover_private_token_tombstones",
       "kind": "function",
-      "line": 316,
+      "line": 324,
       "name": "recover_private_token_tombstones",
       "native": {
         "analyzer": "cccc",
         "cognitive": 16,
         "cyclomatic": 11,
         "kind": "function",
-        "line": 316,
+        "line": 324,
         "name": "recover_private_token_tombstones"
       },
       "path": "src/operations/node/bundle.rs",
@@ -86284,14 +86440,14 @@
       },
       "identity": "crate::operations::node::bundle::recover_private_token_tombstones::<closure>",
       "kind": "closure",
-      "line": 340,
+      "line": 348,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 340,
+        "line": 348,
         "name": "<closure>"
       },
       "path": "src/operations/node/bundle.rs",
@@ -86302,22 +86458,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::node::bundle::recover_private_token_tombstones::<closure>@350#2",
+        "identity": "crate::operations::node::bundle::recover_private_token_tombstones::<closure>@358#2",
         "macro_expansion": "not_measured",
         "path": "src/operations/node/bundle.rs",
         "signature": ".map_err(|error| cleanup_recovery_error(&map_registry_error(error)))?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::node::bundle::recover_private_token_tombstones::<closure>@350#2",
+      "identity": "crate::operations::node::bundle::recover_private_token_tombstones::<closure>@358#2",
       "kind": "closure",
-      "line": 350,
+      "line": 358,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 350,
+        "line": 358,
         "name": "<closure>"
       },
       "path": "src/operations/node/bundle.rs",
@@ -86328,22 +86484,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::node::bundle::recover_private_token_tombstones::<closure>@354#3",
+        "identity": "crate::operations::node::bundle::recover_private_token_tombstones::<closure>@362#3",
         "macro_expansion": "not_measured",
         "path": "src/operations/node/bundle.rs",
         "signature": ".map_err(|error| cleanup_recovery_error(&map_registry_error(error)))?",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::node::bundle::recover_private_token_tombstones::<closure>@354#3",
+      "identity": "crate::operations::node::bundle::recover_private_token_tombstones::<closure>@362#3",
       "kind": "closure",
-      "line": 354,
+      "line": 362,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 354,
+        "line": 362,
         "name": "<closure>"
       },
       "path": "src/operations/node/bundle.rs",
@@ -86354,26 +86510,52 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::node::bundle::recover_private_token_tombstones::<closure>@363#4",
+        "identity": "crate::operations::node::bundle::recover_private_token_tombstones::<closure>@371#4",
         "macro_expansion": "not_measured",
         "path": "src/operations/node/bundle.rs",
         "signature": "lease.restore().map_err(|error| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::node::bundle::recover_private_token_tombstones::<closure>@363#4",
+      "identity": "crate::operations::node::bundle::recover_private_token_tombstones::<closure>@371#4",
       "kind": "closure",
-      "line": 363,
+      "line": 371,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 363,
+        "line": 371,
         "name": "<closure>"
       },
       "path": "src/operations/node/bundle.rs",
       "signature": "lease.restore().map_err(|error| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::node::bundle::recover_private_token_tombstones::<closure>@403#5",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/node/bundle.rs",
+        "signature": ".map_err(|error| cleanup_recovery_error(&map_registry_error(error)))?;",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::node::bundle::recover_private_token_tombstones::<closure>@403#5",
+      "kind": "closure",
+      "line": 403,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 403,
+        "name": "<closure>"
+      },
+      "path": "src/operations/node/bundle.rs",
+      "signature": ".map_err(|error| cleanup_recovery_error(&map_registry_error(error)))?;",
       "source_class": "handwritten"
     },
     {
@@ -86388,14 +86570,14 @@
       },
       "identity": "crate::operations::node::bundle::recover_local_bootstrap_token_tombstones",
       "kind": "function",
-      "line": 400,
+      "line": 408,
       "name": "recover_local_bootstrap_token_tombstones",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 400,
+        "line": 408,
         "name": "recover_local_bootstrap_token_tombstones"
       },
       "path": "src/operations/node/bundle.rs",
@@ -86414,14 +86596,14 @@
       },
       "identity": "crate::operations::node::bundle::recover_local_bootstrap_token_tombstones::<closure>",
       "kind": "closure",
-      "line": 404,
+      "line": 412,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 404,
+        "line": 412,
         "name": "<closure>"
       },
       "path": "src/operations/node/bundle.rs",
@@ -86432,22 +86614,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::operations::node::bundle::recover_local_bootstrap_token_tombstones::<closure>@411#2",
+        "identity": "crate::operations::node::bundle::recover_local_bootstrap_token_tombstones::<closure>@419#2",
         "macro_expansion": "not_measured",
         "path": "src/operations/node/bundle.rs",
         "signature": "result.map_err(|error| cleanup_recovery_error(&error))",
         "source_class": "handwritten"
       },
-      "identity": "crate::operations::node::bundle::recover_local_bootstrap_token_tombstones::<closure>@411#2",
+      "identity": "crate::operations::node::bundle::recover_local_bootstrap_token_tombstones::<closure>@419#2",
       "kind": "closure",
-      "line": 411,
+      "line": 419,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 411,
+        "line": 419,
         "name": "<closure>"
       },
       "path": "src/operations/node/bundle.rs",
@@ -86466,14 +86648,14 @@
       },
       "identity": "crate::operations::node::bundle::complete_token_cleanup",
       "kind": "function",
-      "line": 414,
+      "line": 422,
       "name": "complete_token_cleanup",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 4,
         "kind": "function",
-        "line": 414,
+        "line": 422,
         "name": "complete_token_cleanup"
       },
       "path": "src/operations/node/bundle.rs",
@@ -86492,14 +86674,14 @@
       },
       "identity": "crate::operations::node::bundle::cleanup_recovery_error",
       "kind": "function",
-      "line": 446,
+      "line": 454,
       "name": "cleanup_recovery_error",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 446,
+        "line": 454,
         "name": "cleanup_recovery_error"
       },
       "path": "src/operations/node/bundle.rs",
@@ -86518,18 +86700,44 @@
       },
       "identity": "crate::operations::node::bundle::record_signed_bundle_failure",
       "kind": "function",
-      "line": 457,
+      "line": 465,
       "name": "record_signed_bundle_failure",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 4,
         "kind": "function",
-        "line": 457,
+        "line": 465,
         "name": "record_signed_bundle_failure"
       },
       "path": "src/operations/node/bundle.rs",
       "signature": "fn record_signed_bundle_failure( registry: &NodeRegistry, bundle: Option<&enrollment::SignedEnrollmentBundle>, error: OperationError, ) -> OperationResult<PublicPeer>",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 3,
+      "derived": {
+        "identity": "crate::operations::node::bundle::decode_bundle",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/node/bundle.rs",
+        "signature": "fn decode_bundle(value: &str) -> OperationResult<Vec<u8>>",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::node::bundle::decode_bundle",
+      "kind": "function",
+      "line": 496,
+      "name": "decode_bundle",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 2,
+        "cyclomatic": 3,
+        "kind": "function",
+        "line": 496,
+        "name": "decode_bundle"
+      },
+      "path": "src/operations/node/bundle.rs",
+      "signature": "fn decode_bundle(value: &str) -> OperationResult<Vec<u8>>",
       "source_class": "handwritten"
     },
     {
@@ -86816,32 +87024,6 @@
       },
       "path": "src/operations/node/manual_enrollment.rs",
       "signature": "fn decode_request(value: &str) -> OperationResult<Vec<u8>>",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 2,
-      "cyclomatic": 3,
-      "derived": {
-        "identity": "crate::operations::node::bundle::decode_bundle",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/node/bundle.rs",
-        "signature": "fn decode_bundle(value: &str) -> OperationResult<Vec<u8>>",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::node::bundle::decode_bundle",
-      "kind": "function",
-      "line": 488,
-      "name": "decode_bundle",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 2,
-        "cyclomatic": 3,
-        "kind": "function",
-        "line": 488,
-        "name": "decode_bundle"
-      },
-      "path": "src/operations/node/bundle.rs",
-      "signature": "fn decode_bundle(value: &str) -> OperationResult<Vec<u8>>",
       "source_class": "handwritten"
     },
     {
@@ -88044,6 +88226,422 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
+        "identity": "crate::operations::node::tests::bundle::signed_bundle_apply_is_target_bound_atomic_and_single_use",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/node/tests/bundle.rs",
+        "signature": "fn signed_bundle_apply_is_target_bound_atomic_and_single_use()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::node::tests::bundle::signed_bundle_apply_is_target_bound_atomic_and_single_use",
+      "kind": "function",
+      "line": 18,
+      "name": "signed_bundle_apply_is_target_bound_atomic_and_single_use",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 18,
+        "name": "signed_bundle_apply_is_target_bound_atomic_and_single_use"
+      },
+      "path": "src/operations/node/tests/bundle.rs",
+      "signature": "fn signed_bundle_apply_is_target_bound_atomic_and_single_use()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::node::tests::bundle::signed_bundle_apply_is_target_bound_atomic_and_single_use::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/node/tests/bundle.rs",
+        "signature": ".get_or_init(|| Mutex::new(()))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::node::tests::bundle::signed_bundle_apply_is_target_bound_atomic_and_single_use::<closure>",
+      "kind": "closure",
+      "line": 20,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 20,
+        "name": "<closure>"
+      },
+      "path": "src/operations/node/tests/bundle.rs",
+      "signature": ".get_or_init(|| Mutex::new(()))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::node::tests::bundle::signed_bundle_proof_failure_restores_token_before_retry",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/node/tests/bundle.rs",
+        "signature": "fn signed_bundle_proof_failure_restores_token_before_retry()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::node::tests::bundle::signed_bundle_proof_failure_restores_token_before_retry",
+      "kind": "function",
+      "line": 103,
+      "name": "signed_bundle_proof_failure_restores_token_before_retry",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 103,
+        "name": "signed_bundle_proof_failure_restores_token_before_retry"
+      },
+      "path": "src/operations/node/tests/bundle.rs",
+      "signature": "fn signed_bundle_proof_failure_restores_token_before_retry()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::node::tests::bundle::signed_bundle_proof_failure_restores_token_before_retry::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/node/tests/bundle.rs",
+        "signature": ".get_or_init(|| Mutex::new(()))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::node::tests::bundle::signed_bundle_proof_failure_restores_token_before_retry::<closure>",
+      "kind": "closure",
+      "line": 105,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 105,
+        "name": "<closure>"
+      },
+      "path": "src/operations/node/tests/bundle.rs",
+      "signature": ".get_or_init(|| Mutex::new(()))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::node::tests::bundle::signed_bundle_token_consumption_faults_are_recoverable_across_restart",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/node/tests/bundle.rs",
+        "signature": "fn signed_bundle_token_consumption_faults_are_recoverable_across_restart()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::node::tests::bundle::signed_bundle_token_consumption_faults_are_recoverable_across_restart",
+      "kind": "function",
+      "line": 128,
+      "name": "signed_bundle_token_consumption_faults_are_recoverable_across_restart",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 128,
+        "name": "signed_bundle_token_consumption_faults_are_recoverable_across_restart"
+      },
+      "path": "src/operations/node/tests/bundle.rs",
+      "signature": "fn signed_bundle_token_consumption_faults_are_recoverable_across_restart()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::node::tests::bundle::signed_bundle_token_consumption_faults_are_recoverable_across_restart::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/node/tests/bundle.rs",
+        "signature": ".get_or_init(|| Mutex::new(()))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::node::tests::bundle::signed_bundle_token_consumption_faults_are_recoverable_across_restart::<closure>",
+      "kind": "closure",
+      "line": 130,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 130,
+        "name": "<closure>"
+      },
+      "path": "src/operations/node/tests/bundle.rs",
+      "signature": ".get_or_init(|| Mutex::new(()))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::node::tests::bundle::signed_bundle_token_consumption_faults_are_recoverable_across_restart::<closure>@216#2",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/node/tests/bundle.rs",
+        "signature": "|row| row.get(0),",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::node::tests::bundle::signed_bundle_token_consumption_faults_are_recoverable_across_restart::<closure>@216#2",
+      "kind": "closure",
+      "line": 216,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 216,
+        "name": "<closure>"
+      },
+      "path": "src/operations/node/tests/bundle.rs",
+      "signature": "|row| row.get(0),",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::node::tests::bundle::cleanup_completion_failure_leaves_durable_pending_proof",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/node/tests/bundle.rs",
+        "signature": "fn cleanup_completion_failure_leaves_durable_pending_proof()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::node::tests::bundle::cleanup_completion_failure_leaves_durable_pending_proof",
+      "kind": "function",
+      "line": 224,
+      "name": "cleanup_completion_failure_leaves_durable_pending_proof",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 224,
+        "name": "cleanup_completion_failure_leaves_durable_pending_proof"
+      },
+      "path": "src/operations/node/tests/bundle.rs",
+      "signature": "fn cleanup_completion_failure_leaves_durable_pending_proof()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::node::tests::bundle::cleanup_completion_failure_leaves_durable_pending_proof::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/node/tests/bundle.rs",
+        "signature": ".get_or_init(|| Mutex::new(()))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::node::tests::bundle::cleanup_completion_failure_leaves_durable_pending_proof::<closure>",
+      "kind": "closure",
+      "line": 226,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 226,
+        "name": "<closure>"
+      },
+      "path": "src/operations/node/tests/bundle.rs",
+      "signature": ".get_or_init(|| Mutex::new(()))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::node::tests::bundle::cleanup_completion_failure_leaves_durable_pending_proof::<closure>@239#2",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/node/tests/bundle.rs",
+        "signature": "|row| row.get(0),",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::node::tests::bundle::cleanup_completion_failure_leaves_durable_pending_proof::<closure>@239#2",
+      "kind": "closure",
+      "line": 239,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 239,
+        "name": "<closure>"
+      },
+      "path": "src/operations/node/tests/bundle.rs",
+      "signature": "|row| row.get(0),",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::node::tests::bundle::cleanup_completion_failure_leaves_durable_pending_proof::<closure>@262#3",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/node/tests/bundle.rs",
+        "signature": "|row| row.get(0),",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::node::tests::bundle::cleanup_completion_failure_leaves_durable_pending_proof::<closure>@262#3",
+      "kind": "closure",
+      "line": 262,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 262,
+        "name": "<closure>"
+      },
+      "path": "src/operations/node/tests/bundle.rs",
+      "signature": "|row| row.get(0),",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::node::tests::bundle::signed_bundle_distinct_conductors_have_one_transactional_winner",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/node/tests/bundle.rs",
+        "signature": "fn signed_bundle_distinct_conductors_have_one_transactional_winner()",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::node::tests::bundle::signed_bundle_distinct_conductors_have_one_transactional_winner",
+      "kind": "function",
+      "line": 269,
+      "name": "signed_bundle_distinct_conductors_have_one_transactional_winner",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "function",
+        "line": 269,
+        "name": "signed_bundle_distinct_conductors_have_one_transactional_winner"
+      },
+      "path": "src/operations/node/tests/bundle.rs",
+      "signature": "fn signed_bundle_distinct_conductors_have_one_transactional_winner()",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::node::tests::bundle::signed_bundle_distinct_conductors_have_one_transactional_winner::<closure>",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/node/tests/bundle.rs",
+        "signature": ".get_or_init(|| Mutex::new(()))",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::node::tests::bundle::signed_bundle_distinct_conductors_have_one_transactional_winner::<closure>",
+      "kind": "closure",
+      "line": 271,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 271,
+        "name": "<closure>"
+      },
+      "path": "src/operations/node/tests/bundle.rs",
+      "signature": ".get_or_init(|| Mutex::new(()))",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::node::tests::bundle::signed_bundle_distinct_conductors_have_one_transactional_winner::make_bundle",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/node/tests/bundle.rs",
+        "signature": "let make_bundle = |bundle_id: [u8; 16], manager: &NodeIdentity, transport: &LocalTransport| {",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::node::tests::bundle::signed_bundle_distinct_conductors_have_one_transactional_winner::make_bundle",
+      "kind": "closure",
+      "line": 307,
+      "name": "make_bundle",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 307,
+        "name": "make_bundle"
+      },
+      "path": "src/operations/node/tests/bundle.rs",
+      "signature": "let make_bundle = |bundle_id: [u8; 16], manager: &NodeIdentity, transport: &LocalTransport| {",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::node::tests::bundle::signed_bundle_distinct_conductors_have_one_transactional_winner::<closure>@346#2",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/node/tests/bundle.rs",
+        "signature": "let first = std::thread::spawn(move || apply_signed_bundle(&target_a, request_a));",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::node::tests::bundle::signed_bundle_distinct_conductors_have_one_transactional_winner::<closure>@346#2",
+      "kind": "closure",
+      "line": 346,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 346,
+        "name": "<closure>"
+      },
+      "path": "src/operations/node/tests/bundle.rs",
+      "signature": "let first = std::thread::spawn(move || apply_signed_bundle(&target_a, request_a));",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
+        "identity": "crate::operations::node::tests::bundle::signed_bundle_distinct_conductors_have_one_transactional_winner::<closure>@347#3",
+        "macro_expansion": "not_measured",
+        "path": "src/operations/node/tests/bundle.rs",
+        "signature": "let second = std::thread::spawn(move || apply_signed_bundle(&target_b, request_b));",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::operations::node::tests::bundle::signed_bundle_distinct_conductors_have_one_transactional_winner::<closure>@347#3",
+      "kind": "closure",
+      "line": 347,
+      "name": "<closure>",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 0,
+        "cyclomatic": 1,
+        "kind": "closure",
+        "line": 347,
+        "name": "<closure>"
+      },
+      "path": "src/operations/node/tests/bundle.rs",
+      "signature": "let second = std::thread::spawn(move || apply_signed_bundle(&target_b, request_b));",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "derived": {
         "identity": "crate::operations::node::tests::status::initialization_does_not_recreate_deleted_transport_state",
         "macro_expansion": "not_measured",
         "path": "src/operations/node/tests/status.rs",
@@ -88584,318 +89182,6 @@
       },
       "path": "src/operations/node/tests/status.rs",
       "signature": "let init = thread::spawn(move || {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::node::tests::bundle::signed_bundle_apply_is_target_bound_atomic_and_single_use",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/node/tests/bundle.rs",
-        "signature": "fn signed_bundle_apply_is_target_bound_atomic_and_single_use()",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::node::tests::bundle::signed_bundle_apply_is_target_bound_atomic_and_single_use",
-      "kind": "function",
-      "line": 18,
-      "name": "signed_bundle_apply_is_target_bound_atomic_and_single_use",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 18,
-        "name": "signed_bundle_apply_is_target_bound_atomic_and_single_use"
-      },
-      "path": "src/operations/node/tests/bundle.rs",
-      "signature": "fn signed_bundle_apply_is_target_bound_atomic_and_single_use()",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::node::tests::bundle::signed_bundle_apply_is_target_bound_atomic_and_single_use::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/node/tests/bundle.rs",
-        "signature": ".get_or_init(|| Mutex::new(()))",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::node::tests::bundle::signed_bundle_apply_is_target_bound_atomic_and_single_use::<closure>",
-      "kind": "closure",
-      "line": 20,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 20,
-        "name": "<closure>"
-      },
-      "path": "src/operations/node/tests/bundle.rs",
-      "signature": ".get_or_init(|| Mutex::new(()))",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::node::tests::bundle::signed_bundle_token_consumption_faults_are_recoverable_across_restart",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/node/tests/bundle.rs",
-        "signature": "fn signed_bundle_token_consumption_faults_are_recoverable_across_restart()",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::node::tests::bundle::signed_bundle_token_consumption_faults_are_recoverable_across_restart",
-      "kind": "function",
-      "line": 103,
-      "name": "signed_bundle_token_consumption_faults_are_recoverable_across_restart",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 103,
-        "name": "signed_bundle_token_consumption_faults_are_recoverable_across_restart"
-      },
-      "path": "src/operations/node/tests/bundle.rs",
-      "signature": "fn signed_bundle_token_consumption_faults_are_recoverable_across_restart()",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::node::tests::bundle::signed_bundle_token_consumption_faults_are_recoverable_across_restart::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/node/tests/bundle.rs",
-        "signature": ".get_or_init(|| Mutex::new(()))",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::node::tests::bundle::signed_bundle_token_consumption_faults_are_recoverable_across_restart::<closure>",
-      "kind": "closure",
-      "line": 105,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 105,
-        "name": "<closure>"
-      },
-      "path": "src/operations/node/tests/bundle.rs",
-      "signature": ".get_or_init(|| Mutex::new(()))",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::node::tests::bundle::signed_bundle_token_consumption_faults_are_recoverable_across_restart::<closure>@191#2",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/node/tests/bundle.rs",
-        "signature": "|row| row.get(0),",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::node::tests::bundle::signed_bundle_token_consumption_faults_are_recoverable_across_restart::<closure>@191#2",
-      "kind": "closure",
-      "line": 191,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 191,
-        "name": "<closure>"
-      },
-      "path": "src/operations/node/tests/bundle.rs",
-      "signature": "|row| row.get(0),",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::node::tests::bundle::cleanup_completion_failure_leaves_durable_pending_proof",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/node/tests/bundle.rs",
-        "signature": "fn cleanup_completion_failure_leaves_durable_pending_proof()",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::node::tests::bundle::cleanup_completion_failure_leaves_durable_pending_proof",
-      "kind": "function",
-      "line": 199,
-      "name": "cleanup_completion_failure_leaves_durable_pending_proof",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 199,
-        "name": "cleanup_completion_failure_leaves_durable_pending_proof"
-      },
-      "path": "src/operations/node/tests/bundle.rs",
-      "signature": "fn cleanup_completion_failure_leaves_durable_pending_proof()",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::node::tests::bundle::cleanup_completion_failure_leaves_durable_pending_proof::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/node/tests/bundle.rs",
-        "signature": ".get_or_init(|| Mutex::new(()))",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::node::tests::bundle::cleanup_completion_failure_leaves_durable_pending_proof::<closure>",
-      "kind": "closure",
-      "line": 201,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 201,
-        "name": "<closure>"
-      },
-      "path": "src/operations/node/tests/bundle.rs",
-      "signature": ".get_or_init(|| Mutex::new(()))",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::node::tests::bundle::signed_bundle_distinct_conductors_have_one_transactional_winner",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/node/tests/bundle.rs",
-        "signature": "fn signed_bundle_distinct_conductors_have_one_transactional_winner()",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::node::tests::bundle::signed_bundle_distinct_conductors_have_one_transactional_winner",
-      "kind": "function",
-      "line": 244,
-      "name": "signed_bundle_distinct_conductors_have_one_transactional_winner",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "function",
-        "line": 244,
-        "name": "signed_bundle_distinct_conductors_have_one_transactional_winner"
-      },
-      "path": "src/operations/node/tests/bundle.rs",
-      "signature": "fn signed_bundle_distinct_conductors_have_one_transactional_winner()",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::node::tests::bundle::signed_bundle_distinct_conductors_have_one_transactional_winner::<closure>",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/node/tests/bundle.rs",
-        "signature": ".get_or_init(|| Mutex::new(()))",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::node::tests::bundle::signed_bundle_distinct_conductors_have_one_transactional_winner::<closure>",
-      "kind": "closure",
-      "line": 246,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 246,
-        "name": "<closure>"
-      },
-      "path": "src/operations/node/tests/bundle.rs",
-      "signature": ".get_or_init(|| Mutex::new(()))",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::node::tests::bundle::signed_bundle_distinct_conductors_have_one_transactional_winner::make_bundle",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/node/tests/bundle.rs",
-        "signature": "let make_bundle = |bundle_id: [u8; 16], manager: &NodeIdentity, transport: &LocalTransport| {",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::node::tests::bundle::signed_bundle_distinct_conductors_have_one_transactional_winner::make_bundle",
-      "kind": "closure",
-      "line": 282,
-      "name": "make_bundle",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 282,
-        "name": "make_bundle"
-      },
-      "path": "src/operations/node/tests/bundle.rs",
-      "signature": "let make_bundle = |bundle_id: [u8; 16], manager: &NodeIdentity, transport: &LocalTransport| {",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::node::tests::bundle::signed_bundle_distinct_conductors_have_one_transactional_winner::<closure>@321#2",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/node/tests/bundle.rs",
-        "signature": "let first = std::thread::spawn(move || apply_signed_bundle(&target_a, request_a));",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::node::tests::bundle::signed_bundle_distinct_conductors_have_one_transactional_winner::<closure>@321#2",
-      "kind": "closure",
-      "line": 321,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 321,
-        "name": "<closure>"
-      },
-      "path": "src/operations/node/tests/bundle.rs",
-      "signature": "let first = std::thread::spawn(move || apply_signed_bundle(&target_a, request_a));",
-      "source_class": "handwritten"
-    },
-    {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "derived": {
-        "identity": "crate::operations::node::tests::bundle::signed_bundle_distinct_conductors_have_one_transactional_winner::<closure>@322#3",
-        "macro_expansion": "not_measured",
-        "path": "src/operations/node/tests/bundle.rs",
-        "signature": "let second = std::thread::spawn(move || apply_signed_bundle(&target_b, request_b));",
-        "source_class": "handwritten"
-      },
-      "identity": "crate::operations::node::tests::bundle::signed_bundle_distinct_conductors_have_one_transactional_winner::<closure>@322#3",
-      "kind": "closure",
-      "line": 322,
-      "name": "<closure>",
-      "native": {
-        "analyzer": "cccc",
-        "cognitive": 0,
-        "cyclomatic": 1,
-        "kind": "closure",
-        "line": 322,
-        "name": "<closure>"
-      },
-      "path": "src/operations/node/tests/bundle.rs",
-      "signature": "let second = std::thread::spawn(move || apply_signed_bundle(&target_b, request_b));",
       "source_class": "handwritten"
     },
     {

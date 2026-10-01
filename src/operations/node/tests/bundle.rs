@@ -100,6 +100,31 @@ fn signed_bundle_apply_is_target_bound_atomic_and_single_use() {
 }
 
 #[test]
+fn signed_bundle_proof_failure_restores_token_before_retry() {
+    let _fault_lock = TOKEN_FAULT_LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap();
+    set_private_token_fault(PrivateTokenFault::None);
+    let fixture = signed_bundle_fixture([26; 32], 36, 46);
+    write_secure_token(&fixture.token_path, &"x".repeat(32));
+
+    let error = apply_signed_bundle(&fixture.target, fixture.request.clone()).unwrap_err();
+    assert_eq!(error.code, OperationErrorCode::EnrollmentDenied);
+    assert_eq!(error.message, "bootstrap proof does not match local policy");
+    assert_eq!(
+        fs::read_to_string(&fixture.token_path).unwrap(),
+        "x".repeat(32)
+    );
+    assert!(list_trusted_peers(&fixture.target).unwrap().is_empty());
+
+    write_secure_token(&fixture.token_path, &fixture.request.bootstrap_token);
+    let applied = apply_signed_bundle(&fixture.target, fixture.request).unwrap();
+    assert_eq!(applied.state, "active");
+    assert!(!fixture.token_path.exists());
+}
+
+#[test]
 fn signed_bundle_token_consumption_faults_are_recoverable_across_restart() {
     let _fault_lock = TOKEN_FAULT_LOCK
         .get_or_init(|| Mutex::new(()))

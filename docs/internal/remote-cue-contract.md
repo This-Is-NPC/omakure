@@ -37,7 +37,7 @@ rather than mitigating it:
 
 ### Sibling plane, not a sixth Health kind
 
-`HealthKind` is closed at five (`src/health_plane/model.rs:91`) and stays closed.
+`HealthKind` is closed at five (`src/domain/health_plane/model.rs`) and stays closed.
 Cues use a `cue_` kind namespace with a sibling signer in `direct_transport`,
 reusing the private kind-agnostic `sign_envelope`
 (`src/direct_transport/envelope.rs:163`). `sign_health_envelope`
@@ -155,13 +155,13 @@ and configuration only. A Cue is accepted if and only if **all five** pass.
 | **E** | The script is in `trust.remote_cue_scripts`, or was installed by a battery in `trust.remote_cue_batteries` | `1212`, reported as `1206` |
 
 Role is the `INTEGER` encoding `ROLE_CONDUCTOR = 1` / `ROLE_PERFORMER = 2`
-(`src/health_plane/bounds.rs:13-15`), not a `TEXT` role name.
+(`src/domain/health_plane/bounds.rs`), not a `TEXT` role name.
 
 Gate A is load-bearing: `allow_remote_cues` defaults to `false`, and a node that
 has never opted in refuses every Cue regardless of how trusted the sender is.
 
-`remote-run` ships in all three hand-duplicated capability copies (`src/health_plane/bounds.rs:23`,
-`src/node_registry/`, `src/enrollment.rs:47`).
+`remote-run` belongs to the shared capability allow-list in
+`src/domain/capability.rs`, which enrollment and trust validation use.
 
 ### Gate E: what may run is declared, not inferred
 

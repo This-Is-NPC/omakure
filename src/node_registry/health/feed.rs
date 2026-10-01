@@ -11,8 +11,8 @@ use super::types::{
     HealthFeedPeer, HealthFeedSignal, HealthFleetPeer, HealthPeerSnapshot, HealthPeerState,
     HealthSignalFeed,
 };
-use crate::health_plane::bounds::SIGNAL_INBOX_CAPACITY;
-use crate::health_plane::model::{HealthCode, HealthKind, SignalRecord};
+use crate::domain::health_plane::bounds::SIGNAL_INBOX_CAPACITY;
+use crate::domain::health_plane::model::{HealthCode, HealthKind, SignalRecord};
 use rusqlite::{params, Connection, Transaction, TransactionBehavior};
 
 const MAX_HEALTH_READ_ROWS: usize = 4_096;

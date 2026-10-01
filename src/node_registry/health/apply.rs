@@ -4,11 +4,11 @@ use super::audit::record_health_audit_tx;
 use super::evaluate::evaluate;
 use super::rows::{authorization_in, decode_opaque_id};
 use super::types::{HealthApplyRequest, HealthAuthorization};
-use crate::health_plane::bounds::{
+use crate::domain::health_plane::bounds::{
     MAX_REPLAY_ROWS, REORDER_BUFFER_SECONDS, REPLAY_RETENTION_SECONDS,
     REPLAY_SECURITY_FLOOR_SECONDS, SIGNAL_RETENTION_SECONDS,
 };
-use crate::health_plane::model::{
+use crate::domain::health_plane::model::{
     HealthCode, HealthDecision, ProfileSnapshot, PulseSnapshot, SignalRecord,
 };
 use rusqlite::{params, Transaction, TransactionBehavior};

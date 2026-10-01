@@ -254,7 +254,7 @@ fn message_replay_precedes_signal_ordering() {
     let out_of_order = signal(
         &local,
         1,
-        crate::health_plane::bounds::REORDER_BUFFER_ENTRIES + 1,
+        crate::domain::health_plane::bounds::REORDER_BUFFER_ENTRIES + 1,
         10,
         BASE_NOW,
     );
@@ -265,7 +265,7 @@ fn message_replay_precedes_signal_ordering() {
     let fresh_id = signal(
         &local,
         2,
-        crate::health_plane::bounds::REORDER_BUFFER_ENTRIES + 1,
+        crate::domain::health_plane::bounds::REORDER_BUFFER_ENTRIES + 1,
         11,
         BASE_NOW,
     );
@@ -323,7 +323,7 @@ fn unauthorized_and_revoked_peers_cannot_mutate_any_health_state() {
     let ack = HealthPayload {
         message_id: opaque_id_hex(4),
         target: local.clone(),
-        body: HealthBody::Ack(crate::health_plane::model::AckBody {
+        body: HealthBody::Ack(crate::domain::health_plane::model::AckBody {
             accepted: true,
             acked_message_id: opaque_id_hex(1),
             cursor: 0,

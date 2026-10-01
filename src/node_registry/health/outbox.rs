@@ -3,8 +3,10 @@ use super::super::{NodeRegistry, RegistryError};
 use super::audit::record_health_audit_tx;
 use super::rows::{decode_opaque_id, signal_from_row};
 use super::types::HealthOutboxEntry;
-use crate::health_plane::bounds::{SIGNAL_OUTBOX_CAPACITY, SIGNAL_RETENTION_SECONDS};
-use crate::health_plane::model::{HealthCode, HealthKind, RunFact, SignalKind, SignalRecord};
+use crate::domain::health_plane::bounds::{SIGNAL_OUTBOX_CAPACITY, SIGNAL_RETENTION_SECONDS};
+use crate::domain::health_plane::model::{
+    HealthCode, HealthKind, RunFact, SignalKind, SignalRecord,
+};
 use rusqlite::{params, OptionalExtension, TransactionBehavior};
 
 impl NodeRegistry {

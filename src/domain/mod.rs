@@ -1,6 +1,7 @@
 //! Domain layer - core types and validation logic.
 
 mod capability;
+pub mod health_plane;
 mod node_config;
 mod node_id;
 mod parsing;

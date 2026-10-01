@@ -35,7 +35,7 @@ signature. Holding the publisher key does not produce a session with a node
 that does not trust you.
 
 `baseline-push` was already in the frozen capability allow-list
-(`src/health_plane/bounds.rs`). No capability is added.
+(`src/domain/capability.rs`). No capability is added.
 
 `node_registry` refuses to let one node hold a publisher key *and* conduct
 anyone, in both directions. A node able to author code and order every

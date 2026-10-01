@@ -1,5 +1,7 @@
 use super::super::{AuditEvent, PeerRole, PeerState};
-use crate::health_plane::model::{HealthPayload, ProfileSnapshot, PulseSnapshot, SignalRecord};
+use crate::domain::health_plane::model::{
+    HealthPayload, ProfileSnapshot, PulseSnapshot, SignalRecord,
+};
 
 /// The single read-only projection over `trusted_peers` the Health Plane needs.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -2,11 +2,11 @@ use super::super::{NodeRegistry, RegistryError};
 use super::audit::record_health_audit_tx;
 use super::rows::active_trust_predicate;
 use super::types::HealthPruneReport;
-use crate::health_plane::bounds::{
+use crate::domain::health_plane::bounds::{
     AUDIT_RETENTION_SECONDS, AUDIT_ROW_BYTES, MAX_AUDIT_ROWS, MAX_REPLAY_ROWS, REPLAY_ROW_BYTES,
     REPLAY_SECURITY_FLOOR_SECONDS, SIGNAL_INBOX_CAPACITY, VERSION_INCOMPATIBLE_EXPIRY_SECONDS,
 };
-use crate::health_plane::model::HealthCode;
+use crate::domain::health_plane::model::HealthCode;
 use rusqlite::{params, Transaction, TransactionBehavior};
 
 impl NodeRegistry {

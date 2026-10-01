@@ -159,6 +159,7 @@ src/
 │   ├── json.rs              stable envelope and error codes
 │   └── …                    one adapter per remaining verb (init, trace, token, update, …)
 ├── domain/                  pure schema, parsing, validation, scheduling
+│   └── health_plane/        frozen Health Plane bounds and value types
 ├── operations/              protocol-neutral CLI/HTTP behavior
 │   ├── core/                scripts, runs, queue, and workspace operations
 │   ├── config.rs            resolved config and environment diagnostics
@@ -194,10 +195,8 @@ src/
 ├── direct_transport/        Noise framing, certificates, envelopes, and replay limits
 ├── direct_service/          production direct listener, peer admission, and outboxes
 ├── direct_health.rs         Health Plane carriage over an established direct session
-├── health_plane/            protocol-neutral Health Plane domain and operations
-│   ├── model.rs             Profile, Pulse, and the closed Signal kinds
+├── health_plane/            protocol-neutral Health Plane operations
 │   ├── schema.rs            frozen wire schema
-│   ├── bounds.rs            frozen size and rate bounds
 │   ├── report/              Performer-side facts, reporting, payloads, sanitization, and IDs
 │   └── lifecycle.rs         enrolled/revoked lifecycle Signals
 ├── remote_cue/              receive half of the Cue plane and its refusal codes

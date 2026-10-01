@@ -1,7 +1,7 @@
 use super::super::fields::validate_node_id;
 use super::super::{NodeRegistry, RegistryError};
 use super::types::HealthAuditEvent;
-use crate::health_plane::bounds::MAX_AUDIT_ROWS;
+use crate::domain::health_plane::bounds::MAX_AUDIT_ROWS;
 use rusqlite::{params, Transaction, TransactionBehavior};
 
 impl NodeRegistry {

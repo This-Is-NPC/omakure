@@ -191,7 +191,7 @@ installing — the **claim**. `baseline_observed_id` is the same derivation
 over the paths that set named, as they are on this node's disk now — the
 **evidence**. Both are 32 bytes wide because that is what the baseline plane
 derives; the width is not a policy choice this contract made, and
-`src/health_plane/bounds.rs` derives it from `crate::baseline` rather than
+`src/domain/health_plane/bounds.rs` derives it from `crate::baseline` rather than
 transcribing it, so the two cannot disagree.
 
 **A Performer never reports drift.** It does not know what it was supposed to

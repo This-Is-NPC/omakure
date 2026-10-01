@@ -2,7 +2,7 @@ use super::super::{NodeRegistry, PeerRole, PeerState, RegistryError};
 use super::feed::fleet_peer_in;
 use super::rows::{cleanup_corrupt_health_rows, load_peer_state, CorruptHealthIdentity};
 use super::*;
-use crate::health_plane::bounds::{
+use crate::domain::health_plane::bounds::{
     AUDIT_ROW_BYTES, MAX_AGE_SECONDS, MAX_AUDIT_ROWS, MAX_FUTURE_SKEW_SECONDS,
     MAX_PERFORMERS_PER_CONDUCTOR, MAX_PROFILES_PER_PEER_PER_HOUR, MAX_REPLAY_ROWS,
     MAX_STORED_PROFILE_BYTES, MAX_STORED_PULSE_BYTES, MAX_STORED_SIGNAL_BYTES, REPLAY_ROW_BYTES,
@@ -10,7 +10,7 @@ use crate::health_plane::bounds::{
     SIGNAL_RETENTION_SECONDS, STORAGE_CEILING_BYTES, VERSION_INCOMPATIBLE_EXPIRY_SECONDS,
     WORST_CASE_BYTES_PER_PERFORMER,
 };
-use crate::health_plane::model::{
+use crate::domain::health_plane::model::{
     HealthBody, HealthCode, HealthDecision, HealthKind, HealthPayload, ProfileSnapshot,
     PulseSnapshot, RunFact, RunnerFact, RuntimeFact, SignalKind, SignalRecord,
 };

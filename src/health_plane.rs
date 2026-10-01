@@ -9,9 +9,8 @@
 //! Every bound it enforces is transcribed from `docs/internal/health-plane-contract.md`
 //! into [`bounds`]; none of them is derived, negotiated, or widened at runtime.
 
-pub mod bounds;
+pub use crate::domain::health_plane::{bounds, model};
 pub mod lifecycle;
-pub mod model;
 pub mod report;
 pub mod schema;
 

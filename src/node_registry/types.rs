@@ -1,6 +1,6 @@
 use super::error::RegistryError;
+use crate::domain::health_plane::bounds::{ROLE_CONDUCTOR, ROLE_PERFORMER};
 use crate::enrollment::EnrollmentRole;
-use crate::health_plane::bounds::{ROLE_CONDUCTOR, ROLE_PERFORMER};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PeerRole {

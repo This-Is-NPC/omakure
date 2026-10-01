@@ -2,7 +2,7 @@ use super::super::fields::decode_hex;
 use super::super::{NodeRegistry, PeerRole, PeerState, RegistryError};
 use super::audit::record_health_audit_tx;
 use super::types::{HealthAuthorization, HealthPeerState};
-use crate::health_plane::model::{
+use crate::domain::health_plane::model::{
     HealthCode, HealthKind, ProfileSnapshot, PulseSnapshot, RunFact, RunnerFact, RuntimeFact,
     SignalKind, SignalRecord,
 };

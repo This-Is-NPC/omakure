@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "9597280878721e8065b1cc2552febc22b0ab049b720188c8d80a5b9652c12d70",
+  "canonical_sha256": "05c7fc9d78917fefe1f9a09399eaf61c753aa7d0921bcc3471a489eeaaa0ffd0",
   "config_identity": "no-config",
   "files": [
     {
@@ -2367,7 +2367,7 @@
         "cognitive": 0,
         "cyclomatic": 0
       },
-      "path": "src/health_plane/bounds.rs",
+      "path": "src/domain/health_plane/bounds.rs",
       "source_class": "handwritten"
     },
     {
@@ -2395,7 +2395,7 @@
         "cognitive": 15,
         "cyclomatic": 78
       },
-      "path": "src/health_plane/model.rs",
+      "path": "src/domain/health_plane/model.rs",
       "source_class": "handwritten"
     },
     {
@@ -54802,13 +54802,13 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::model::code",
+        "identity": "crate::domain::health_plane::model::code",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/model.rs",
+        "path": "src/domain/health_plane/model.rs",
         "signature": "pub const fn code(self) -> u16",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::model::code",
+      "identity": "crate::domain::health_plane::model::code",
       "kind": "method",
       "line": 58,
       "name": "code",
@@ -54820,7 +54820,7 @@
         "line": 58,
         "name": "code"
       },
-      "path": "src/health_plane/model.rs",
+      "path": "src/domain/health_plane/model.rs",
       "signature": "pub const fn code(self) -> u16",
       "source_class": "handwritten"
     },
@@ -54828,13 +54828,13 @@
       "cognitive": 1,
       "cyclomatic": 16,
       "derived": {
-        "identity": "crate::health_plane::model::name",
+        "identity": "crate::domain::health_plane::model::name",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/model.rs",
+        "path": "src/domain/health_plane/model.rs",
         "signature": "pub const fn name(self) -> &'static str",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::model::name",
+      "identity": "crate::domain::health_plane::model::name",
       "kind": "method",
       "line": 63,
       "name": "name",
@@ -54846,7 +54846,7 @@
         "line": 63,
         "name": "name"
       },
-      "path": "src/health_plane/model.rs",
+      "path": "src/domain/health_plane/model.rs",
       "signature": "pub const fn name(self) -> &'static str",
       "source_class": "handwritten"
     },
@@ -54854,13 +54854,13 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::model::from_code",
+        "identity": "crate::domain::health_plane::model::from_code",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/model.rs",
+        "path": "src/domain/health_plane/model.rs",
         "signature": "pub fn from_code(code: u16) -> Option<Self>",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::model::from_code",
+      "identity": "crate::domain::health_plane::model::from_code",
       "kind": "method",
       "line": 84,
       "name": "from_code",
@@ -54872,7 +54872,7 @@
         "line": 84,
         "name": "from_code"
       },
-      "path": "src/health_plane/model.rs",
+      "path": "src/domain/health_plane/model.rs",
       "signature": "pub fn from_code(code: u16) -> Option<Self>",
       "source_class": "handwritten"
     },
@@ -54880,13 +54880,13 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::model::from_code::<closure>",
+        "identity": "crate::domain::health_plane::model::from_code::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/model.rs",
+        "path": "src/domain/health_plane/model.rs",
         "signature": "Self::ALL.into_iter().find(|entry| entry.code() == code)",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::model::from_code::<closure>",
+      "identity": "crate::domain::health_plane::model::from_code::<closure>",
       "kind": "closure",
       "line": 85,
       "name": "<closure>",
@@ -54898,7 +54898,7 @@
         "line": 85,
         "name": "<closure>"
       },
-      "path": "src/health_plane/model.rs",
+      "path": "src/domain/health_plane/model.rs",
       "signature": "Self::ALL.into_iter().find(|entry| entry.code() == code)",
       "source_class": "handwritten"
     },
@@ -54906,13 +54906,13 @@
       "cognitive": 1,
       "cyclomatic": 6,
       "derived": {
-        "identity": "crate::health_plane::model::wire",
+        "identity": "crate::domain::health_plane::model::wire",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/model.rs",
+        "path": "src/domain/health_plane/model.rs",
         "signature": "pub const fn wire(self) -> &'static str",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::model::wire",
+      "identity": "crate::domain::health_plane::model::wire",
       "kind": "method",
       "line": 110,
       "name": "wire",
@@ -54924,7 +54924,7 @@
         "line": 110,
         "name": "wire"
       },
-      "path": "src/health_plane/model.rs",
+      "path": "src/domain/health_plane/model.rs",
       "signature": "pub const fn wire(self) -> &'static str",
       "source_class": "handwritten"
     },
@@ -54932,13 +54932,13 @@
       "cognitive": 1,
       "cyclomatic": 6,
       "derived": {
-        "identity": "crate::health_plane::model::body_field",
+        "identity": "crate::domain::health_plane::model::body_field",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/model.rs",
+        "path": "src/domain/health_plane/model.rs",
         "signature": "pub const fn body_field(self) -> &'static str",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::model::body_field",
+      "identity": "crate::domain::health_plane::model::body_field",
       "kind": "method",
       "line": 121,
       "name": "body_field",
@@ -54950,7 +54950,7 @@
         "line": 121,
         "name": "body_field"
       },
-      "path": "src/health_plane/model.rs",
+      "path": "src/domain/health_plane/model.rs",
       "signature": "pub const fn body_field(self) -> &'static str",
       "source_class": "handwritten"
     },
@@ -54958,13 +54958,13 @@
       "cognitive": 1,
       "cyclomatic": 6,
       "derived": {
-        "identity": "crate::health_plane::model::max_canonical_bytes",
+        "identity": "crate::domain::health_plane::model::max_canonical_bytes",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/model.rs",
+        "path": "src/domain/health_plane/model.rs",
         "signature": "pub const fn max_canonical_bytes(self) -> usize",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::model::max_canonical_bytes",
+      "identity": "crate::domain::health_plane::model::max_canonical_bytes",
       "kind": "method",
       "line": 132,
       "name": "max_canonical_bytes",
@@ -54976,7 +54976,7 @@
         "line": 132,
         "name": "max_canonical_bytes"
       },
-      "path": "src/health_plane/model.rs",
+      "path": "src/domain/health_plane/model.rs",
       "signature": "pub const fn max_canonical_bytes(self) -> usize",
       "source_class": "handwritten"
     },
@@ -54984,13 +54984,13 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::model::max_encoded_bytes",
+        "identity": "crate::domain::health_plane::model::max_encoded_bytes",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/model.rs",
+        "path": "src/domain/health_plane/model.rs",
         "signature": "pub const fn max_encoded_bytes(self) -> usize",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::model::max_encoded_bytes",
+      "identity": "crate::domain::health_plane::model::max_encoded_bytes",
       "kind": "method",
       "line": 143,
       "name": "max_encoded_bytes",
@@ -55002,7 +55002,7 @@
         "line": 143,
         "name": "max_encoded_bytes"
       },
-      "path": "src/health_plane/model.rs",
+      "path": "src/domain/health_plane/model.rs",
       "signature": "pub const fn max_encoded_bytes(self) -> usize",
       "source_class": "handwritten"
     },
@@ -55010,13 +55010,13 @@
       "cognitive": 1,
       "cyclomatic": 5,
       "derived": {
-        "identity": "crate::health_plane::model::max_stored_bytes",
+        "identity": "crate::domain::health_plane::model::max_stored_bytes",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/model.rs",
+        "path": "src/domain/health_plane/model.rs",
         "signature": "pub const fn max_stored_bytes(self) -> Option<i64>",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::model::max_stored_bytes",
+      "identity": "crate::domain::health_plane::model::max_stored_bytes",
       "kind": "method",
       "line": 148,
       "name": "max_stored_bytes",
@@ -55028,7 +55028,7 @@
         "line": 148,
         "name": "max_stored_bytes"
       },
-      "path": "src/health_plane/model.rs",
+      "path": "src/domain/health_plane/model.rs",
       "signature": "pub const fn max_stored_bytes(self) -> Option<i64>",
       "source_class": "handwritten"
     },
@@ -55036,13 +55036,13 @@
       "cognitive": 1,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::health_plane::model::required_role",
+        "identity": "crate::domain::health_plane::model::required_role",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/model.rs",
+        "path": "src/domain/health_plane/model.rs",
         "signature": "pub const fn required_role(self) -> i64",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::model::required_role",
+      "identity": "crate::domain::health_plane::model::required_role",
       "kind": "method",
       "line": 158,
       "name": "required_role",
@@ -55054,7 +55054,7 @@
         "line": 158,
         "name": "required_role"
       },
-      "path": "src/health_plane/model.rs",
+      "path": "src/domain/health_plane/model.rs",
       "signature": "pub const fn required_role(self) -> i64",
       "source_class": "handwritten"
     },
@@ -55062,13 +55062,13 @@
       "cognitive": 1,
       "cyclomatic": 4,
       "derived": {
-        "identity": "crate::health_plane::model::required_capability",
+        "identity": "crate::domain::health_plane::model::required_capability",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/model.rs",
+        "path": "src/domain/health_plane/model.rs",
         "signature": "pub const fn required_capability(self) -> Option<&'static str>",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::model::required_capability",
+      "identity": "crate::domain::health_plane::model::required_capability",
       "kind": "method",
       "line": 166,
       "name": "required_capability",
@@ -55080,7 +55080,7 @@
         "line": 166,
         "name": "required_capability"
       },
-      "path": "src/health_plane/model.rs",
+      "path": "src/domain/health_plane/model.rs",
       "signature": "pub const fn required_capability(self) -> Option<&'static str>",
       "source_class": "handwritten"
     },
@@ -55088,13 +55088,13 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::model::parse",
+        "identity": "crate::domain::health_plane::model::parse",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/model.rs",
+        "path": "src/domain/health_plane/model.rs",
         "signature": "pub fn parse(value: &str) -> Option<Self>",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::model::parse",
+      "identity": "crate::domain::health_plane::model::parse",
       "kind": "method",
       "line": 175,
       "name": "parse",
@@ -55106,7 +55106,7 @@
         "line": 175,
         "name": "parse"
       },
-      "path": "src/health_plane/model.rs",
+      "path": "src/domain/health_plane/model.rs",
       "signature": "pub fn parse(value: &str) -> Option<Self>",
       "source_class": "handwritten"
     },
@@ -55114,13 +55114,13 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::model::parse::<closure>",
+        "identity": "crate::domain::health_plane::model::parse::<closure>",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/model.rs",
+        "path": "src/domain/health_plane/model.rs",
         "signature": "Self::ALL.into_iter().find(|kind| kind.wire() == value)",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::model::parse::<closure>",
+      "identity": "crate::domain::health_plane::model::parse::<closure>",
       "kind": "closure",
       "line": 176,
       "name": "<closure>",
@@ -55132,7 +55132,7 @@
         "line": 176,
         "name": "<closure>"
       },
-      "path": "src/health_plane/model.rs",
+      "path": "src/domain/health_plane/model.rs",
       "signature": "Self::ALL.into_iter().find(|kind| kind.wire() == value)",
       "source_class": "handwritten"
     },
@@ -55140,13 +55140,13 @@
       "cognitive": 1,
       "cyclomatic": 4,
       "derived": {
-        "identity": "crate::health_plane::model::wire@198#2",
+        "identity": "crate::domain::health_plane::model::wire@198#2",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/model.rs",
+        "path": "src/domain/health_plane/model.rs",
         "signature": "pub const fn wire(self) -> &'static str",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::model::wire@198#2",
+      "identity": "crate::domain::health_plane::model::wire@198#2",
       "kind": "method",
       "line": 198,
       "name": "wire",
@@ -55158,7 +55158,7 @@
         "line": 198,
         "name": "wire"
       },
-      "path": "src/health_plane/model.rs",
+      "path": "src/domain/health_plane/model.rs",
       "signature": "pub const fn wire(self) -> &'static str",
       "source_class": "handwritten"
     },
@@ -55166,13 +55166,13 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::model::parse@207#2",
+        "identity": "crate::domain::health_plane::model::parse@207#2",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/model.rs",
+        "path": "src/domain/health_plane/model.rs",
         "signature": "pub fn parse(value: &str) -> Option<Self>",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::model::parse@207#2",
+      "identity": "crate::domain::health_plane::model::parse@207#2",
       "kind": "method",
       "line": 207,
       "name": "parse",
@@ -55184,7 +55184,7 @@
         "line": 207,
         "name": "parse"
       },
-      "path": "src/health_plane/model.rs",
+      "path": "src/domain/health_plane/model.rs",
       "signature": "pub fn parse(value: &str) -> Option<Self>",
       "source_class": "handwritten"
     },
@@ -55192,13 +55192,13 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::health_plane::model::parse::<closure>@208#2",
+        "identity": "crate::domain::health_plane::model::parse::<closure>@208#2",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/model.rs",
+        "path": "src/domain/health_plane/model.rs",
         "signature": "Self::ALL.into_iter().find(|kind| kind.wire() == value)",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::model::parse::<closure>@208#2",
+      "identity": "crate::domain::health_plane::model::parse::<closure>@208#2",
       "kind": "closure",
       "line": 208,
       "name": "<closure>",
@@ -55210,7 +55210,7 @@
         "line": 208,
         "name": "<closure>"
       },
-      "path": "src/health_plane/model.rs",
+      "path": "src/domain/health_plane/model.rs",
       "signature": "Self::ALL.into_iter().find(|kind| kind.wire() == value)",
       "source_class": "handwritten"
     },
@@ -55218,13 +55218,13 @@
       "cognitive": 1,
       "cyclomatic": 6,
       "derived": {
-        "identity": "crate::health_plane::model::kind",
+        "identity": "crate::domain::health_plane::model::kind",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/model.rs",
+        "path": "src/domain/health_plane/model.rs",
         "signature": "pub const fn kind(&self) -> HealthKind",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::model::kind",
+      "identity": "crate::domain::health_plane::model::kind",
       "kind": "method",
       "line": 322,
       "name": "kind",
@@ -55236,7 +55236,7 @@
         "line": 322,
         "name": "kind"
       },
-      "path": "src/health_plane/model.rs",
+      "path": "src/domain/health_plane/model.rs",
       "signature": "pub const fn kind(&self) -> HealthKind",
       "source_class": "handwritten"
     },
@@ -55244,13 +55244,13 @@
       "cognitive": 1,
       "cyclomatic": 5,
       "derived": {
-        "identity": "crate::health_plane::model::name@353#2",
+        "identity": "crate::domain::health_plane::model::name@353#2",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/model.rs",
+        "path": "src/domain/health_plane/model.rs",
         "signature": "pub const fn name(self) -> &'static str",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::model::name@353#2",
+      "identity": "crate::domain::health_plane::model::name@353#2",
       "kind": "method",
       "line": 353,
       "name": "name",
@@ -55262,7 +55262,7 @@
         "line": 353,
         "name": "name"
       },
-      "path": "src/health_plane/model.rs",
+      "path": "src/domain/health_plane/model.rs",
       "signature": "pub const fn name(self) -> &'static str",
       "source_class": "handwritten"
     },
@@ -55270,13 +55270,13 @@
       "cognitive": 3,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::health_plane::model::derive",
+        "identity": "crate::domain::health_plane::model::derive",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/model.rs",
+        "path": "src/domain/health_plane/model.rs",
         "signature": "pub fn derive(last_pulse_at: Option<i64>, now: i64) -> Self",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::model::derive",
+      "identity": "crate::domain::health_plane::model::derive",
       "kind": "method",
       "line": 363,
       "name": "derive",
@@ -55288,7 +55288,7 @@
         "line": 363,
         "name": "derive"
       },
-      "path": "src/health_plane/model.rs",
+      "path": "src/domain/health_plane/model.rs",
       "signature": "pub fn derive(last_pulse_at: Option<i64>, now: i64) -> Self",
       "source_class": "handwritten"
     },
@@ -55296,13 +55296,13 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "derived": {
-        "identity": "crate::health_plane::model::code@392#2",
+        "identity": "crate::domain::health_plane::model::code@392#2",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/model.rs",
+        "path": "src/domain/health_plane/model.rs",
         "signature": "pub const fn code(&self) -> Option<HealthCode>",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::model::code@392#2",
+      "identity": "crate::domain::health_plane::model::code@392#2",
       "kind": "method",
       "line": 392,
       "name": "code",
@@ -55314,7 +55314,7 @@
         "line": 392,
         "name": "code"
       },
-      "path": "src/health_plane/model.rs",
+      "path": "src/domain/health_plane/model.rs",
       "signature": "pub const fn code(&self) -> Option<HealthCode>",
       "source_class": "handwritten"
     },
@@ -55322,13 +55322,13 @@
       "cognitive": 1,
       "cyclomatic": 4,
       "derived": {
-        "identity": "crate::health_plane::model::outcome",
+        "identity": "crate::domain::health_plane::model::outcome",
         "macro_expansion": "not_measured",
-        "path": "src/health_plane/model.rs",
+        "path": "src/domain/health_plane/model.rs",
         "signature": "pub const fn outcome(&self) -> &'static str",
         "source_class": "handwritten"
       },
-      "identity": "crate::health_plane::model::outcome",
+      "identity": "crate::domain::health_plane::model::outcome",
       "kind": "method",
       "line": 400,
       "name": "outcome",
@@ -55340,7 +55340,7 @@
         "line": 400,
         "name": "outcome"
       },
-      "path": "src/health_plane/model.rs",
+      "path": "src/domain/health_plane/model.rs",
       "signature": "pub const fn outcome(&self) -> &'static str",
       "source_class": "handwritten"
     },

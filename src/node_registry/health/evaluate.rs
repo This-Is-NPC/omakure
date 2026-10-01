@@ -2,13 +2,13 @@ use super::super::{PeerState, RegistryError};
 use super::apply::{advance_cursor, record_replay_key, store_profile, store_pulse, store_signal};
 use super::rows::{decode_opaque_id, health_authorization_from_row, load_peer_state};
 use super::types::{HealthApplyRequest, HealthPeerState};
-use crate::health_plane::bounds::{
+use crate::domain::health_plane::bounds::{
     MAX_CONDUCTORS_PER_PERFORMER, MAX_MESSAGES_PER_PEER_PER_MINUTE, MAX_PERFORMERS_PER_CONDUCTOR,
     MAX_PROFILES_PER_PEER_PER_HOUR, MAX_SIGNALS_PER_PEER_PER_MINUTE, MIN_PULSE_INTERVAL_SECONDS,
     RATE_BURST_ALLOWANCE, RATE_HOUR_WINDOW_SECONDS, RATE_MINUTE_WINDOW_SECONDS,
     REORDER_BUFFER_ENTRIES, SIGNAL_GLOBAL_INBOX_CAPACITY, SIGNAL_INBOX_CAPACITY,
 };
-use crate::health_plane::model::{HealthBody, HealthCode, HealthDecision, HealthKind};
+use crate::domain::health_plane::model::{HealthBody, HealthCode, HealthDecision, HealthKind};
 use rusqlite::{params, OptionalExtension, Transaction};
 
 pub(super) fn evaluate(
@@ -121,11 +121,12 @@ fn freshness_rejection(request: &HealthApplyRequest<'_>) -> Option<HealthCode> {
     if request.created_at
         > request
             .now
-            .saturating_add(crate::health_plane::bounds::MAX_FUTURE_SKEW_SECONDS)
+            .saturating_add(crate::domain::health_plane::bounds::MAX_FUTURE_SKEW_SECONDS)
     {
         return Some(HealthCode::Future);
     }
-    if request.now.saturating_sub(request.created_at) > crate::health_plane::bounds::MAX_AGE_SECONDS
+    if request.now.saturating_sub(request.created_at)
+        > crate::domain::health_plane::bounds::MAX_AGE_SECONDS
     {
         return Some(HealthCode::Stale);
     }

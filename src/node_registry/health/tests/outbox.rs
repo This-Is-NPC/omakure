@@ -49,7 +49,7 @@ fn outbox_is_bounded_drops_the_oldest_and_retires_on_acknowledgement() {
     let ack = HealthPayload {
         message_id: opaque_id_hex(8_888),
         target: local,
-        body: HealthBody::Ack(crate::health_plane::model::AckBody {
+        body: HealthBody::Ack(crate::domain::health_plane::model::AckBody {
             accepted: true,
             acked_message_id: opaque_id_hex(7_777),
             cursor: 5,

@@ -95,7 +95,7 @@ impl DiscoveryService {
         let handle = thread::Builder::new()
             .name("omakure-lan-discovery".to_string())
             .spawn(move || {
-                discovery_loop(
+                discovery_loop(DiscoveryRuntime {
                     socket,
                     settings,
                     identity,
@@ -105,9 +105,9 @@ impl DiscoveryService {
                     multicast_addr,
                     multicast,
                     broadcast,
-                    stop_for_thread,
-                    status_for_thread,
-                )
+                    stop: stop_for_thread,
+                    status: status_for_thread,
+                })
             })
             .map_err(|_| DiscoveryError::Internal)?;
         Ok(Self {
@@ -156,10 +156,7 @@ impl Drop for DiscoveryService {
     }
 }
 
-// These inputs are the complete owned lifecycle state; grouping them would
-// obscure which values are process-only and which are protocol configuration.
-#[allow(clippy::too_many_arguments)]
-fn discovery_loop(
+struct DiscoveryRuntime {
     socket: UdpSocket,
     settings: DiscoverySettings,
     identity: NodeIdentity,
@@ -171,75 +168,94 @@ fn discovery_loop(
     broadcast: bool,
     stop: Arc<AtomicBool>,
     status: DiscoveryStatusHandle,
-) {
+}
+
+fn discovery_loop(runtime: DiscoveryRuntime) {
     let mut buffer = [0_u8; MAX_DATAGRAM_BYTES];
     let mut beacon_id = [0_u8; BEACON_ID_BYTES];
     entropy::fill_bytes(&mut beacon_id);
     let mut sequence = 0_u64;
-    let local_node_id = identity.public_status().node_id.clone();
+    let local_node_id = runtime.identity.public_status().node_id.clone();
     let mut next_send = Instant::now();
-    while !stop.load(Ordering::SeqCst) {
+    while !runtime.stop.load(Ordering::SeqCst) {
         let now_instant = Instant::now();
         if now_instant >= next_send {
             let now = unix_seconds();
-            if let Some(direct_port) = direct_port {
-                if let Ok(beacon) = Beacon::create(
-                    &identity,
-                    direct_port,
-                    beacon_id,
-                    sequence,
-                    now,
-                    secret.as_deref().map(str::as_bytes),
-                ) {
-                    if let Ok(bytes) = beacon.encode() {
-                        for sender in &send_sockets {
-                            if multicast {
-                                let _ = sender.socket.send_to(
-                                    &bytes,
-                                    SocketAddr::new(IpAddr::V4(multicast_addr), settings.port),
-                                );
-                            }
-                            if broadcast && sender.broadcast {
-                                let _ = sender.socket.send_to(
-                                    &bytes,
-                                    SocketAddr::new(IpAddr::V4(Ipv4Addr::BROADCAST), settings.port),
-                                );
-                                if let Some(address) = sender.address {
-                                    let _ = sender.socket.send_to(
-                                        &bytes,
-                                        SocketAddr::new(IpAddr::V4(address), settings.port),
-                                    );
-                                }
-                            }
-                        }
-                    }
-                }
+            if let Some(direct_port) = runtime.direct_port {
+                runtime.send_beacon(direct_port, beacon_id, sequence, now);
                 sequence = sequence.saturating_add(1);
             }
             next_send = now_instant + BEACON_INTERVAL;
         }
+        runtime.receive_batch(&mut buffer, &local_node_id);
+        if let Ok(mut snapshot) = runtime.status.lock() {
+            snapshot.prune(unix_seconds(), Instant::now());
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+}
 
+impl DiscoveryRuntime {
+    fn send_beacon(
+        &self,
+        direct_port: u16,
+        beacon_id: [u8; BEACON_ID_BYTES],
+        sequence: u64,
+        now: u64,
+    ) {
+        let Ok(beacon) = Beacon::create(
+            &self.identity,
+            direct_port,
+            beacon_id,
+            sequence,
+            now,
+            self.secret.as_deref().map(str::as_bytes),
+        ) else {
+            return;
+        };
+        let Ok(bytes) = beacon.encode() else {
+            return;
+        };
+        for sender in &self.send_sockets {
+            if self.multicast {
+                let _ = sender.socket.send_to(
+                    &bytes,
+                    SocketAddr::new(IpAddr::V4(self.multicast_addr), self.settings.port),
+                );
+            }
+            if self.broadcast && sender.broadcast {
+                let _ = sender.socket.send_to(
+                    &bytes,
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::BROADCAST), self.settings.port),
+                );
+                if let Some(address) = sender.address {
+                    let _ = sender.socket.send_to(
+                        &bytes,
+                        SocketAddr::new(IpAddr::V4(address), self.settings.port),
+                    );
+                }
+            }
+        }
+    }
+
+    fn receive_batch(&self, buffer: &mut [u8; MAX_DATAGRAM_BYTES], local_node_id: &str) {
         let mut received = 0;
         while received < RECEIVE_BATCH_LIMIT {
-            match socket.recv_from(&mut buffer) {
+            match self.socket.recv_from(buffer) {
                 Ok((size, source)) => {
                     received += 1;
                     process_datagram(
                         &buffer[..size],
                         source,
-                        &secret,
-                        &status,
-                        Some(&local_node_id),
+                        &self.secret,
+                        &self.status,
+                        Some(local_node_id),
                     );
                 }
                 Err(error) if error.kind() == io::ErrorKind::WouldBlock => break,
                 Err(_) => break,
             }
         }
-        if let Ok(mut snapshot) = status.lock() {
-            snapshot.prune(unix_seconds(), Instant::now());
-        }
-        thread::sleep(Duration::from_millis(20));
     }
 }
 

@@ -1,7 +1,7 @@
 {
   "analyzer": "cccc",
   "binary_sha256": "f788b7c32e7c86bd892a4b606615918cfafbe9882d2282db97193db7997e4e12",
-  "canonical_sha256": "f5809309ff7436c3deccc5e325347c217183347ffbac5ac18a60b339053481ee",
+  "canonical_sha256": "0cba01c51cdea4fd52076265c8e9c01b9c1b57a60d2050cb4e4202e75ce1ad41",
   "config_identity": "no-config",
   "files": [
     {
@@ -2210,7 +2210,7 @@
         "score_inclusion": "native_source_ast_only"
       },
       "native": {
-        "cognitive": 83,
+        "cognitive": 52,
         "cyclomatic": 62
       },
       "path": "src/discovery/service.rs",
@@ -48178,14 +48178,14 @@
       },
       "identity": "crate::discovery::service::start",
       "kind": "method",
-      "line": 23,
+      "line": 22,
       "name": "start",
       "native": {
         "analyzer": "cccc",
         "cognitive": 11,
         "cyclomatic": 11,
         "kind": "method",
-        "line": 23,
+        "line": 22,
         "name": "start"
       },
       "path": "src/discovery/service.rs",
@@ -48204,14 +48204,14 @@
       },
       "identity": "crate::discovery::service::start::<closure>",
       "kind": "closure",
-      "line": 45,
+      "line": 44,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 45,
+        "line": 44,
         "name": "<closure>"
       },
       "path": "src/discovery/service.rs",
@@ -48222,22 +48222,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::discovery::service::start::<closure>@48#2",
+        "identity": "crate::discovery::service::start::<closure>@47#2",
         "macro_expansion": "not_measured",
         "path": "src/discovery/service.rs",
         "signature": ".map_err(|_| DiscoveryError::Internal)?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::discovery::service::start::<closure>@48#2",
+      "identity": "crate::discovery::service::start::<closure>@47#2",
       "kind": "closure",
-      "line": 48,
+      "line": 47,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 48,
+        "line": 47,
         "name": "<closure>"
       },
       "path": "src/discovery/service.rs",
@@ -48248,22 +48248,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::discovery::service::start::<closure>@52#3",
+        "identity": "crate::discovery::service::start::<closure>@51#3",
         "macro_expansion": "not_measured",
         "path": "src/discovery/service.rs",
         "signature": ".map_err(|_| DiscoveryError::InvalidBeacon)?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::discovery::service::start::<closure>@52#3",
+      "identity": "crate::discovery::service::start::<closure>@51#3",
       "kind": "closure",
-      "line": 52,
+      "line": 51,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 52,
+        "line": 51,
         "name": "<closure>"
       },
       "path": "src/discovery/service.rs",
@@ -48274,22 +48274,22 @@
       "cognitive": 3,
       "cyclomatic": 3,
       "derived": {
-        "identity": "crate::discovery::service::start::<closure>@64#4",
+        "identity": "crate::discovery::service::start::<closure>@63#4",
         "macro_expansion": "not_measured",
         "path": "src/discovery/service.rs",
         "signature": ".filter_map(|interface| {",
         "source_class": "handwritten"
       },
-      "identity": "crate::discovery::service::start::<closure>@64#4",
+      "identity": "crate::discovery::service::start::<closure>@63#4",
       "kind": "closure",
-      "line": 64,
+      "line": 63,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 3,
         "cyclomatic": 3,
         "kind": "closure",
-        "line": 64,
+        "line": 63,
         "name": "<closure>"
       },
       "path": "src/discovery/service.rs",
@@ -48300,22 +48300,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::discovery::service::start::<closure>@79#5",
+        "identity": "crate::discovery::service::start::<closure>@78#5",
         "macro_expansion": "not_measured",
         "path": "src/discovery/service.rs",
         "signature": "let broadcast = settings.broadcast && send_sockets.iter().any(|sender| sender.broadcast);",
         "source_class": "handwritten"
       },
-      "identity": "crate::discovery::service::start::<closure>@79#5",
+      "identity": "crate::discovery::service::start::<closure>@78#5",
       "kind": "closure",
-      "line": 79,
+      "line": 78,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 79,
+        "line": 78,
         "name": "<closure>"
       },
       "path": "src/discovery/service.rs",
@@ -48326,22 +48326,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::discovery::service::start::<closure>@84#6",
+        "identity": "crate::discovery::service::start::<closure>@83#6",
         "macro_expansion": "not_measured",
         "path": "src/discovery/service.rs",
         "signature": "NodeIdentity::load_existing(&context).map_err(|_| DiscoveryError::Internal)?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::discovery::service::start::<closure>@84#6",
+      "identity": "crate::discovery::service::start::<closure>@83#6",
       "kind": "closure",
-      "line": 84,
+      "line": 83,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 84,
+        "line": 83,
         "name": "<closure>"
       },
       "path": "src/discovery/service.rs",
@@ -48352,22 +48352,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::discovery::service::start::<closure>@98#7",
+        "identity": "crate::discovery::service::start::<closure>@97#7",
         "macro_expansion": "not_measured",
         "path": "src/discovery/service.rs",
         "signature": ".spawn(move || {",
         "source_class": "handwritten"
       },
-      "identity": "crate::discovery::service::start::<closure>@98#7",
+      "identity": "crate::discovery::service::start::<closure>@97#7",
       "kind": "closure",
-      "line": 98,
+      "line": 97,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 98,
+        "line": 97,
         "name": "<closure>"
       },
       "path": "src/discovery/service.rs",
@@ -48378,22 +48378,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::discovery::service::start::<closure>@113#8",
+        "identity": "crate::discovery::service::start::<closure>@112#8",
         "macro_expansion": "not_measured",
         "path": "src/discovery/service.rs",
         "signature": ".map_err(|_| DiscoveryError::Internal)?;",
         "source_class": "handwritten"
       },
-      "identity": "crate::discovery::service::start::<closure>@113#8",
+      "identity": "crate::discovery::service::start::<closure>@112#8",
       "kind": "closure",
-      "line": 113,
+      "line": 112,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 113,
+        "line": 112,
         "name": "<closure>"
       },
       "path": "src/discovery/service.rs",
@@ -48412,14 +48412,14 @@
       },
       "identity": "crate::discovery::service::disabled",
       "kind": "method",
-      "line": 121,
+      "line": 120,
       "name": "disabled",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 121,
+        "line": 120,
         "name": "disabled"
       },
       "path": "src/discovery/service.rs",
@@ -48438,14 +48438,14 @@
       },
       "identity": "crate::discovery::service::status_without_service",
       "kind": "method",
-      "line": 131,
+      "line": 130,
       "name": "status_without_service",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 131,
+        "line": 130,
         "name": "status_without_service"
       },
       "path": "src/discovery/service.rs",
@@ -48464,14 +48464,14 @@
       },
       "identity": "crate::discovery::service::status",
       "kind": "method",
-      "line": 139,
+      "line": 138,
       "name": "status",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 139,
+        "line": 138,
         "name": "status"
       },
       "path": "src/discovery/service.rs",
@@ -48490,14 +48490,14 @@
       },
       "identity": "crate::discovery::service::stop",
       "kind": "method",
-      "line": 143,
+      "line": 142,
       "name": "stop",
       "native": {
         "analyzer": "cccc",
         "cognitive": 2,
         "cyclomatic": 3,
         "kind": "method",
-        "line": 143,
+        "line": 142,
         "name": "stop"
       },
       "path": "src/discovery/service.rs",
@@ -48516,14 +48516,14 @@
       },
       "identity": "crate::discovery::service::drop",
       "kind": "method",
-      "line": 155,
+      "line": 154,
       "name": "drop",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "method",
-        "line": 155,
+        "line": 154,
         "name": "drop"
       },
       "path": "src/discovery/service.rs",
@@ -48531,29 +48531,81 @@
       "source_class": "handwritten"
     },
     {
-      "cognitive": 51,
-      "cyclomatic": 16,
+      "cognitive": 8,
+      "cyclomatic": 5,
       "derived": {
         "identity": "crate::discovery::service::discovery_loop",
         "macro_expansion": "not_measured",
         "path": "src/discovery/service.rs",
-        "signature": "fn discovery_loop( socket: UdpSocket, settings: DiscoverySettings, identity: NodeIdentity, direct_port: Option<u16>, secret: Option<String>, send_sockets: Vec<InterfaceSocket>, multicast_addr: Ipv4Addr, multicast: bool, broadcast: bool, stop: Arc<AtomicBool>, status: DiscoveryStatusHandle, )",
+        "signature": "fn discovery_loop(runtime: DiscoveryRuntime)",
         "source_class": "handwritten"
       },
       "identity": "crate::discovery::service::discovery_loop",
       "kind": "function",
-      "line": 163,
+      "line": 173,
       "name": "discovery_loop",
       "native": {
         "analyzer": "cccc",
-        "cognitive": 51,
-        "cyclomatic": 16,
+        "cognitive": 8,
+        "cyclomatic": 5,
         "kind": "function",
-        "line": 163,
+        "line": 173,
         "name": "discovery_loop"
       },
       "path": "src/discovery/service.rs",
-      "signature": "fn discovery_loop( socket: UdpSocket, settings: DiscoverySettings, identity: NodeIdentity, direct_port: Option<u16>, secret: Option<String>, send_sockets: Vec<InterfaceSocket>, multicast_addr: Ipv4Addr, multicast: bool, broadcast: bool, stop: Arc<AtomicBool>, status: DiscoveryStatusHandle, )",
+      "signature": "fn discovery_loop(runtime: DiscoveryRuntime)",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 9,
+      "cyclomatic": 6,
+      "derived": {
+        "identity": "crate::discovery::service::send_beacon",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/service.rs",
+        "signature": "fn send_beacon( &self, direct_port: u16, beacon_id: [u8",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::service::send_beacon",
+      "kind": "method",
+      "line": 199,
+      "name": "send_beacon",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 9,
+        "cyclomatic": 6,
+        "kind": "method",
+        "line": 199,
+        "name": "send_beacon"
+      },
+      "path": "src/discovery/service.rs",
+      "signature": "fn send_beacon( &self, direct_port: u16, beacon_id: [u8",
+      "source_class": "handwritten"
+    },
+    {
+      "cognitive": 3,
+      "cyclomatic": 5,
+      "derived": {
+        "identity": "crate::discovery::service::receive_batch",
+        "macro_expansion": "not_measured",
+        "path": "src/discovery/service.rs",
+        "signature": "fn receive_batch(&self, buffer: &mut [u8",
+        "source_class": "handwritten"
+      },
+      "identity": "crate::discovery::service::receive_batch",
+      "kind": "method",
+      "line": 241,
+      "name": "receive_batch",
+      "native": {
+        "analyzer": "cccc",
+        "cognitive": 3,
+        "cyclomatic": 5,
+        "kind": "method",
+        "line": 241,
+        "name": "receive_batch"
+      },
+      "path": "src/discovery/service.rs",
+      "signature": "fn receive_batch(&self, buffer: &mut [u8",
       "source_class": "handwritten"
     },
     {
@@ -48568,14 +48620,14 @@
       },
       "identity": "crate::discovery::service::process_datagram",
       "kind": "function",
-      "line": 247,
+      "line": 262,
       "name": "process_datagram",
       "native": {
         "analyzer": "cccc",
         "cognitive": 4,
         "cyclomatic": 6,
         "kind": "function",
-        "line": 247,
+        "line": 262,
         "name": "process_datagram"
       },
       "path": "src/discovery/service.rs",
@@ -48594,14 +48646,14 @@
       },
       "identity": "crate::discovery::service::process_datagram::<closure>",
       "kind": "closure",
-      "line": 277,
+      "line": 292,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 277,
+        "line": 292,
         "name": "<closure>"
       },
       "path": "src/discovery/service.rs",
@@ -48620,14 +48672,14 @@
       },
       "identity": "crate::discovery::service::local_ipv4_interfaces",
       "kind": "function",
-      "line": 296,
+      "line": 311,
       "name": "local_ipv4_interfaces",
       "native": {
         "analyzer": "cccc",
         "cognitive": 12,
         "cyclomatic": 8,
         "kind": "function",
-        "line": 296,
+        "line": 311,
         "name": "local_ipv4_interfaces"
       },
       "path": "src/discovery/service.rs",
@@ -48646,14 +48698,14 @@
       },
       "identity": "crate::discovery::service::local_ipv4_interfaces::<closure>",
       "kind": "closure",
-      "line": 336,
+      "line": 351,
       "name": "<closure>",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "closure",
-        "line": 336,
+        "line": 351,
         "name": "<closure>"
       },
       "path": "src/discovery/service.rs",
@@ -48664,22 +48716,22 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "derived": {
-        "identity": "crate::discovery::service::local_ipv4_interfaces@350#2",
+        "identity": "crate::discovery::service::local_ipv4_interfaces@365#2",
         "macro_expansion": "not_measured",
         "path": "src/discovery/service.rs",
         "signature": "fn local_ipv4_interfaces() -> Vec<InterfaceAddress>",
         "source_class": "handwritten"
       },
-      "identity": "crate::discovery::service::local_ipv4_interfaces@350#2",
+      "identity": "crate::discovery::service::local_ipv4_interfaces@365#2",
       "kind": "function",
-      "line": 350,
+      "line": 365,
       "name": "local_ipv4_interfaces",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 350,
+        "line": 365,
         "name": "local_ipv4_interfaces"
       },
       "path": "src/discovery/service.rs",
@@ -48698,14 +48750,14 @@
       },
       "identity": "crate::discovery::service::platform_supported",
       "kind": "function",
-      "line": 354,
+      "line": 369,
       "name": "platform_supported",
       "native": {
         "analyzer": "cccc",
         "cognitive": 0,
         "cyclomatic": 1,
         "kind": "function",
-        "line": 354,
+        "line": 369,
         "name": "platform_supported"
       },
       "path": "src/discovery/service.rs",

@@ -18,6 +18,25 @@ use std::time::Duration;
 
 const STOP_GRACE: Duration = Duration::from_secs(5);
 
+#[cfg(unix)]
+#[derive(Debug, thiserror::Error)]
+pub(super) enum LockError {
+    #[error("daemon already running (pid {pid}, lock file {})", path.display())]
+    AlreadyRunning { pid: u32, path: PathBuf },
+    #[error("create {}: {source}", path.display())]
+    Create {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("write {}: {source}", path.display())]
+    Write {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+}
+
 pub fn run(scripts_dir: PathBuf, args: ServeArgs, json_output: bool) -> Result<(), Box<dyn Error>> {
     let workspace = Workspace::new(scripts_dir);
     workspace.ensure_layout()?;
@@ -52,15 +71,12 @@ pub(super) fn pid_file(workspace: &Workspace) -> PathBuf {
 // ---------------------------------------------------------------------------
 
 #[cfg(unix)]
-pub(super) fn acquire_lock(workspace: &Workspace) -> Result<(), String> {
+pub(super) fn acquire_lock(workspace: &Workspace) -> Result<(), LockError> {
     let path = pid_file(workspace);
     if path.exists() {
         match read_pid(&path) {
             Some(pid) if process_alive(pid) => {
-                return Err(format!(
-                    "daemon already running (pid {pid}, lock file {})",
-                    path.display()
-                ));
+                return Err(LockError::AlreadyRunning { pid, path });
             }
             _ => {
                 let _ = fs::remove_file(&path);
@@ -71,9 +87,11 @@ pub(super) fn acquire_lock(workspace: &Workspace) -> Result<(), String> {
         .write(true)
         .create_new(true)
         .open(&path)
-        .map_err(|e| format!("create {}: {e}", path.display()))?;
-    writeln!(file, "{}", std::process::id())
-        .map_err(|e| format!("write {}: {e}", path.display()))?;
+        .map_err(|source| LockError::Create {
+            path: path.clone(),
+            source,
+        })?;
+    writeln!(file, "{}", std::process::id()).map_err(|source| LockError::Write { path, source })?;
     Ok(())
 }
 
@@ -439,7 +457,7 @@ fn run_foreground(
 ) -> Result<(), Box<dyn Error>> {
     #[cfg(unix)]
     if let Err(err) = acquire_lock(&workspace) {
-        exit_with_error(json_output, codes::DAEMON_ALREADY_RUNNING, err);
+        exit_with_error(json_output, codes::DAEMON_ALREADY_RUNNING, err.to_string());
     }
     #[cfg(windows)]
     let lock = match acquire_lock(&workspace) {

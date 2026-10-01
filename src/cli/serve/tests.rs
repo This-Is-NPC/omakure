@@ -1,3 +1,5 @@
+#[cfg(unix)]
+use super::lifecycle::LockError;
 use super::lifecycle::{acquire_lock, pid_file, release_lock};
 #[cfg(windows)]
 use super::lifecycle::{publish_windows_pid_file, read_windows_pid_file, WindowsPidFile};
@@ -227,7 +229,32 @@ fn acquire_lock_rejects_when_live_pid_present() {
     // Write our own PID — it is by definition alive.
     fs::write(pid_file(&ws), std::process::id().to_string()).unwrap();
     let err = acquire_lock(&ws).unwrap_err();
-    assert!(err.contains("daemon already running"), "was: {err}");
+    assert!(matches!(&err, LockError::AlreadyRunning { .. }));
+    assert_eq!(
+        err.to_string(),
+        format!(
+            "daemon already running (pid {}, lock file {})",
+            std::process::id(),
+            pid_file(&ws).display()
+        )
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn acquire_lock_reports_create_failure_with_path() {
+    let tmp = TempDir::new().unwrap();
+    let ws = workspace_in(&tmp);
+    fs::remove_dir_all(ws.omakure_dir()).unwrap();
+    let err = acquire_lock(&ws).unwrap_err();
+    assert!(matches!(
+        &err,
+        LockError::Create { path, source }
+            if path == &pid_file(&ws) && source.kind() == std::io::ErrorKind::NotFound
+    ));
+    assert!(err
+        .to_string()
+        .starts_with(&format!("create {}: ", pid_file(&ws).display())));
 }
 
 #[cfg(unix)]

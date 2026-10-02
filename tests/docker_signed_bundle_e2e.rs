@@ -249,8 +249,7 @@ mod cleanup_tests {
         assert_eq!(
             args,
             [
-                "--foreground",
-                "--kill-after=10s",
+                super::docker::BOUNDED_RUNNER,
                 "120s",
                 "docker",
                 "compose",

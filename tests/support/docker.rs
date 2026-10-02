@@ -4,14 +4,17 @@ use std::time::{Duration, Instant};
 
 const COMPOSE_OPERATION_TIMEOUT: &str = "120s";
 const COMPOSE_BUILD_TIMEOUT: &str = "1800s";
+pub const BOUNDED_RUNNER: &str = "scripts/tasks/atomic/run-bounded";
 
 pub fn compose_project_name(label: &str) -> String {
     format!("omakure-{label}-{}", std::process::id())
 }
 
 fn bounded_command_within(program: &str, budget: &str) -> Command {
-    let mut command = Command::new("timeout");
-    command.args(["--foreground", "--kill-after=10s", budget, program]);
+    let mut command = Command::new("bash");
+    command
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .args([BOUNDED_RUNNER, budget, program]);
     command
 }
 
@@ -145,8 +148,7 @@ mod tests {
         assert_eq!(
             args,
             [
-                "--foreground",
-                "--kill-after=10s",
+                super::BOUNDED_RUNNER,
                 "1800s",
                 "docker",
                 "compose",

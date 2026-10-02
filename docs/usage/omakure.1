@@ -109,6 +109,15 @@ Install one Battery script into the trusted scripts workspace
 \fBbattery remove\fR
 Unregister one Battery
 .TP
+\fBbattery workflow\fR
+Start and inspect installed Battery workflows
+.TP
+\fBbattery workflow start\fR
+Start a workflow using installed scripts from one Battery
+.TP
+\fBbattery workflow status\fR
+Inspect a durable workflow and its step results
+.TP
 \fBtoken\fR
 Generate hashed API tokens for `\-\-tokens\-file` auth
 .TP
@@ -952,6 +961,73 @@ When set, supported subcommands print exactly one JSON envelope `{ ok, data, err
 .TP
 \fB<NAME>\fR
 Battery name
+.SH "OMAKURE BATTERY WORKFLOW"
+Start and inspect installed Battery workflows
+.PP
+\fBUsage:\fR omakure battery workflow [OPTIONS] <COMMAND>
+.PP
+\fBOptions:\fR
+.PP
+.TP
+\fB\-\-scripts\-dir\fR \fI<SCRIPTS_DIR>\fR
+Scripts directory override
+.TP
+\fB\-\-json\fR
+Emit machine\-readable JSON output for AI\-facing subcommands.
+
+When set, supported subcommands print exactly one JSON envelope `{ ok, data, error, schema_version }` on stdout instead of their human\-readable form. Subcommands that do not support JSON ignore this flag.
+.RS
+\fIDefault: \fRfalse
+.RE
+.SH "OMAKURE BATTERY WORKFLOW START"
+Start a workflow using installed scripts from one Battery
+.PP
+\fBUsage:\fR omakure battery workflow start [OPTIONS] <BATTERY> <WORKFLOW>
+.PP
+\fBOptions:\fR
+.PP
+.TP
+\fB\-\-scripts\-dir\fR \fI<SCRIPTS_DIR>\fR
+Scripts directory override
+.TP
+\fB\-\-json\fR
+Emit machine\-readable JSON output for AI\-facing subcommands.
+
+When set, supported subcommands print exactly one JSON envelope `{ ok, data, error, schema_version }` on stdout instead of their human\-readable form. Subcommands that do not support JSON ignore this flag.
+.RS
+\fIDefault: \fRfalse
+.RE
+\fBArguments:\fR
+.PP
+.TP
+\fB<BATTERY>\fR
+Registered Battery name
+.TP
+\fB<WORKFLOW>\fR
+Workflow id from the Battery manifest
+.SH "OMAKURE BATTERY WORKFLOW STATUS"
+Inspect a durable workflow and its step results
+.PP
+\fBUsage:\fR omakure battery workflow status [OPTIONS] <WORKFLOW_RUN_ID>
+.PP
+\fBOptions:\fR
+.PP
+.TP
+\fB\-\-scripts\-dir\fR \fI<SCRIPTS_DIR>\fR
+Scripts directory override
+.TP
+\fB\-\-json\fR
+Emit machine\-readable JSON output for AI\-facing subcommands.
+
+When set, supported subcommands print exactly one JSON envelope `{ ok, data, error, schema_version }` on stdout instead of their human\-readable form. Subcommands that do not support JSON ignore this flag.
+.RS
+\fIDefault: \fRfalse
+.RE
+\fBArguments:\fR
+.PP
+.TP
+\fB<WORKFLOW_RUN_ID>\fR
+Workflow run id returned by `battery workflow start`
 .SH "OMAKURE TOKEN"
 Generate hashed API tokens for `\-\-tokens\-file` auth
 

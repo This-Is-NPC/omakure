@@ -5,8 +5,8 @@
   "clap_usage_version": "5.0.0",
   "clap_usage_revision": "9732c63",
   "clap_usage_commit": "9732c6365fceabea524ba850b758564d48e37941",
-  "command_count": 75,
-  "leaf_count": 65,
+  "command_count": 78,
+  "leaf_count": 67,
   "losses": [
     {
       "command": [

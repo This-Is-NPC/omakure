@@ -51,6 +51,20 @@
       ]
     },
     {
+      "entry_id": "battery-workflow-start",
+      "operation_family": "battery",
+      "cli_ids": [
+        "battery workflow start"
+      ]
+    },
+    {
+      "entry_id": "battery-workflow-status",
+      "operation_family": "battery",
+      "cli_ids": [
+        "battery workflow status"
+      ]
+    },
+    {
       "entry_id": "cli-api",
       "operation_family": "api",
       "cli_ids": [

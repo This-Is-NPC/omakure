@@ -133,37 +133,18 @@ fn worker_loop_inner(
         if cancel_flag.load(Ordering::SeqCst) {
             return;
         }
-        let store = match RunStore::open(&workspace) {
-            Ok(store) => store,
-            Err(_) => {
+        let row = match claim_after_workflow_recovery(
+            &workspace,
+            &worker_id,
+            &filters,
+            &mut workflow_recovery_failed,
+        ) {
+            Ok(Some(row)) => row,
+            Ok(None) if once => return,
+            _ => {
                 thread::sleep(Duration::from_millis(WORKER_IDLE_POLL_MS));
                 continue;
             }
-        };
-        match store.recover_workflows() {
-            Ok(_) => workflow_recovery_failed = false,
-            Err(error) => {
-                if !workflow_recovery_failed {
-                    eprintln!("omakure: workflow recovery remains pending: {error}");
-                    workflow_recovery_failed = true;
-                }
-            }
-        }
-        let claimed = match store.claim_next(&worker_id, &filters) {
-            Ok(opt) => opt,
-            Err(_) => {
-                drop(store);
-                thread::sleep(Duration::from_millis(WORKER_IDLE_POLL_MS));
-                continue;
-            }
-        };
-        drop(store);
-        let Some(row) = claimed else {
-            if once {
-                return;
-            }
-            thread::sleep(Duration::from_millis(WORKER_IDLE_POLL_MS));
-            continue;
         };
         execute_and_finalize(
             &workspace,
@@ -175,6 +156,24 @@ fn worker_loop_inner(
             return;
         }
     }
+}
+
+fn claim_after_workflow_recovery(
+    workspace: &Workspace,
+    worker_id: &str,
+    filters: &ClaimFilters,
+    recovery_failed: &mut bool,
+) -> Result<Option<RunRow>, RunsError> {
+    let store = RunStore::open(workspace)?;
+    match store.recover_workflows() {
+        Ok(_) => *recovery_failed = false,
+        Err(error) if !*recovery_failed => {
+            eprintln!("omakure: workflow recovery remains pending: {error}");
+            *recovery_failed = true;
+        }
+        Err(_) => {}
+    }
+    store.claim_next(worker_id, filters)
 }
 
 /// Execute one claimed row through the shared executor and write the
@@ -214,36 +213,12 @@ fn execute_and_finalize_inner(
     // (`docs/internal/env-injection-spec.md` §1): the active managed env. Reserved
     // vars (layer 4) are pushed after this inside `execute_with_heartbeat`
     // and remain non-overridable.
-    let run_env_name = RunStore::open(workspace)
-        .ok()
-        .and_then(|store| store.get_run_env(&row.run_id).ok().flatten());
-    let extra_env = match run_env_name.as_deref() {
-        Some(name) => {
-            let path = match crate::operations::envs::env_file_path(workspace, name) {
-                Ok(path) => path,
-                Err(err) => {
-                    fail_without_execution(
-                        workspace,
-                        row,
-                        format!("queued env resolution failed: {}", err.message),
-                    );
-                    return;
-                }
-            };
-            match crate::adapters::environments::resolve_run_env(workspace.envs_dir(), Some(&path))
-            {
-                Ok(env) => env,
-                Err(err) => {
-                    fail_without_execution(
-                        workspace,
-                        row,
-                        format!("queued env resolution failed: {err}"),
-                    );
-                    return;
-                }
-            }
+    let extra_env = match resolve_worker_env(workspace, &row.run_id) {
+        Ok(env) => env,
+        Err(error) => {
+            fail_without_execution(workspace, row, error);
+            return;
         }
-        None => crate::adapters::environments::resolve_active_env(workspace.envs_dir()),
     };
     let result = crate::run_executor::execute_with_heartbeat_guarded(
         workspace,
@@ -273,6 +248,24 @@ fn execute_and_finalize_inner(
     if transition.is_ok() {
         advance_workflow_after_run(&store, &row.run_id);
     }
+}
+
+fn resolve_worker_env(
+    workspace: &Workspace,
+    run_id: &str,
+) -> Result<Vec<(String, String)>, String> {
+    let run_env_name = RunStore::open(workspace)
+        .ok()
+        .and_then(|store| store.get_run_env(run_id).ok().flatten());
+    let Some(name) = run_env_name else {
+        return Ok(crate::adapters::environments::resolve_active_env(
+            workspace.envs_dir(),
+        ));
+    };
+    let path = crate::operations::envs::env_file_path(workspace, &name)
+        .map_err(|err| format!("queued env resolution failed: {}", err.message))?;
+    crate::adapters::environments::resolve_run_env(workspace.envs_dir(), Some(&path))
+        .map_err(|err| format!("queued env resolution failed: {err}"))
 }
 
 fn advance_workflow_after_run(store: &RunStore, run_id: &str) {

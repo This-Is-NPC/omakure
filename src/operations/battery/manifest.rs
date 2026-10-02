@@ -81,8 +81,16 @@ pub fn validate_manifest(cache_path: &Path, manifest: &BatteryManifest) -> Opera
             "battery manifest name is required",
         ));
     }
+    let script_ids = validate_manifest_scripts(cache_path, &manifest.scripts)?;
+    validate_manifest_workflows(&manifest.workflows, &script_ids)
+}
+
+fn validate_manifest_scripts<'a>(
+    cache_path: &Path,
+    scripts: &'a [BatteryManifestScript],
+) -> OperationResult<HashSet<&'a str>> {
     let mut ids = HashSet::new();
-    for script in &manifest.scripts {
+    for script in scripts {
         if !ids.insert(script.id.as_str()) {
             return Err(OperationError::new(
                 OperationErrorCode::ManifestInvalid,
@@ -91,39 +99,54 @@ pub fn validate_manifest(cache_path: &Path, manifest: &BatteryManifest) -> Opera
         }
         validate_script_entry(cache_path, script)?;
     }
+    Ok(ids)
+}
+
+fn validate_manifest_workflows(
+    workflows: &[BatteryManifestWorkflow],
+    script_ids: &HashSet<&str>,
+) -> OperationResult<()> {
     let mut workflow_ids = HashSet::new();
-    for workflow in &manifest.workflows {
-        if workflow.id.trim().is_empty() {
-            return Err(OperationError::new(
-                OperationErrorCode::ManifestInvalid,
-                "battery workflow id is required",
-            ));
-        }
+    for workflow in workflows {
         if !workflow_ids.insert(workflow.id.as_str()) {
             return Err(OperationError::new(
                 OperationErrorCode::ManifestInvalid,
                 format!("duplicate battery workflow id: {}", workflow.id),
             ));
         }
-        if workflow.scripts.len() < 2 {
+        validate_workflow_entry(workflow, script_ids)?;
+    }
+    Ok(())
+}
+
+fn validate_workflow_entry(
+    workflow: &BatteryManifestWorkflow,
+    script_ids: &HashSet<&str>,
+) -> OperationResult<()> {
+    if workflow.id.trim().is_empty() {
+        return Err(OperationError::new(
+            OperationErrorCode::ManifestInvalid,
+            "battery workflow id is required",
+        ));
+    }
+    if workflow.scripts.len() < 2 {
+        return Err(OperationError::new(
+            OperationErrorCode::ManifestInvalid,
+            format!(
+                "battery workflow '{}' requires at least two steps",
+                workflow.id
+            ),
+        ));
+    }
+    for script_id in &workflow.scripts {
+        if !script_ids.contains(script_id.as_str()) {
             return Err(OperationError::new(
                 OperationErrorCode::ManifestInvalid,
                 format!(
-                    "battery workflow '{}' requires at least two steps",
-                    workflow.id
+                    "battery workflow '{}' references unknown script id: {}",
+                    workflow.id, script_id
                 ),
             ));
-        }
-        for script_id in &workflow.scripts {
-            if !ids.contains(script_id.as_str()) {
-                return Err(OperationError::new(
-                    OperationErrorCode::ManifestInvalid,
-                    format!(
-                        "battery workflow '{}' references unknown script id: {}",
-                        workflow.id, script_id
-                    ),
-                ));
-            }
         }
     }
     Ok(())

@@ -5,11 +5,12 @@
 ## Source
 
 - `tests/remote_cue_e2e.rs`
-- Contract/authorization support: `tests/remote_cue_contract.rs`, `tests/remote_cue_authorization.rs`
+- Contract/authorization support: `tests/remote_cue_suite/contract.rs`, `tests/remote_cue_suite/authorization.rs`
 
 ## Run
 
 ```bash
+cargo test --test remote_cue_suite --locked
 cargo test --test remote_cue_e2e --locked -- --ignored --nocapture
 ```
 

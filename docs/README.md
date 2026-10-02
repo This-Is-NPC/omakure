@@ -79,7 +79,7 @@ and quantitative bounds:
 - [Script paths](scripts-path.md): workspace resolution and `.omakureignore`
   rules.
 
-## Referência
+## Reference
 
 - [CLI reference](cli-reference.md)
 - [Usage Markdown](usage/omakure.md)

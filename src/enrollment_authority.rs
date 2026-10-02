@@ -19,16 +19,10 @@
 //! `O_NOFOLLOW` so a symlink cannot redirect it, and never returned by any read
 //! path.
 
+use crate::enrollment::BundleMaterial;
 use crate::node::{NodeContext, NodeError};
-use k256::elliptic_curve::Generate;
+use crate::node_key::{HeldKey, KeyFileError};
 use k256::schnorr::SigningKey;
-use sha2::{Digest, Sha256};
-use std::fs;
-use std::io::Read;
-use std::path::Path;
-
-/// The bytes of the authority scalar.
-const AUTHORITY_PRIVATE_BYTES: usize = 32;
 
 /// Domain separator for the authority key id.
 ///
@@ -70,6 +64,22 @@ impl From<NodeError> for AuthorityError {
     }
 }
 
+impl KeyFileError for AuthorityError {
+    fn state(detail: String) -> Self {
+        Self::State(detail)
+    }
+
+    fn invalid_key() -> Self {
+        Self::InvalidKey
+    }
+}
+
+const AUTHORITY_KEY: HeldKey = HeldKey {
+    label: "enrollment authority",
+    article: "an",
+    scalar: "authority",
+};
+
 /// The enrollment authority this node holds, if it holds one.
 pub struct EnrollmentAuthority {
     signing_key: SigningKey,
@@ -83,60 +93,22 @@ impl EnrollmentAuthority {
     /// across every machine in the fleet — that is a fleet-wide event, not a
     /// side effect of running a command twice.
     pub fn create(context: &NodeContext) -> Result<Self, AuthorityError> {
-        context.ensure_state_directory()?;
         let path = context.authority_key_path();
-        if fs::symlink_metadata(&path).is_ok() {
-            return Err(AuthorityError::State(
-                "this node already holds an enrollment authority key".to_string(),
-            ));
-        }
-        let signing_key = SigningKey::generate();
-        crate::node::write_atomic_new(&path, signing_key.to_bytes().as_ref(), 0o600)?;
+        let signing_key = AUTHORITY_KEY.generate::<AuthorityError>(context, &path)?;
         context.validate_private_file(&path)?;
         Ok(Self { signing_key })
     }
 
     /// Load the authority key, without creating anything.
     pub fn load_existing(context: &NodeContext) -> Result<Self, AuthorityError> {
-        if !context.validate_existing_state_directory()? {
-            return Err(AuthorityError::State(
-                "node state is not initialized".to_string(),
-            ));
-        }
-        let path = context.authority_key_path();
-        let metadata = fs::symlink_metadata(&path).map_err(|_| {
-            AuthorityError::State("this node holds no enrollment authority key".to_string())
-        })?;
-        if !metadata.file_type().is_file() {
-            return Err(AuthorityError::State(
-                "the enrollment authority key is not a regular file".to_string(),
-            ));
-        }
-        context.validate_private_file(&path)?;
-        let bytes = read_authority_key(context, &path)?;
-        let signing_key = SigningKey::from_slice(&bytes).map_err(|_| AuthorityError::InvalidKey)?;
-        // The same normalization check the identity makes: a scalar that was
-        // not stored even-Y normalized would sign under a different public key
-        // than the one published in `trust.authorities`.
-        if signing_key.to_bytes().as_slice() != bytes.as_slice() {
-            return Err(AuthorityError::State(
-                "the persisted authority scalar is not even-Y normalized".to_string(),
-            ));
-        }
+        let signing_key =
+            AUTHORITY_KEY.load::<AuthorityError>(context, &context.authority_key_path())?;
         Ok(Self { signing_key })
-    }
-
-    /// Whether this node holds an authority key at all.
-    pub fn is_present(context: &NodeContext) -> bool {
-        fs::symlink_metadata(context.authority_key_path())
-            .is_ok_and(|metadata| metadata.file_type().is_file())
     }
 
     /// The x-only public key, as `trust.authorities[].public_key` carries it.
     pub fn public_key(&self) -> [u8; 32] {
-        let mut key = [0u8; 32];
-        key.copy_from_slice(self.signing_key.verifying_key().to_bytes().as_slice());
-        key
+        crate::node_key::xonly_public_key(&self.signing_key)
     }
 
     /// The stable id a bundle carries and `trust.authorities[].key_id` names.
@@ -144,104 +116,33 @@ impl EnrollmentAuthority {
     /// Derived from the public key rather than stored, so the two can never
     /// disagree and there is no second piece of state to keep in step.
     pub fn key_id(&self) -> [u8; crate::enrollment::BUNDLE_AUTHORITY_ID_BYTES] {
-        let digest = Sha256::digest([AUTHORITY_ID_DOMAIN, &self.public_key()[..]].concat());
-        let mut id = [0u8; crate::enrollment::BUNDLE_AUTHORITY_ID_BYTES];
-        id.copy_from_slice(&digest[..crate::enrollment::BUNDLE_AUTHORITY_ID_BYTES]);
-        id
+        crate::node_key::derive_key_id(AUTHORITY_ID_DOMAIN, &self.signing_key)
     }
 
     /// Mint one bundle. The signing itself is the shipped, tested construction;
     /// this is the caller it never had.
-    #[allow(clippy::too_many_arguments)]
-    pub fn issue(
-        &self,
-        bundle_id: [u8; crate::enrollment::REQUEST_ID_BYTES],
-        organization: String,
-        audience_node_id: String,
-        subject_node_id: String,
-        subject_xonly: [u8; 32],
-        subject_transport_x25519: [u8; 32],
-        subject_certificate: [u8; crate::direct_transport::MAX_CERTIFICATE_BYTES],
-        role: crate::enrollment::EnrollmentRole,
-        capabilities: Vec<String>,
-        issued_at: u64,
-        expires_at: u64,
-    ) -> Result<Vec<u8>, AuthorityError> {
+    pub fn issue(&self, material: BundleMaterial) -> Result<Vec<u8>, AuthorityError> {
         // A bundle whose audience is its own subject would enrol a node into
         // trusting itself. Refused here rather than left to the receiver.
-        if audience_node_id == subject_node_id {
+        if material.audience_node_id == material.subject_node_id {
             return Err(AuthorityError::Signing(
                 "a bundle cannot name the same node as audience and subject".to_string(),
             ));
         }
         crate::enrollment::SignedEnrollmentBundle::sign_with_material(
             self.signing_key.to_bytes().as_ref(),
-            bundle_id,
             self.key_id(),
-            organization,
-            audience_node_id,
-            subject_node_id,
-            subject_xonly,
-            subject_transport_x25519,
-            subject_certificate,
-            role,
-            capabilities,
-            issued_at,
-            expires_at,
+            material,
         )
         .map(|bundle| bundle.encode())
         .map_err(|error| AuthorityError::Signing(format!("{error:?}")))
     }
 }
 
-/// Read the scalar without following a symlink, re-validating owner and mode.
-fn read_authority_key(
-    context: &NodeContext,
-    path: &Path,
-) -> Result<[u8; AUTHORITY_PRIVATE_BYTES], AuthorityError> {
-    let mut options = fs::OpenOptions::new();
-    options.read(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.custom_flags(libc::O_NOFOLLOW);
-    }
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::OpenOptionsExt;
-        const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
-        options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
-    }
-    let mut file = options.open(path)?;
-    if !file.metadata()?.file_type().is_file() {
-        return Err(AuthorityError::State(
-            "the enrollment authority key has an unexpected file type".to_string(),
-        ));
-    }
-    context.validate_private_file(path)?;
-    let mut bytes = Vec::new();
-    file.read_to_end(&mut bytes)?;
-    bytes.try_into().map_err(|_| AuthorityError::InvalidKey)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::node::{NodePathOverrides, NodePlatform};
-
-    fn node_context(root: &Path) -> NodeContext {
-        let config = root.join("node.toml");
-        std::fs::write(&config, "version = 1\n").expect("write config");
-        NodeContext::resolve_for(
-            NodePlatform::current(),
-            NodePathOverrides::new(Some(root.join("state")), Some(config)),
-            true,
-            None,
-            None,
-            None,
-        )
-        .expect("resolve node context")
-    }
+    use crate::test_support::configured_node_context;
 
     /// Creating twice must refuse rather than rotate.
     ///
@@ -251,7 +152,7 @@ mod tests {
     #[test]
     fn an_authority_key_is_never_silently_replaced() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let context = node_context(dir.path());
+        let context = configured_node_context(dir.path());
 
         let first = EnrollmentAuthority::create(&context).expect("create the authority");
         let before = first.public_key();
@@ -273,7 +174,7 @@ mod tests {
     #[test]
     fn the_key_id_is_a_function_of_the_public_key() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let context = node_context(dir.path());
+        let context = configured_node_context(dir.path());
         let authority = EnrollmentAuthority::create(&context).expect("create");
 
         let reloaded = EnrollmentAuthority::load_existing(&context).expect("load");
@@ -282,7 +183,7 @@ mod tests {
         // A different key must produce a different id, or the id identifies
         // nothing.
         let other_dir = tempfile::tempdir().expect("tempdir");
-        let other_context = node_context(other_dir.path());
+        let other_context = configured_node_context(other_dir.path());
         let other = EnrollmentAuthority::create(&other_context).expect("create");
         assert_ne!(
             authority.key_id(),
@@ -295,10 +196,9 @@ mod tests {
     #[test]
     fn loading_without_a_key_refuses_instead_of_creating_one() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let context = node_context(dir.path());
+        let context = configured_node_context(dir.path());
         context.ensure_state_directory().expect("state dir");
 
-        assert!(!EnrollmentAuthority::is_present(&context));
         assert!(EnrollmentAuthority::load_existing(&context).is_err());
         assert!(
             !context.authority_key_path().exists(),
@@ -313,7 +213,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
 
         let dir = tempfile::tempdir().expect("tempdir");
-        let context = node_context(dir.path());
+        let context = configured_node_context(dir.path());
         EnrollmentAuthority::create(&context).expect("create");
         assert!(EnrollmentAuthority::load_existing(&context).is_ok());
 
@@ -343,11 +243,11 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
 
         let dir = tempfile::tempdir().expect("tempdir");
-        let context = node_context(dir.path());
+        let context = configured_node_context(dir.path());
         context.ensure_state_directory().expect("state dir");
 
         let decoy_dir = tempfile::tempdir().expect("tempdir");
-        let decoy_context = node_context(decoy_dir.path());
+        let decoy_context = configured_node_context(decoy_dir.path());
         let decoy = EnrollmentAuthority::create(&decoy_context).expect("a real key elsewhere");
         let elsewhere = decoy_context.authority_key_path();
         std::fs::set_permissions(&elsewhere, std::fs::Permissions::from_mode(0o600)).expect("0600");
@@ -373,7 +273,7 @@ mod tests {
     #[test]
     fn the_amended_state_allow_list_admits_the_key_and_nothing_else() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let context = node_context(dir.path());
+        let context = configured_node_context(dir.path());
         crate::node_identity::NodeIdentity::load_or_initialize(&context).expect("identity");
         EnrollmentAuthority::create(&context).expect("create");
 
@@ -396,24 +296,28 @@ mod tests {
     #[test]
     fn a_bundle_cannot_name_one_node_as_both_sides() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let context = node_context(dir.path());
+        let context = configured_node_context(dir.path());
         let authority = EnrollmentAuthority::create(&context).expect("create");
         let node = format!("omk1_{}", "a".repeat(64));
 
-        assert!(authority
-            .issue(
-                [1u8; crate::enrollment::REQUEST_ID_BYTES],
-                "org".to_string(),
-                node.clone(),
-                node,
-                [2u8; 32],
-                [3u8; 32],
-                [0u8; crate::direct_transport::MAX_CERTIFICATE_BYTES],
-                crate::enrollment::EnrollmentRole::Conductor,
-                vec!["remote-run".to_string()],
-                1_800_000_000,
-                1_800_003_600,
-            )
-            .is_err());
+        let error = authority
+            .issue(BundleMaterial {
+                bundle_id: [1u8; crate::enrollment::REQUEST_ID_BYTES],
+                organization: "org".to_string(),
+                audience_node_id: node.clone(),
+                subject_node_id: node,
+                subject_xonly: [2u8; 32],
+                subject_transport_x25519: [3u8; 32],
+                subject_certificate: [0u8; crate::direct_transport::MAX_CERTIFICATE_BYTES],
+                role: crate::enrollment::EnrollmentRole::Conductor,
+                capabilities: vec!["remote-run".to_string()],
+                issued_at: 1_800_000_000,
+                expires_at: 1_800_003_600,
+            })
+            .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "a bundle cannot name the same node as audience and subject"
+        );
     }
 }

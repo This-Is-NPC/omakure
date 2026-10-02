@@ -1,12 +1,54 @@
 use std::ffi::{OsStr, OsString};
-use std::io;
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 use crate::error::ScriptError;
 #[cfg(windows)]
 use crate::runtime::BASH_MISSING_HINT;
 use crate::runtime::{powershell_program, python_program};
+
+pub(crate) fn runtime_version_banner(
+    program: &str,
+    args: &[&str],
+    timeout: Duration,
+    max_bytes: usize,
+) -> Option<String> {
+    let mut child = Command::new(program)
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+
+    let deadline = Instant::now() + timeout;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(25)),
+            Err(_) => return None,
+        }
+    };
+    if !status.success() {
+        return None;
+    }
+
+    let mut banner = String::new();
+    child
+        .stdout
+        .take()?
+        .take(max_bytes as u64)
+        .read_to_string(&mut banner)
+        .ok()?;
+    Some(banner)
+}
 
 /// Check that a command is available and runs successfully using the effective
 /// injected PATH. If no PATH override is supplied, preserve the normal parent
@@ -34,10 +76,11 @@ const MAX_INJECTED_PATH_BYTES: usize = 32 * 1024;
 /// Build a minimal PATH for spawning an already-resolved absolute executable.
 fn bounded_spawn_path(program: &Path) -> OsString {
     let mut paths = Vec::new();
-    if let Some(parent) = program.parent() {
-        if !parent.as_os_str().is_empty() {
-            paths.push(parent.to_path_buf());
-        }
+    if let Some(parent) = program
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        paths.push(parent.to_path_buf());
     }
 
     #[cfg(windows)]
@@ -267,7 +310,7 @@ pub(crate) fn ensure_python_installed_with_env(
 #[cfg(all(test, unix))]
 pub(crate) fn write_test_executable_shim(dir: &Path, program: &str) {
     let path = dir.join(program);
-    crate::util::write_generated_executable(&path, b"#!/bin/sh\nexit 0\n")
+    crate::util::exec::write_generated_executable(&path, b"#!/bin/sh\nexit 0\n")
         .unwrap_or_else(|error| panic!("write {program} fixture: {error}"));
     // The write above is already atomic, but atomicity is not the hazard here:
     // a sibling test thread that forks while our descriptor is still open
@@ -296,6 +339,7 @@ pub(crate) fn write_test_executable_shim(dir: &Path, program: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
     type DependencyCheck = fn(&[(String, String)]) -> Result<(), ScriptError>;
 
     #[test]
@@ -400,7 +444,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn test_dependency_checks_use_injected_path_for_every_runtime() {
-        let dir = crate::util::generated_executable_tempdir().unwrap();
+        let dir = crate::util::exec::generated_executable_tempdir().unwrap();
         let programs = ["git", "jq", "bash", python_program(), powershell_program()];
         for program in programs {
             write_test_executable_shim(dir.path(), program);
@@ -437,7 +481,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn test_dependency_checks_succeed_with_huge_injected_path() {
-        let dir = crate::util::generated_executable_tempdir().unwrap();
+        let dir = crate::util::exec::generated_executable_tempdir().unwrap();
         write_test_executable_shim(dir.path(), "git");
         write_test_executable_shim(dir.path(), "jq");
 
@@ -530,7 +574,7 @@ mod tests {
         use std::io::Write;
         use std::os::unix::fs::OpenOptionsExt;
 
-        let dir = crate::util::generated_executable_tempdir().unwrap();
+        let dir = crate::util::exec::generated_executable_tempdir().unwrap();
         let path = dir.path().join("not-executable");
         {
             let mut file = OpenOptions::new()

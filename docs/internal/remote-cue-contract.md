@@ -37,15 +37,16 @@ rather than mitigating it:
 
 ### Sibling plane, not a sixth Health kind
 
-`HealthKind` is closed at five (`src/health_plane/model.rs:91`) and stays closed.
+`HealthKind` is closed at five (`src/domain/health_plane/model.rs`) and stays closed.
 Cues use a `cue_` kind namespace with a sibling signer in `direct_transport`,
 reusing the private kind-agnostic `sign_envelope`
-(`src/direct_transport.rs:1263`). `sign_health_envelope` (`:1150`) keeps refusing
+(`src/direct_transport/envelope.rs:163`). `sign_health_envelope`
+(`src/direct_transport/carriage.rs:108`) keeps refusing
 any kind without the `health_` prefix, so it never becomes a generic signing
 oracle for a plane it does not govern.
 
 The inner frame is unchanged: `ENVELOPE_KIND = 1`
-(`src/direct_transport.rs:43`). No transport code changes.
+(`src/direct_transport/mod.rs:56`). No transport code changes.
 
 ## Version and Domains
 
@@ -154,13 +155,13 @@ and configuration only. A Cue is accepted if and only if **all five** pass.
 | **E** | The script is in `trust.remote_cue_scripts`, or was installed by a battery in `trust.remote_cue_batteries` | `1212`, reported as `1206` |
 
 Role is the `INTEGER` encoding `ROLE_CONDUCTOR = 1` / `ROLE_PERFORMER = 2`
-(`src/health_plane/bounds.rs:13-15`), not a `TEXT` role name.
+(`src/domain/health_plane/bounds.rs`), not a `TEXT` role name.
 
 Gate A is load-bearing: `allow_remote_cues` defaults to `false`, and a node that
 has never opted in refuses every Cue regardless of how trusted the sender is.
 
-`remote-run` ships in all three hand-duplicated capability copies (`src/health_plane/bounds.rs:23`,
-`src/node_registry.rs:70`, `src/enrollment.rs:47`).
+`remote-run` belongs to the shared capability allow-list in
+`src/domain/capability.rs`, which enrollment and trust validation use.
 
 ### Gate E: what may run is declared, not inferred
 
@@ -211,11 +212,11 @@ elimination.
 
 A Cue-origin run row is written with an explicit **deny-all** secret policy:
 `allowed_secret_refs: Some(vec![])`. Empty already means deny-all
-(`src/runs.rs:897-907`).
+(`src/runs/enqueue.rs:372-378`).
 
 `None` must never be used for a Cue-origin run. `None` writes
-`ALLOW_ALL_SECRET_REFS_POLICY` (`src/runs.rs:819-825`), and
-`src/run_executor.rs:399` returns `SecretAccess::allow_all()` both when the
+`ALLOW_ALL_SECRET_REFS_POLICY` (`src/runs/enqueue.rs:131-138`), and
+`src/run_executor/admission.rs` returns `SecretAccess::allow_all()` both when the
 policy row is missing **and when the lookup errors**. A Cue "carrying no secrets"
 written the obvious way would therefore receive *every* secret the node holds,
 and a transient database error would do the same. This is the single most
@@ -236,7 +237,8 @@ discovery is not remotely runnable even when it is declared.
 
 Resolution is never a string comparison on the name. The resolved path must be a
 regular file by `symlink_metadata`, following the rejection pattern already used
-at `src/node.rs:1057`, so a symlink cannot redirect a Cue outside the workspace.
+in `validate_file_security` (`src/node/security.rs`), so a symlink cannot redirect
+a Cue outside the workspace.
 
 The resolved file's content hash is recorded when gate E authorizes it and
 **re-verified at the accept→run transition**. The gates walk the filesystem and
@@ -278,12 +280,12 @@ outbox and does not amend [Explicitly Out of Scope](#explicitly-out-of-scope).
 
 The local run id is a deterministic function of the `cue_id` under the
 run-id derivation domain. `runs.run_id` is a `TEXT PRIMARY KEY`
-(`src/runs.rs:493`), so the database is the durable at-most-once key: a duplicate
+(`src/runs/open.rs:67`), so the database is the durable at-most-once key: a duplicate
 `cue_dispatch` collides on insert and is answered from the existing row rather
 than starting a second run.
 
 The Conductor computes the expected `opaque_run_id`
-(`src/health_plane/report.rs:517`) from the `cue_id` it sent, so correlation
+(`src/health_plane/report/ids.rs`) from the `cue_id` it sent, so correlation
 needs no new field on any message.
 
 ## The At-Most-Once Rule
@@ -291,7 +293,7 @@ needs no new field on any message.
 A Cue-origin run left `running` by a crash is **never re-claimed and never
 re-executed**.
 
-`claim_next` (`src/runs.rs:965`) currently re-claims any `running` row whose
+`claim_next` (`src/runs/lifecycle.rs:21`) currently re-claims any `running` row whose
 lease expired after `HEARTBEAT_MS = 60_000`. That is correct for a queued job and
 wrong for a Cue: it silently converts at-most-once into at-least-once, and the
 remote caller has no way to know a side effect happened twice. `RunTrigger::Cue`

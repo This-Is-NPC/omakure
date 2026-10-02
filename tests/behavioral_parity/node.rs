@@ -1,9 +1,8 @@
 //! Real node, baseline and enrollment paired adapter probes.
 
-use super::{evidence, BehavioralContext};
+use super::{BehavioralContext, ProbeEvidence, evidence};
 use omakure::baseline::SignedBaselineManifest;
 use omakure::baseline_push::BaselinePush;
-use omakure::cli_http_parity::ProbeEvidence;
 use omakure::discovery::Beacon;
 use omakure::enrollment::{self, EnrollmentRole, ManualEnrollmentRequest};
 use omakure::node::{NodeContext, NodePathOverrides, NodePlatform};
@@ -11,11 +10,12 @@ use omakure::node_identity::NodeIdentity;
 use omakure::node_transport::LocalTransport;
 use omakure::operations::baseline::RetainedBaseline;
 use omakure::operations::node as node_ops;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::fs;
 use std::net::UdpSocket;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+use std::time::{Duration, Instant};
 
 pub const CASE_IDS: &[&str] = &[
     "exact.node-init",
@@ -46,6 +46,7 @@ const CAPS: &[&str] = &[
 ];
 const PEER_ID: &str = "omk1_71319375521da1a36e37088c56b0e957043cc8459de4d0a54642e5e0b2443a92";
 const PEER_KEY: &str = "c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5";
+const NODE_CLI_TIMEOUT: Duration = Duration::from_secs(30);
 
 type Probe = fn(&BehavioralContext) -> Result<ProbeEvidence, String>;
 
@@ -114,20 +115,37 @@ fn node_cli_any(ctx: &BehavioralContext, tail: &[&str]) -> Value {
         config.as_str(),
     ];
     args.extend_from_slice(tail);
-    let output = ctx.cli_with_env(
+    let started = Instant::now();
+    let output = ctx.cli_with_env_timeout(
         &args,
         &[
             ("OMAKURE_NODE_TEST_MODE", "1"),
             ("OMAKURE_NODE_STATE_DIR", state.as_str()),
             ("OMAKURE_NODE_CONFIG", config.as_str()),
         ],
+        NODE_CLI_TIMEOUT,
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     let line = stdout
         .lines()
         .find(|line| !line.trim().is_empty())
         .unwrap_or("");
-    serde_json::from_str(line).expect("CLI node adapter emitted no JSON envelope")
+    serde_json::from_str(line).unwrap_or_else(|error| {
+        let problem = if line.is_empty() {
+            "no JSON envelope"
+        } else {
+            "invalid JSON envelope"
+        };
+        panic!(
+            "CLI node adapter emitted {problem} for {} in {}: {error}; status={}, elapsed={:?}, stdout_len={}, stderr_len={}, budget={NODE_CLI_TIMEOUT:?}",
+            tail.first().copied().unwrap_or("unknown"),
+            ctx.workspace.path().display(),
+            output.status,
+            started.elapsed(),
+            output.stdout.len(),
+            output.stderr.len(),
+        )
+    })
 }
 
 fn http(
@@ -242,7 +260,7 @@ fn assert_patch_auth(ctx: &BehavioralContext, path: &str, body: &Value) -> Resul
         "PATCH",
         path,
         Some(body.to_string()),
-        AuthMode::Bearer(super::API_TOKEN),
+        AuthMode::Bearer(super::support::api_token()),
     );
     if forbidden.status != 403 {
         return Err(format!(
@@ -330,11 +348,11 @@ fn named_result_data(value: &Value) -> Value {
 }
 fn stable_health(value: &Value) -> Value {
     let data = &value["data"];
-    json!({"local_node_id": data["local_node_id"], "enabled": data["enabled"], "nodes": data["nodes"], "presence": data["presence"], "baselines": data["baselines"]})
+    json!({"local_node_id": data["local_node_id"], "nodes": data["nodes"], "presence": data["presence"], "baselines": data["baselines"]})
 }
 fn stable_signals(value: &Value) -> Value {
     let data = &value["data"];
-    json!({"local_node_id": data["local_node_id"], "enabled": data["enabled"], "gap": data["gap"], "limit": data["limit"], "retention_seconds": data["retention_seconds"], "cursors": data["cursors"], "signals": data["signals"]})
+    json!({"local_node_id": data["local_node_id"], "gap": data["gap"], "limit": data["limit"], "retention_seconds": data["retention_seconds"], "cursors": data["cursors"], "signals": data["signals"]})
 }
 fn projected(value: &Value, data: Value) -> Value {
     json!({"ok": value["ok"], "data": data})
@@ -409,7 +427,7 @@ fn enrollment_material(
     )
     .map_err(|error| format!("create enrollment request: {error}"))?;
     let node_id = offer.request.proposer_node_id.clone();
-    let certificate = enrollment::hex_bytes(transport.certificate().as_bytes());
+    let certificate = omakure::hex::encode(transport.certificate().as_bytes());
     Ok((node_id, offer.request_hex(), certificate, offer.code_hex()))
 }
 
@@ -697,14 +715,10 @@ fn restart_node_with_env(ctx: BehavioralContext, extra_envs: &[(&str, &str)]) ->
         fixture,
     } = ctx;
     let _ = server.terminate();
-    let mut args = Vec::with_capacity(CAPS.len() * 2);
-    for capability in CAPS {
-        args.extend(["--capability", *capability]);
-    }
     let server = super::support::HttpServer::start_node_service(
         workspace.path(),
-        super::API_TOKEN,
-        &args,
+        CAPS,
+        &[],
         extra_envs,
         std::time::Duration::from_secs(10),
     );
@@ -732,15 +746,11 @@ fn fresh_uninitialized_node(ctx: BehavioralContext) -> BehavioralContext {
         fs::remove_file(&config).expect("remove initialized node config");
     }
     let state_env = state.to_string_lossy().to_string();
-    let mut args = Vec::with_capacity(CAPS.len() * 2);
-    for capability in CAPS {
-        args.extend(["--capability", *capability]);
-    }
     let config_env = config.to_string_lossy().to_string();
     let server = super::support::HttpServer::start_with_args(
         workspace.path(),
-        super::API_TOKEN,
-        &args,
+        CAPS,
+        &[],
         &[
             ("OMAKURE_NODE_TEST_MODE", "1"),
             ("OMAKURE_NODE_STATE_DIR", state_env.as_str()),
@@ -765,7 +775,7 @@ fn identity_material(ctx: &BehavioralContext) -> Result<(String, String, String)
     Ok((
         identity.public_status().node_id.clone(),
         identity.public_status().public_key_hex.clone(),
-        enrollment::hex_bytes(transport.certificate().as_bytes()),
+        omakure::hex::encode(transport.certificate().as_bytes()),
     ))
 }
 
@@ -871,7 +881,7 @@ fn rollback_expectation(ctx: &BehavioralContext) -> Result<(String, Vec<Vec<u8>>
     let baseline_id = manifest
         .baseline_id()
         .map_err(|error| format!("derive retained baseline id: {error}"))?;
-    Ok((enrollment::hex_bytes(&baseline_id), push.bodies))
+    Ok((omakure::hex::encode(&baseline_id), push.bodies))
 }
 
 fn assert_rollback_files(
@@ -1007,16 +1017,12 @@ fn node_baseline_push(parent: &BehavioralContext) -> Result<ProbeEvidence, Strin
             "receiver did not retain active CLI peer after baseline push: {cli_peer_state}"
         ));
     }
-    let manifest_hex = fs::read(&manifest)
-        .map_err(|e| e.to_string())?
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect::<String>();
+    let manifest_hex = omakure::hex::encode(&fs::read(&manifest).map_err(|e| e.to_string())?);
     let scripts = ["base-a.sh", "base-b.sh"]
         .iter()
         .map(|name| {
             fs::read(cli.workspace.path().join(name))
-                .map(|bytes| bytes.iter().map(|b| format!("{b:02x}")).collect::<String>())
+                .map(|bytes| omakure::hex::encode(&bytes))
                 .map_err(|e| e.to_string())
         })
         .collect::<Result<Vec<_>, _>>()?;
@@ -1537,12 +1543,12 @@ fn node_enroll_apply(parent: &BehavioralContext) -> Result<ProbeEvidence, String
     let cli_bootstrap_token = b"behavioral-parity-cli-bootstrap-token-000000";
     let http_bootstrap_token = b"behavioral-parity-http-bootstrap-token-000000";
     let cli_token_hash =
-        enrollment::hex_bytes(&enrollment::hash_bootstrap_token(cli_bootstrap_token));
+        omakure::hex::encode(&enrollment::hash_bootstrap_token(cli_bootstrap_token));
     let http_token_hash =
-        enrollment::hex_bytes(&enrollment::hash_bootstrap_token(http_bootstrap_token));
+        omakure::hex::encode(&enrollment::hash_bootstrap_token(http_bootstrap_token));
     let nonce = "00112233445566778899aabbccddeeff";
     let nonce_bytes = enrollment::parse_hex(nonce, 16).map_err(|e| format!("nonce: {e}"))?;
-    let nonce_hash = enrollment::hex_bytes(&enrollment::hash_bootstrap_nonce(&nonce_bytes));
+    let nonce_hash = omakure::hex::encode(&enrollment::hash_bootstrap_nonce(&nonce_bytes));
     for (target, token_hash) in [
         (&cli, cli_token_hash.as_str()),
         (&http_ctx, http_token_hash.as_str()),

@@ -1,9 +1,8 @@
+#[path = "support/bin.rs"]
+mod bin;
+
 use std::path::PathBuf;
 use std::process::Command;
-
-fn omakure_bin() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_omakure"))
-}
 
 fn unique_temp(label: &str) -> PathBuf {
     let pid = std::process::id();
@@ -19,7 +18,7 @@ fn json_battery_errors_emit_single_stdout_envelope_without_stderr() {
     let dir = unique_temp("json_error");
     std::fs::create_dir_all(&dir).expect("create temp dir");
 
-    let output = Command::new(omakure_bin())
+    let output = Command::new(bin::omakure_bin())
         .arg("--scripts-dir")
         .arg(&dir)
         .arg("--json")

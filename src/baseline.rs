@@ -24,11 +24,13 @@
 //!
 //! [`baseline_id`]: SignedBaselineManifest::baseline_id
 
+use crate::util::bytes::ByteReader;
+use crate::util::digest::sha256_domain;
+use crate::util::hex;
 use k256::schnorr::{
-    signature::hazmat::{PrehashSigner, PrehashVerifier},
     Signature, SigningKey, VerifyingKey,
+    signature::hazmat::{PrehashSigner, PrehashVerifier},
 };
-use sha2::{Digest, Sha256};
 use std::fmt;
 use thiserror::Error;
 
@@ -110,13 +112,16 @@ impl fmt::Debug for SignedBaselineManifest {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("SignedBaselineManifest")
-            .field("publisher_key_id", &hex(&self.publisher_key_id))
+            .field("publisher_key_id", &hex::encode(&self.publisher_key_id))
             .field("organization", &self.organization)
             .field("entries", &self.entries.len())
-            .field("baseline_id", &self.baseline_id().map(|id| hex(&id)).ok())
+            .field(
+                "baseline_id",
+                &self.baseline_id().map(|id| hex::encode(&id)).ok(),
+            )
             .field("issued_at", &self.issued_at)
             .field("expires_at", &self.expires_at)
-            .field("publisher_signature", &"<redacted>")
+            .field("publisher_signature", &crate::secrets::REDACTED)
             .finish()
     }
 }
@@ -157,7 +162,7 @@ impl SignedBaselineManifest {
             expires_at,
             publisher_signature: [0; SIGNATURE_BYTES],
         };
-        let digest = hash_domain(&manifest.unsigned_bytes()?, DOMAIN);
+        let digest = sha256_domain(DOMAIN, &manifest.unsigned_bytes()?);
         manifest.publisher_signature = signing_key
             .sign_prehash(&digest)
             .map_err(|_| BaselineError::Invalid)?
@@ -170,7 +175,7 @@ impl SignedBaselineManifest {
         if bytes.len() > MAX_MANIFEST_BYTES {
             return Err(BaselineError::TooLarge);
         }
-        let mut cursor = Cursor::new(bytes);
+        let mut cursor = ByteReader::new(bytes, BaselineError::Invalid);
         if cursor.take(4)? != MAGIC || cursor.byte()? != VERSION || cursor.take(2)? != [0, 0] {
             return Err(BaselineError::Invalid);
         }
@@ -248,7 +253,7 @@ impl SignedBaselineManifest {
             .map_err(|_| BaselineError::PublisherUnknown)?;
         let signature =
             Signature::from_slice(&self.publisher_signature).map_err(|_| BaselineError::Invalid)?;
-        let digest = hash_domain(&self.unsigned_bytes()?, DOMAIN);
+        let digest = sha256_domain(DOMAIN, &self.unsigned_bytes()?);
         key.verify_prehash(&digest, &signature)
             .map_err(|_| BaselineError::SignatureMismatch)
     }
@@ -382,7 +387,7 @@ impl VerifiedBaseline {
 pub fn derive_baseline_id(
     entries: &[BaselineEntry],
 ) -> Result<[u8; BASELINE_ID_BYTES], BaselineError> {
-    Ok(hash_domain(&entry_bytes(entries)?, BASELINE_ID_DOMAIN))
+    Ok(sha256_domain(BASELINE_ID_DOMAIN, &entry_bytes(entries)?))
 }
 
 /// The recorded hash of one script body.
@@ -392,7 +397,7 @@ pub fn derive_baseline_id(
 /// is deliberate: this is not `sha256sum` output, and anything that later
 /// re-checks a script on disk has to call this, not reimplement it.
 pub fn hash_script(body: &[u8]) -> [u8; SCRIPT_HASH_BYTES] {
-    hash_domain(body, b"omakure/baseline-script/v1\0")
+    sha256_domain(b"omakure/baseline-script/v1\0", body)
 }
 
 /// The canonical bytes of the entry list, shared by the signature preimage and
@@ -449,78 +454,10 @@ fn validate_entry_path(path: &str) -> Result<(), BaselineError> {
     Ok(())
 }
 
-fn hash_domain(bytes: &[u8], domain: &[u8]) -> [u8; 32] {
-    let mut digest = Sha256::new();
-    digest.update(domain);
-    digest.update(bytes);
-    digest.finalize().into()
-}
-
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-}
-
-struct Cursor<'a> {
-    bytes: &'a [u8],
-    offset: usize,
-}
-
-impl<'a> Cursor<'a> {
-    fn new(bytes: &'a [u8]) -> Self {
-        Self { bytes, offset: 0 }
-    }
-
-    fn take(&mut self, length: usize) -> Result<&'a [u8], BaselineError> {
-        let end = self
-            .offset
-            .checked_add(length)
-            .ok_or(BaselineError::Invalid)?;
-        let value = self
-            .bytes
-            .get(self.offset..end)
-            .ok_or(BaselineError::Invalid)?;
-        self.offset = end;
-        Ok(value)
-    }
-
-    fn byte(&mut self) -> Result<u8, BaselineError> {
-        Ok(*self.take(1)?.first().ok_or(BaselineError::Invalid)?)
-    }
-
-    fn u16(&mut self) -> Result<u16, BaselineError> {
-        Ok(u16::from_be_bytes(
-            self.take(2)?
-                .try_into()
-                .map_err(|_| BaselineError::Invalid)?,
-        ))
-    }
-
-    fn u64(&mut self) -> Result<u64, BaselineError> {
-        Ok(u64::from_be_bytes(
-            self.take(8)?
-                .try_into()
-                .map_err(|_| BaselineError::Invalid)?,
-        ))
-    }
-
-    fn array<const N: usize>(&mut self) -> Result<[u8; N], BaselineError> {
-        self.take(N)?.try_into().map_err(|_| BaselineError::Invalid)
-    }
-
-    fn text(&mut self, length: usize) -> Result<String, BaselineError> {
-        std::str::from_utf8(self.take(length)?)
-            .map(str::to_string)
-            .map_err(|_| BaselineError::Invalid)
-    }
-
-    fn remaining(&self) -> usize {
-        self.bytes.len().saturating_sub(self.offset)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sha2::{Digest, Sha256};
 
     const ISSUED_AT: u64 = 1_800_000_000;
     const EXPIRES_AT: u64 = 1_800_003_600;

@@ -5,6 +5,8 @@ root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../../.." && pwd -P)"
 cd "$root"
 export MISE_PROJECT_ROOT="$root"
 
+source "$root/scripts/tasks/check/platform-mode"
+
 die() {
     printf 'check:platform:macos: %s\n' "$1" >&2
     exit 2
@@ -47,10 +49,14 @@ tmpdir_owner_group="$(stat -f '%u:%g' "$physical_tmpdir")"
 }
 export TMPDIR="$physical_tmpdir"
 
-printf 'check:platform:macos: native tests (%s)\n' "$target"
-CARGO_BUILD_TARGET="$target" "$root/scripts/tasks/suite/native-tests"
-printf 'check:platform:macos: release build (%s)\n' "$target"
-"$root/scripts/tasks/atomic/build-release" --target-triple "$target"
-printf 'check:platform:macos: binary smoke (%s)\n' "$target"
-"$root/scripts/tasks/atomic/binary-smoke" "$target"
+if [[ "$mode" != build ]]; then
+    printf 'check:platform:macos: native tests (%s)\n' "$target"
+    CARGO_BUILD_TARGET="$target" "$root/scripts/tasks/suite/native-tests"
+fi
+if [[ "$mode" != test ]]; then
+    printf 'check:platform:macos: release build (%s)\n' "$target"
+    "$root/scripts/tasks/atomic/build-release" --target-triple "$target"
+    printf 'check:platform:macos: binary smoke (%s)\n' "$target"
+    "$root/scripts/tasks/atomic/binary-smoke" "$target"
+fi
 printf 'check:platform:macos: PASS\n'

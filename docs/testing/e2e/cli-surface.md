@@ -39,5 +39,5 @@ indeterminate PID file rather than killing an unrelated process.
 
 ## Troubleshooting
 
-- Inventory mismatch: inspect `omakure --help` and `src/cli/args.rs`; add behavioral coverage separately from the inventory row.
+- Inventory mismatch: inspect `omakure --help` and `src/cli/args/`; add behavioral coverage separately from the inventory row.
 - `serve --once` failure: inspect the temporary `.omakure/daemon.log`, not a global service unit.

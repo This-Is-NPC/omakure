@@ -90,12 +90,6 @@ services:
       - --workers
       - "1"
       - --no-scheduler
-      - --capability
-      - node:read
-      - --capability
-      - enrollment:read
-      - --capability
-      - enrollment:write
     networks:
       - hp-net
     ports:

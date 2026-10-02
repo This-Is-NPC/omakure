@@ -14,18 +14,23 @@ CHMOD_PAT='set_executable_permissions|fs::set_permissions|Permissions::from_mode
 
 # Whole-file scan of src/**/*.rs and tests/**/*.rs for the toxic tempdir+chmod pair.
 # Allowlisted with reasons:
-#   src/auth.rs                       TempDir::new + fs::set_permissions in test fixtures only
+#   src/auth/tests.rs                 TempDir::new + fs::set_permissions in test fixtures only
 #   src/baseline_publisher.rs         tempfile::tempdir + set_mode/set_permissions in test fixtures only
-#   src/baseline_push.rs              tempfile::tempdir + set_permissions in test fixtures only
+#   src/baseline_push/tests/mod.rs    tempfile::tempdir + set_permissions in test fixtures only
 #   src/enrollment_authority.rs       tempfile::tempdir + set_mode/set_permissions in test fixtures only
-#   src/node.rs                       TempDir::new + fs::set_permissions in test fixtures only
+#   src/node/tests/policy.rs          TempDir::new + fs::set_permissions in test fixtures only
+#   src/node/tests/private_token.rs   TempDir::new + fs::set_permissions in test fixtures only
+#   src/node/tests/security.rs        TempDir::new + fs::set_permissions in test fixtures only
+#   src/node/tests/state.rs           TempDir::new + fs::set_permissions in test fixtures only
 #   src/node_identity.rs              TempDir::new + fs::set_permissions in test fixtures only
-#   src/node_registry.rs              TempDir::new + fs::set_permissions in test fixtures only
-#   src/operations/node.rs            TempDir::new + fs::set_permissions in test fixtures only
-#   src/util.rs                       canonical generated_executable_tempdir + set_executable_permissions
+#   src/node_registry/tests/open.rs   TempDir::new + fs::set_permissions in test fixtures only
+#   src/operations/node/tests/status.rs  TempDir::new + fs::set_permissions in test fixtures only
+#   src/operations/node/tests/bundle.rs  TempDir::new + fs::set_permissions in test fixtures only
+#   src/operations/node/tests/mod.rs     TempDir::new + fs::set_permissions in test fixtures only
+#   src/util/fs.rs                    canonical set_executable_permissions
 #   src/cli/init.rs                   init chmods the created script; TempDir tokens are test fixtures
 #   src/cli/update.rs                 update chmods the installed binary; TempDir tokens are test install roots
-#   src/operations/battery.rs         install keeps the source script's mode via fchmod on the temp descriptor; TempDir tokens are test fixtures
+#   src/operations/battery/tests/install.rs  install tests set source script modes; TempDir tokens are test fixtures
 #   tests/support/mod.rs              shared test helper chmod
 #   tests/docker_signed_bundle_e2e.rs e2e bootstrap token mode
 #   tests/enrollment_authority_e2e.rs e2e bootstrap token permissions
@@ -33,7 +38,7 @@ CHMOD_PAT='set_executable_permissions|fs::set_permissions|Permissions::from_mode
 
 is_allowlisted_tempdir_permissions() {
     case "$1" in
-        src/auth.rs)
+        src/auth/tests.rs)
             # TempDir::new + fs::set_permissions in test fixtures only
             return 0
             ;;
@@ -41,7 +46,7 @@ is_allowlisted_tempdir_permissions() {
             # tempfile::tempdir + set_mode/set_permissions in test fixtures only
             return 0
             ;;
-        src/baseline_push.rs)
+        src/baseline_push/tests/mod.rs)
             # tempfile::tempdir + set_permissions in test fixtures only
             return 0
             ;;
@@ -49,7 +54,19 @@ is_allowlisted_tempdir_permissions() {
             # tempfile::tempdir + set_mode/set_permissions in test fixtures only
             return 0
             ;;
-        src/node.rs)
+        src/node/tests/policy.rs)
+            # TempDir::new + fs::set_permissions in test fixtures only
+            return 0
+            ;;
+        src/node/tests/private_token.rs)
+            # TempDir::new + fs::set_permissions in test fixtures only
+            return 0
+            ;;
+        src/node/tests/security.rs)
+            # TempDir::new + fs::set_permissions in test fixtures only
+            return 0
+            ;;
+        src/node/tests/state.rs)
             # TempDir::new + fs::set_permissions in test fixtures only
             return 0
             ;;
@@ -57,16 +74,24 @@ is_allowlisted_tempdir_permissions() {
             # TempDir::new + fs::set_permissions in test fixtures only
             return 0
             ;;
-        src/node_registry.rs)
+        src/node_registry/tests/open.rs)
             # TempDir::new + fs::set_permissions in test fixtures only
             return 0
             ;;
-        src/operations/node.rs)
+        src/operations/node/tests/status.rs)
             # TempDir::new + fs::set_permissions in test fixtures only
             return 0
             ;;
-        src/util.rs)
-            # canonical generated_executable_tempdir + set_executable_permissions
+        src/operations/node/tests/bundle.rs)
+            # TempDir::new + fs::set_permissions in test fixtures only
+            return 0
+            ;;
+        src/operations/node/tests/mod.rs)
+            # TempDir::new + fs::set_permissions in test fixtures only
+            return 0
+            ;;
+        src/util/fs.rs)
+            # canonical set_executable_permissions
             return 0
             ;;
         src/cli/init.rs)
@@ -77,8 +102,8 @@ is_allowlisted_tempdir_permissions() {
             # update chmods the installed binary; TempDir tokens are test install roots
             return 0
             ;;
-        src/operations/battery.rs)
-            # install keeps the source script's mode via fchmod on the temp descriptor; TempDir tokens are test fixtures
+        src/operations/battery/tests/install.rs)
+            # install tests set source script modes; TempDir tokens are test fixtures
             return 0
             ;;
         tests/support/mod.rs)
@@ -103,7 +128,7 @@ is_allowlisted_tempdir_permissions() {
 
 is_allowlisted_set_executable_permissions() {
     case "$1" in
-        src/util.rs | src/cli/init.rs)
+        src/util/fs.rs | src/cli/init.rs)
             return 0
             ;;
         src/cli/update.rs)

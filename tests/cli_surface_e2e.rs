@@ -1,4 +1,4 @@
-mod support;
+pub mod support;
 
 use serde_json::Value;
 use std::fs;
@@ -8,16 +8,18 @@ use std::process::Command;
 use std::process::Output;
 #[cfg(windows)]
 use std::thread;
+#[cfg(windows)]
 use std::time::Duration;
 #[cfg(windows)]
 use std::time::Instant;
+use support::assert_success;
 
 // Coverage-guarantee boundary (read before trusting this inventory):
 //
 // `command_surface_inventory_maps_all_current_commands` is a DRIFT TRIPWIRE,
 // not a proof of behavioral coverage. It mechanically asserts that this
 // inventory equals the clap command set (`omakure --help`), so a command
-// added to `src/cli/args.rs` without an inventory entry fails the suite. The
+// added to `src/cli/args/` without an inventory entry fails the suite. The
 // `Covered("path")` string is a human-authored pointer to where the command is
 // exercised — it is NOT asserted to reference a test that actually invokes the
 // command. A command can therefore be "listed but unexercised" if someone adds
@@ -212,7 +214,7 @@ const NESTED_COVERAGE: &[CommandCoverage] = &[
     CommandCoverage {
         command: "node baseline",
         coverage: Coverage::Covered(
-            "tests/cli_surface_e2e.rs + src/baseline_push.rs delivery_tests",
+            "tests/cli_surface_e2e.rs + src/baseline_push/tests/delivery.rs",
         ),
     },
     CommandCoverage {
@@ -251,7 +253,7 @@ const NESTED_COVERAGE: &[CommandCoverage] = &[
     },
     CommandCoverage {
         command: "node reset",
-        coverage: Coverage::Covered("src/cli/args.rs + node lifecycle tests"),
+        coverage: Coverage::Covered("src/cli/args/tests/node.rs + node lifecycle tests"),
     },
     CommandCoverage {
         command: "node revoke",
@@ -312,7 +314,7 @@ const NESTED_COVERAGE: &[CommandCoverage] = &[
 #[test]
 fn command_surface_inventory_maps_all_current_commands() {
     // Derive top-level + nested subcommands from clap `--help` so inventory
-    // drift against `src/cli/args.rs` fails this suite.
+    // drift against `src/cli/args/` fails this suite.
     let clap_top = clap_top_level_commands();
     let mut inventory_top: Vec<&str> = TOP_LEVEL_COVERAGE.iter().map(|e| e.command).collect();
     inventory_top.sort_unstable();
@@ -467,9 +469,10 @@ fn clap_nested_commands(parents: &[&str]) -> Vec<String> {
 #[test]
 fn search_refreshes_changes_and_reports_failed_refresh() {
     let workspace = support::TestWorkspace::new("search_refresh");
-    let init = omakure(workspace.path(), &["--json", "init", "tools/info.sh"]);
+    let init =
+        support::workspace_command::<20>(workspace.path(), &["--json", "init", "tools/info.sh"]);
     assert_success(&init);
-    let search = omakure(workspace.path(), &["--json", "search", "info"]);
+    let search = support::workspace_command::<20>(workspace.path(), &["--json", "search", "info"]);
     assert_success(&search);
     assert_eq!(json(&search)["data"][0]["relative_path"], "tools/info.sh");
 
@@ -478,14 +481,16 @@ fn search_refreshes_changes_and_reports_failed_refresh() {
         .unwrap()
         .replace("info", "updated");
     fs::write(&script, contents).unwrap();
-    let updated = omakure(workspace.path(), &["--json", "search", "updated"]);
+    let updated =
+        support::workspace_command::<20>(workspace.path(), &["--json", "search", "updated"]);
     assert_success(&updated);
     assert_eq!(json(&updated)["data"][0]["name"], "updated");
 
     let conn =
         rusqlite::Connection::open(workspace.path().join(".history/search-index.sqlite")).unwrap();
     conn.execute_batch("CREATE TRIGGER reject_insert BEFORE INSERT ON script_index BEGIN SELECT RAISE(ABORT, 'injected refresh failure'); END;").unwrap();
-    let failed = omakure(workspace.path(), &["--json", "search", "updated"]);
+    let failed =
+        support::workspace_command::<20>(workspace.path(), &["--json", "search", "updated"]);
     assert!(!failed.status.success());
     let error = json(&failed);
     assert_eq!(error["ok"], false);
@@ -498,7 +503,8 @@ fn search_refreshes_changes_and_reports_failed_refresh() {
     );
     conn.execute_batch("DROP TRIGGER reject_insert").unwrap();
     fs::remove_file(script).unwrap();
-    let removed = omakure(workspace.path(), &["--json", "search", "updated"]);
+    let removed =
+        support::workspace_command::<20>(workspace.path(), &["--json", "search", "updated"]);
     assert_success(&removed);
     assert_eq!(json(&removed)["data"], serde_json::json!([]));
 }
@@ -507,15 +513,19 @@ fn search_refreshes_changes_and_reports_failed_refresh() {
 fn local_info_commands_cover_init_describe_search_doctor_help_completion_and_serve() {
     let workspace = support::TestWorkspace::new("cli_surface_info");
 
-    let init = omakure(workspace.path(), &["--json", "init", "tools/info.sh"]);
+    let init =
+        support::workspace_command::<20>(workspace.path(), &["--json", "init", "tools/info.sh"]);
     assert_success(&init);
     assert_eq!(json(&init)["data"]["relative_path"], "tools/info.sh");
 
-    let describe = omakure(workspace.path(), &["--json", "describe", "tools/info.sh"]);
+    let describe = support::workspace_command::<20>(
+        workspace.path(),
+        &["--json", "describe", "tools/info.sh"],
+    );
     assert_success(&describe);
     assert_eq!(json(&describe)["data"]["relative_path"], "tools/info.sh");
 
-    let search = omakure(workspace.path(), &["--json", "search", "info"]);
+    let search = support::workspace_command::<20>(workspace.path(), &["--json", "search", "info"]);
     assert_success(&search);
     assert!(
         json(&search)["data"]
@@ -527,18 +537,18 @@ fn local_info_commands_cover_init_describe_search_doctor_help_completion_and_ser
         json(&search)
     );
 
-    let doctor = omakure(workspace.path(), &["--json", "doctor"]);
+    let doctor = support::workspace_command::<20>(workspace.path(), &["--json", "doctor"]);
     assert_success(&doctor);
     assert!(String::from_utf8_lossy(&doctor.stdout).contains("All checks passed"));
 
-    let help_ai = omakure(workspace.path(), &["help-ai"]);
+    let help_ai = support::workspace_command::<20>(workspace.path(), &["help-ai"]);
     assert_success(&help_ai);
     let help_ai_json = json(&help_ai);
     let verbs = help_ai_json["data"]["verbs"].as_array().expect("verbs");
     assert!(verbs.iter().any(|verb| verb["name"] == "trace"));
     assert!(verbs.iter().any(|verb| verb["name"] == "token"));
 
-    let token_gen = omakure(
+    let token_gen = support::workspace_command::<20>(
         workspace.path(),
         &[
             "--json",
@@ -553,20 +563,25 @@ fn local_info_commands_cover_init_describe_search_doctor_help_completion_and_ser
     assert_success(&token_gen);
     let token_body = json(&token_gen);
     assert!(token_body["ok"].as_bool().unwrap());
-    assert!(token_body["data"]["token"]
-        .as_str()
-        .unwrap()
-        .starts_with("omk_live_"));
-    assert!(token_body["data"]["hash"]
-        .as_str()
-        .unwrap()
-        .contains("argon2id"));
+    assert!(
+        token_body["data"]["token"]
+            .as_str()
+            .unwrap()
+            .starts_with("omk_live_")
+    );
+    assert!(
+        token_body["data"]["hash"]
+            .as_str()
+            .unwrap()
+            .contains("argon2id")
+    );
 
     let completion = omakure_large_output(workspace.path(), &["completion", "bash"]);
     assert_success(&completion);
     assert!(String::from_utf8_lossy(&completion.stdout).contains("omakure"));
 
-    let serve_once = omakure(workspace.path(), &["serve", "--once", "--no-worker"]);
+    let serve_once =
+        support::workspace_command::<20>(workspace.path(), &["serve", "--once", "--no-worker"]);
     assert_success(&serve_once);
     // Prove the one-shot loop actually started and shut down cleanly rather than
     // parsing args and exiting: the daemon log must record both lifecycle lines.
@@ -579,7 +594,7 @@ fn local_info_commands_cover_init_describe_search_doctor_help_completion_and_ser
     );
 
     // Host-safe boundary: status probe must not mutate systemd units.
-    let serve_status = omakure(workspace.path(), &["serve", "--status"]);
+    let serve_status = support::workspace_command::<20>(workspace.path(), &["serve", "--status"]);
     #[cfg(target_os = "linux")]
     {
         assert_eq!(
@@ -610,7 +625,7 @@ fn local_info_commands_cover_init_describe_search_doctor_help_completion_and_ser
         );
     }
 
-    let config_json = omakure(workspace.path(), &["--json", "config"]);
+    let config_json = support::workspace_command::<20>(workspace.path(), &["--json", "config"]);
     assert_success(&config_json);
     let config_env = json(&config_json);
     assert_eq!(config_env["ok"], true);
@@ -621,10 +636,92 @@ fn local_info_commands_cover_init_describe_search_doctor_help_completion_and_ser
         ["update", "--help"].as_slice(),
         ["uninstall", "--help"].as_slice(),
     ] {
-        let output = omakure(workspace.path(), args);
+        let output = support::workspace_command::<20>(workspace.path(), args);
         assert_success(&output);
         assert!(String::from_utf8_lossy(&output.stdout).contains("Usage"));
     }
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn serve_status_reports_isolated_systemd_unit_state() {
+    let workspace = support::TestWorkspace::new("serve_status_systemd");
+    let home = tempfile::tempdir().expect("temporary HOME");
+    let shim = omakure::generated_executable_tempdir().expect("executable shim directory");
+    omakure::write_generated_executable(
+        &shim.path().join("systemctl"),
+        b"#!/bin/sh\nif [ \"$#\" -ne 4 ] || [ \"$1\" != \"--user\" ] || [ \"$3\" != \"--quiet\" ] || [ -z \"$4\" ]; then exit 99; fi\ncase \"$4\" in *.service) ;; *) exit 99;; esac\ncase \"$2\" in is-active) exit 0;; is-enabled) exit 1;; *) exit 99;; esac\n",
+    )
+    .expect("write systemctl shim");
+    let home_path = home.path().to_str().expect("UTF-8 HOME path");
+    let shim_path = shim.path().to_str().expect("UTF-8 shim path");
+    let envs = [("HOME", home_path), ("PATH", shim_path)];
+    let status = || {
+        let output = support::workspace_command_with_env::<20>(
+            workspace.path(),
+            &["--json", "serve", "--status"],
+            &envs,
+        );
+        assert_success(&output);
+        json(&output)["data"].clone()
+    };
+
+    let absent = status();
+    let unit_name = absent["unit"].as_str().expect("unit name");
+    let unit_dir = home.path().join(".config/systemd/user");
+    let unit_path = unit_dir.join(unit_name);
+    assert!(
+        unit_name.starts_with("omakure-")
+            && unit_name.ends_with(".service")
+            && !unit_name.contains('/')
+    );
+    assert_eq!(absent["unit_path"], unit_path.to_string_lossy().as_ref());
+    assert_eq!(absent["installed"], false);
+    assert_eq!(absent["active"], false);
+    assert_eq!(absent["enabled"], false);
+
+    fs::create_dir_all(&unit_dir).expect("create isolated systemd user directory");
+    fs::write(&unit_path, "[Unit]\nDescription=isolated test unit\n").expect("write isolated unit");
+    let present = status();
+    assert_eq!(present["unit"], absent["unit"]);
+    assert_eq!(present["unit_path"], absent["unit_path"]);
+    assert_eq!(present["installed"], true);
+    assert_eq!(present["active"], true);
+    assert_eq!(present["enabled"], false);
+}
+
+#[test]
+fn config_masks_parent_sourced_secrets_and_credential_overrides() {
+    let workspace = support::TestWorkspace::new("config_masks_parent_secrets");
+    let envs = workspace.path().join(".omakure/envs");
+    fs::create_dir_all(&envs).expect("create managed env directory");
+    fs::write(envs.join("dev.conf"), "PLAIN=$AWS_SECRET_ACCESS_KEY\n").expect("write active env");
+    fs::write(envs.join("active"), "dev.conf\n").expect("select active env");
+
+    let output = support::workspace_command_with_env::<20>(
+        workspace.path(),
+        &["--json", "config"],
+        &[
+            ("AWS_SECRET_ACCESS_KEY", "parent-secret-value"),
+            (
+                "OMAKURE_REPO",
+                "https://user:secret@example.invalid/repo.git",
+            ),
+        ],
+    );
+    assert_success(&output);
+    let config = json(&output);
+    let keys = config["data"]["active_env_keys"]
+        .as_array()
+        .expect("active env keys");
+    assert!(
+        keys.iter()
+            .any(|key| key["key"] == "PLAIN" && key["value"] == "****")
+    );
+    assert_eq!(config["data"]["env_overrides"]["OMAKURE_REPO"], "****");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!stdout.contains("parent-secret-value"));
+    assert!(!stdout.contains("user:secret"));
 }
 
 #[cfg(windows)]
@@ -655,7 +752,7 @@ fn serve_stop_gracefully_stops_a_foreground_process() {
         "serve did not publish a complete PID file"
     );
 
-    let stop = omakure(workspace.path(), &["serve", "--stop"]);
+    let stop = support::workspace_command::<20>(workspace.path(), &["serve", "--stop"]);
     if !stop.status.success() {
         let _ = child.kill();
         let _ = child.wait();
@@ -699,7 +796,7 @@ fn serve_stop_refuses_a_live_unrelated_pid_and_preserves_the_file() {
     )
     .expect("write test PID file");
 
-    let stop = omakure(workspace.path(), &["serve", "--stop"]);
+    let stop = support::workspace_command::<20>(workspace.path(), &["serve", "--stop"]);
     assert!(
         !stop.status.success(),
         "stop must reject a live PID without the daemon event"
@@ -717,6 +814,38 @@ fn serve_stop_refuses_a_live_unrelated_pid_and_preserves_the_file() {
     );
     let _ = unrelated.kill();
     let _ = unrelated.wait();
+}
+
+#[test]
+fn serve_persists_secret_ref_default_without_plaintext() {
+    let workspace = support::TestWorkspace::new("serve_secret_ref");
+    let schema = r#"{"Name":"scheduled_secret","Fields":[{"Name":"TOKEN","Type":"secret","Arg":"--token","Default":"secret://env/OMAKURE_CRON_SECRET_REF"}],"Schedule":{"Cron":"* * * * *","Enabled":true}}"#;
+    let script = workspace.path().join("scheduled.sh");
+    fs::write(
+        &script,
+        format!("#!/usr/bin/env bash\n# OMAKURE_SCHEMA_START\n# {schema}\n# OMAKURE_SCHEMA_END\n"),
+    )
+    .expect("write scheduled script");
+    support::set_executable(&script);
+
+    let served = support::workspace_command_with_env::<20>(
+        workspace.path(),
+        &["serve", "--once", "--no-worker"],
+        &[("OMAKURE_CRON_SECRET_REF", "cron_plaintext_value")],
+    );
+    assert_success(&served);
+
+    let history = support::workspace_command::<20>(
+        workspace.path(),
+        &["--json", "history", "list", "--state", "queued"],
+    );
+    assert_success(&history);
+    let payload = json(&history);
+    let rows = payload["data"].as_array().expect("queued scheduled runs");
+    assert_eq!(rows.len(), 1);
+    let args = rows[0]["args_json"].as_str().expect("persisted run args");
+    assert!(args.contains("secret://env/OMAKURE_CRON_SECRET_REF"));
+    assert!(!args.contains("cron_plaintext_value"));
 }
 
 /// `node baseline` end to end at the CLI: a key, a signed manifest, and a push
@@ -745,7 +874,11 @@ fn node_baseline_creates_a_key_signs_a_set_and_refuses_to_push_without_a_service
             config_arg.as_str(),
         ];
         args.extend_from_slice(extra);
-        omakure_with_env(workspace.path(), &args, &[("OMAKURE_NODE_TEST_MODE", "1")])
+        support::workspace_command_with_env::<20>(
+            workspace.path(),
+            &args,
+            &[("OMAKURE_NODE_TEST_MODE", "1")],
+        )
     };
 
     assert_success(&node(&["init"]));
@@ -827,7 +960,7 @@ fn node_cli_commands_share_public_status_and_confirmed_trust_mutations() {
     let config_arg = config.to_string_lossy().to_string();
     let node_args = [state_arg.as_str(), config_arg.as_str()];
 
-    let init = omakure_with_env(
+    let init = support::workspace_command_with_env::<20>(
         workspace.path(),
         &[
             "--json",
@@ -844,7 +977,7 @@ fn node_cli_commands_share_public_status_and_confirmed_trust_mutations() {
     assert_eq!(json(&init)["data"]["status"]["initialized"], true);
     assert_eq!(json(&init)["data"]["state_dir_created"], true);
 
-    let status = omakure_with_env(
+    let status = support::workspace_command_with_env::<20>(
         workspace.path(),
         &[
             "--json",
@@ -865,9 +998,11 @@ fn node_cli_commands_share_public_status_and_confirmed_trust_mutations() {
             .len(),
         64
     );
-    assert!(json(&status)["data"]["identity"]
-        .get("private_key")
-        .is_none());
+    assert!(
+        json(&status)["data"]["identity"]
+            .get("private_key")
+            .is_none()
+    );
 
     let trust = [
         "--json",
@@ -889,11 +1024,15 @@ fn node_cli_commands_share_public_status_and_confirmed_trust_mutations() {
         "approved",
         "--confirmed",
     ];
-    let imported = omakure_with_env(workspace.path(), &trust, &[("OMAKURE_NODE_TEST_MODE", "1")]);
+    let imported = support::workspace_command_with_env::<20>(
+        workspace.path(),
+        &trust,
+        &[("OMAKURE_NODE_TEST_MODE", "1")],
+    );
     assert_success(&imported);
     assert_eq!(json(&imported)["data"]["state"], "active");
 
-    let peers = omakure_with_env(
+    let peers = support::workspace_command_with_env::<20>(
         workspace.path(),
         &[
             "--json",
@@ -913,7 +1052,7 @@ fn node_cli_commands_share_public_status_and_confirmed_trust_mutations() {
     // the same protocol-neutral operation the HTTP route renders, so an
     // actively trusted peer that has never reported appears exactly once with
     // the frozen `unknown` presence and no Profile or Pulse.
-    let health = omakure_with_env(
+    let health = support::workspace_command_with_env::<20>(
         workspace.path(),
         &[
             "--json",
@@ -928,7 +1067,6 @@ fn node_cli_commands_share_public_status_and_confirmed_trust_mutations() {
     );
     assert_success(&health);
     let health_body = json(&health);
-    assert_eq!(health_body["data"]["enabled"], true);
     assert_eq!(health_body["data"]["presence"]["unknown"], 1);
     assert_eq!(health_body["data"]["presence"]["total"], 1);
     assert_eq!(health_body["data"]["nodes"].as_array().unwrap().len(), 1);
@@ -953,7 +1091,7 @@ fn node_cli_commands_share_public_status_and_confirmed_trust_mutations() {
     // `node signals` is the CLI half of the closed Signal feed. Trusting the
     // peer above was an authoritative local trust transition, so exactly one
     // `enrolled` Signal is visible, bounded and newest first.
-    let signals = omakure_with_env(
+    let signals = support::workspace_command_with_env::<20>(
         workspace.path(),
         &[
             "--json",
@@ -968,7 +1106,6 @@ fn node_cli_commands_share_public_status_and_confirmed_trust_mutations() {
     );
     assert_success(&signals);
     let signals_body = json(&signals)["data"].clone();
-    assert_eq!(signals_body["enabled"], true);
     assert_eq!(signals_body["gap"], false);
     assert_eq!(signals_body["limit"], 64);
     assert_eq!(signals_body["retention_seconds"], 604_800);
@@ -1003,14 +1140,14 @@ fn behavioral_flags_cover_tags_history_filters_init_force_and_queue_priority_tim
 
     let schema =
         r#"{"Name":"tagged","Description":"flag fixture","Tags":["alpha","beta"],"Fields":[]}"#;
-    let init = omakure(
+    let init = support::workspace_command::<20>(
         workspace.path(),
         &["--json", "init", "tools/tagged.sh", "--schema-json", schema],
     );
     assert_success(&init);
     assert_eq!(json(&init)["data"]["relative_path"], "tools/tagged.sh");
 
-    let force = omakure(
+    let force = support::workspace_command::<20>(
         workspace.path(),
         &[
             "--json",
@@ -1087,31 +1224,36 @@ fn behavioral_flags_cover_tags_history_filters_init_force_and_queue_priority_tim
         alone_text.len()
     );
 
-    let scripts = omakure(
+    let scripts = support::workspace_command::<20>(
         workspace.path(),
         &["--json", "scripts", "--tag", "alpha", "--tag", "beta"],
     );
     assert_success(&scripts);
-    assert!(json(&scripts)["data"]
-        .as_array()
-        .expect("scripts data")
-        .iter()
-        .any(|entry| entry["relative_path"] == "tools/tagged.sh"
-            || entry["path"] == "tools/tagged.sh"
-            || entry.as_str() == Some("tools/tagged.sh")));
+    assert!(
+        json(&scripts)["data"]
+            .as_array()
+            .expect("scripts data")
+            .iter()
+            .any(|entry| entry["relative_path"] == "tools/tagged.sh"
+                || entry["path"] == "tools/tagged.sh"
+                || entry.as_str() == Some("tools/tagged.sh"))
+    );
 
-    let search = omakure(
+    let search = support::workspace_command::<20>(
         workspace.path(),
         &["--json", "search", "tagged", "--tag", "alpha"],
     );
     assert_success(&search);
-    assert!(json(&search)["data"]
-        .as_array()
-        .expect("search data")
-        .iter()
-        .any(|entry| entry["relative_path"] == "tools/tagged.sh"));
+    assert!(
+        json(&search)["data"]
+            .as_array()
+            .expect("search data")
+            .iter()
+            .any(|entry| entry["relative_path"] == "tools/tagged.sh")
+    );
 
-    let run = omakure(workspace.path(), &["--json", "run", "tools/tagged.sh"]);
+    let run =
+        support::workspace_command::<20>(workspace.path(), &["--json", "run", "tools/tagged.sh"]);
     assert_success(&run);
     let run_id = json(&run)["data"]["run_id"]
         .as_str()
@@ -1120,7 +1262,7 @@ fn behavioral_flags_cover_tags_history_filters_init_force_and_queue_priority_tim
 
     // Enqueue (but do not run) a job so history filters have both a terminal
     // (completed) run and an in-flight (queued) run to discriminate between.
-    let queued = omakure(
+    let queued = support::workspace_command::<20>(
         workspace.path(),
         &[
             "--json",
@@ -1141,7 +1283,7 @@ fn behavioral_flags_cover_tags_history_filters_init_force_and_queue_priority_tim
 
     // `--state completed` must include the completed run and EXCLUDE the queued
     // one — proves the filter restricts rather than returning everything.
-    let history_state = omakure(
+    let history_state = support::workspace_command::<20>(
         workspace.path(),
         &["--json", "history", "list", "--state", "completed"],
     );
@@ -1157,7 +1299,7 @@ fn behavioral_flags_cover_tags_history_filters_init_force_and_queue_priority_tim
     );
 
     // `--state-set terminal` includes completed, excludes queued.
-    let history_terminal = omakure(
+    let history_terminal = support::workspace_command::<20>(
         workspace.path(),
         &["--json", "history", "list", "--state-set", "terminal"],
     );
@@ -1174,7 +1316,7 @@ fn behavioral_flags_cover_tags_history_filters_init_force_and_queue_priority_tim
 
     // `--state-set in_flight` is the mirror image: includes queued, excludes
     // completed.
-    let history_in_flight = omakure(
+    let history_in_flight = support::workspace_command::<20>(
         workspace.path(),
         &["--json", "history", "list", "--state-set", "in_flight"],
     );
@@ -1189,11 +1331,12 @@ fn behavioral_flags_cover_tags_history_filters_init_force_and_queue_priority_tim
         "--state-set in_flight must exclude the completed run"
     );
 
-    let show = omakure(workspace.path(), &["--json", "history", "show", &run_id]);
+    let show =
+        support::workspace_command::<20>(workspace.path(), &["--json", "history", "show", &run_id]);
     assert_success(&show);
     assert_eq!(json(&show)["data"]["run_id"], run_id);
 
-    let cancel = omakure(
+    let cancel = support::workspace_command::<20>(
         workspace.path(),
         &["--json", "queue", "cancel", "prio-timeout"],
     );
@@ -1216,12 +1359,12 @@ echo traced"##,
         vec!["--json", "env", "replace", "prod", "HOST=new", "PORT=443"],
         vec!["--json", "env", "list"],
     ] {
-        assert_success(&omakure(workspace.path(), &args));
+        assert_success(&support::workspace_command::<20>(workspace.path(), &args));
     }
 
     let omakure_bin = support::omakure_bin();
     let omakure_bin = omakure_bin.to_string_lossy().to_string();
-    let run = omakure_with_env(
+    let run = support::workspace_command_with_env::<20>(
         workspace.path(),
         &["--json", "run", "trace.sh"],
         &[("OMAKURE_BIN", omakure_bin.as_str())],
@@ -1234,7 +1377,7 @@ echo traced"##,
 
     // A second run guarantees history holds >= 2 rows, so `--limit 1` is
     // actually discriminating rather than trivially satisfied.
-    let run2 = omakure_with_env(
+    let run2 = support::workspace_command_with_env::<20>(
         workspace.path(),
         &["--json", "run", "trace.sh"],
         &[("OMAKURE_BIN", omakure_bin.as_str())],
@@ -1245,13 +1388,13 @@ echo traced"##,
         vec!["--json", "history", "list"],
         vec!["--json", "history", "traces", &run_id],
     ] {
-        let output = omakure(workspace.path(), &args);
+        let output = support::workspace_command::<20>(workspace.path(), &args);
         assert_success(&output);
         assert_eq!(json(&output)["ok"], true);
     }
 
     // Two completed runs exist: stats must report them, not an empty summary.
-    let stats = omakure(workspace.path(), &["--json", "history", "stats"]);
+    let stats = support::workspace_command::<20>(workspace.path(), &["--json", "history", "stats"]);
     assert_success(&stats);
     let stats_data = &json(&stats)["data"];
     assert!(
@@ -1268,7 +1411,8 @@ echo traced"##,
 
     // `history list` sees both runs; `tail --limit 1` must cap the result to
     // exactly one row.
-    let full_history = omakure(workspace.path(), &["--json", "history", "list"]);
+    let full_history =
+        support::workspace_command::<20>(workspace.path(), &["--json", "history", "list"]);
     assert_success(&full_history);
     assert!(
         json(&full_history)["data"]
@@ -1278,7 +1422,7 @@ echo traced"##,
             >= 2,
         "expected >= 2 history rows before asserting --limit caps"
     );
-    let tail_one = omakure(
+    let tail_one = support::workspace_command::<20>(
         workspace.path(),
         &["--json", "history", "tail", "--limit", "1"],
     );
@@ -1289,14 +1433,19 @@ echo traced"##,
         "--limit 1 must return exactly one row"
     );
 
-    let traces = omakure(workspace.path(), &["--json", "history", "traces", &run_id]);
-    assert!(json(&traces)["data"]
-        .as_array()
-        .expect("traces")
-        .iter()
-        .any(|trace| { trace["message"] == "trace message" }));
+    let traces = support::workspace_command::<20>(
+        workspace.path(),
+        &["--json", "history", "traces", &run_id],
+    );
+    assert!(
+        json(&traces)["data"]
+            .as_array()
+            .expect("traces")
+            .iter()
+            .any(|trace| { trace["message"] == "trace message" })
+    );
 
-    let queued = omakure(
+    let queued = support::workspace_command::<20>(
         workspace.path(),
         &[
             "--json",
@@ -1308,7 +1457,7 @@ echo traced"##,
         ],
     );
     assert_success(&queued);
-    let cancel = omakure(
+    let cancel = support::workspace_command::<20>(
         workspace.path(),
         &["--json", "queue", "cancel", "queued-cancel"],
     );
@@ -1317,7 +1466,7 @@ echo traced"##,
 
     let failing = workspace.write_schema_script("fail.sh", "fail_fixture", "exit 7");
     support::set_executable(&failing);
-    let enqueue_fail = omakure(
+    let enqueue_fail = support::workspace_command::<20>(
         workspace.path(),
         &[
             "--json",
@@ -1329,16 +1478,19 @@ echo traced"##,
         ],
     );
     assert_success(&enqueue_fail);
-    let worker = omakure(workspace.path(), &["--json", "queue", "worker", "--once"]);
+    let worker = support::workspace_command::<20>(
+        workspace.path(),
+        &["--json", "queue", "worker", "--once"],
+    );
     assert_success(&worker);
-    let dead_letter = omakure(
+    let dead_letter = support::workspace_command::<20>(
         workspace.path(),
         &["--json", "queue", "dead-letter", "queued-dead"],
     );
     assert_success(&dead_letter);
     assert_eq!(json(&dead_letter)["data"]["state"], "dead_letter");
 
-    let stats = omakure(workspace.path(), &["--json", "queue", "stats"]);
+    let stats = support::workspace_command::<20>(workspace.path(), &["--json", "queue", "stats"]);
     assert_success(&stats);
     let counts = &json(&stats)["data"]["counts_by_state"];
     assert!(counts.is_object());
@@ -1353,8 +1505,53 @@ echo traced"##,
         "queue stats must count the dead-letter job (counts={counts})"
     );
 
-    let delete = omakure(workspace.path(), &["--json", "env", "delete", "prod"]);
+    let delete =
+        support::workspace_command::<20>(workspace.path(), &["--json", "env", "delete", "prod"]);
     assert_success(&delete);
+}
+
+#[test]
+fn trace_cli_redacts_runtime_secret_file_values() {
+    let workspace = support::TestWorkspace::new("trace_redacts");
+    let script = workspace.write_schema_script("trace.sh", "trace_fixture", "echo ready");
+    support::set_executable(&script);
+    let run_id = "rid-trace-secret";
+    let queued = support::workspace_command::<20>(
+        workspace.path(),
+        &["--json", "queue", "add", "trace.sh", "--run-id", run_id],
+    );
+    assert_success(&queued);
+
+    let redaction_file = workspace.path().join("redact.json");
+    fs::write(&redaction_file, r#"["trace_secret_value"]"#).expect("write redaction file");
+    let written = support::workspace_command_with_env::<20>(
+        workspace.path(),
+        &[
+            "trace",
+            "saw trace_secret_value",
+            "--data",
+            r#"{"token":"trace_secret_value"}"#,
+        ],
+        &[
+            ("OMAKURE_RUN_ID", run_id),
+            (
+                "OMAKURE_REDACT_SECRETS_FILE",
+                redaction_file.to_str().expect("UTF-8 redaction path"),
+            ),
+        ],
+    );
+    assert_success(&written);
+
+    let traces = support::workspace_command::<20>(
+        workspace.path(),
+        &["--json", "history", "traces", run_id],
+    );
+    assert_success(&traces);
+    let payload = json(&traces);
+    let rows = payload["data"].as_array().expect("trace rows");
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0]["message"], "saw <redacted>");
+    assert_eq!(rows[0]["data_json"], r#"{"token":"<redacted>"}"#);
 }
 
 #[cfg(unix)]
@@ -1364,7 +1561,7 @@ fn battery_lifecycle_subcommands_work_against_local_repo() {
     let repo = support::TestWorkspace::new("cli_surface_battery_repo");
     support::write_local_battery_repo(repo.path(), "local", "Local test battery");
 
-    let add = omakure(
+    let add = support::workspace_command::<20>(
         workspace.path(),
         &[
             "--json",
@@ -1377,11 +1574,12 @@ fn battery_lifecycle_subcommands_work_against_local_repo() {
     );
     assert_success(&add);
 
-    let sync = omakure(workspace.path(), &["--json", "battery", "sync", "local"]);
+    let sync =
+        support::workspace_command::<20>(workspace.path(), &["--json", "battery", "sync", "local"]);
     assert_success(&sync);
 
     // list must contain the registered battery by name.
-    let list = omakure(workspace.path(), &["--json", "battery", "list"]);
+    let list = support::workspace_command::<20>(workspace.path(), &["--json", "battery", "list"]);
     assert_success(&list);
     assert!(
         json(&list)["data"]
@@ -1394,12 +1592,18 @@ fn battery_lifecycle_subcommands_work_against_local_repo() {
     );
 
     // inspect must resolve the battery summary by name.
-    let inspect = omakure(workspace.path(), &["--json", "battery", "inspect", "local"]);
+    let inspect = support::workspace_command::<20>(
+        workspace.path(),
+        &["--json", "battery", "inspect", "local"],
+    );
     assert_success(&inspect);
     assert_eq!(json(&inspect)["data"]["summary"]["name"], "local");
 
     // scripts must list the fixture's script id.
-    let scripts = omakure(workspace.path(), &["--json", "battery", "scripts", "local"]);
+    let scripts = support::workspace_command::<20>(
+        workspace.path(),
+        &["--json", "battery", "scripts", "local"],
+    );
     assert_success(&scripts);
     assert!(
         json(&scripts)["data"]
@@ -1411,7 +1615,7 @@ fn battery_lifecycle_subcommands_work_against_local_repo() {
         String::from_utf8_lossy(&scripts.stdout)
     );
 
-    let install = omakure(
+    let install = support::workspace_command::<20>(
         workspace.path(),
         &["--json", "battery", "install", "local", "local.echo"],
     );
@@ -1419,7 +1623,7 @@ fn battery_lifecycle_subcommands_work_against_local_repo() {
     assert!(workspace.path().join("scripts/echo.sh").exists());
 
     // Second install without --force should fail; --force overwrites.
-    let conflict = omakure(
+    let conflict = support::workspace_command::<20>(
         workspace.path(),
         &["--json", "battery", "install", "local", "local.echo"],
     );
@@ -1427,7 +1631,7 @@ fn battery_lifecycle_subcommands_work_against_local_repo() {
         !conflict.status.success(),
         "second install without --force must fail"
     );
-    let forced = omakure(
+    let forced = support::workspace_command::<20>(
         workspace.path(),
         &[
             "--json",
@@ -1441,12 +1645,44 @@ fn battery_lifecycle_subcommands_work_against_local_repo() {
     assert_success(&forced);
     assert_eq!(json(&forced)["ok"], true);
 
-    let remove = omakure(
+    let remove = support::workspace_command::<20>(
         workspace.path(),
         &["--json", "battery", "remove", "local", "--remove-cache"],
     );
     assert_success(&remove);
     assert_eq!(json(&remove)["ok"], true);
+}
+
+#[test]
+fn battery_add_stores_token_ref_without_environment_plaintext() {
+    let workspace = support::TestWorkspace::new("battery_secret_ref");
+    let token_ref = "secret://env/OMAKURE_BATTERY_TOKEN_TEST";
+    let plaintext = "super-secret-battery-token-value";
+    let add = support::workspace_command_with_env::<20>(
+        workspace.path(),
+        &[
+            "--json",
+            "battery",
+            "add",
+            "https://example.invalid/private.git",
+            "--name",
+            "private",
+            "--token-ref",
+            token_ref,
+        ],
+        &[("OMAKURE_BATTERY_TOKEN_TEST", plaintext)],
+    );
+    assert_success(&add);
+    let payload = json(&add);
+    let summary = &payload["data"];
+    assert_eq!(summary["auth"]["method"], "https_token_ref");
+    assert_eq!(summary["auth"]["token_ref"], token_ref);
+
+    let registry = fs::read_to_string(workspace.path().join(".omakure/batteries.json"))
+        .expect("read Battery registry");
+    assert!(registry.contains(token_ref));
+    assert!(registry.contains("https_token_ref"));
+    assert!(!registry.contains(plaintext));
 }
 
 #[test]
@@ -1472,19 +1708,17 @@ fn direct_and_queue_runs_reject_reserved_workspace_scripts() {
             (vec!["--json", "run", script], "unsafe_path"),
             (vec!["--json", "queue", "add", script], "invalid_argument"),
         ] {
-            let output = omakure(workspace.path(), &args);
+            let output = support::workspace_command::<20>(workspace.path(), &args);
             assert!(!output.status.success());
             assert_eq!(json(&output)["error"]["code"], code);
-            assert!(json(&output)["error"]["message"]
-                .as_str()
-                .unwrap()
-                .contains("reserved workspace metadata"));
+            assert!(
+                json(&output)["error"]["message"]
+                    .as_str()
+                    .unwrap()
+                    .contains("reserved workspace metadata")
+            );
         }
     }
-}
-
-fn omakure(workspace: &Path, args: &[&str]) -> Output {
-    omakure_with_env(workspace, args, &[])
 }
 
 fn omakure_large_output(workspace: &Path, args: &[&str]) -> Output {
@@ -1494,25 +1728,6 @@ fn omakure_large_output(workspace: &Path, args: &[&str]) -> Output {
         .args(args)
         .output()
         .expect("run omakure command")
-}
-
-fn omakure_with_env(workspace: &Path, args: &[&str], envs: &[(&str, &str)]) -> Output {
-    let mut command = support::omakure_command();
-    command.arg("--scripts-dir").arg(workspace).args(args);
-    for (key, value) in envs {
-        command.env(key, value);
-    }
-    support::command_with_timeout(&mut command, Duration::from_secs(20))
-}
-
-fn assert_success(output: &Output) {
-    assert!(
-        output.status.success(),
-        "expected success, status: {:?}, stdout_len: {}, stderr_len: {}",
-        output.status.code(),
-        output.stdout.len(),
-        output.stderr.len()
-    );
 }
 
 fn json(output: &Output) -> Value {

@@ -8,17 +8,13 @@ The first applicable entry wins:
 
 1. `--scripts-dir <PATH>`.
 2. `OMAKURE_SCRIPTS_DIR`.
-3. `OVERTURE_SCRIPTS_DIR` (legacy).
-4. `CLOUD_MGMT_SCRIPTS_DIR` (legacy).
-5. Repository `scripts/workspace/` in debug builds, when present.
-6. `~/Documents/omakure-scripts` or the Windows Documents equivalent.
-7. Legacy `overture-scripts` or `cloud-mgmt-scripts` directories, when present.
-8. The default Omakure directory as a first-launch fallback.
+3. Repository `scripts/workspace/` in debug builds, when present.
+4. `~/Documents/omakure-scripts` or the Windows Documents equivalent.
 
-There is no positional path mode. `omakure PATH` is not a supported alias for
-`--scripts-dir` and should be treated as a command-line error. This keeps
-scripts, metadata, history, environments, and the search index under one
-explicit root.
+The workspace root cannot be selected with a bare positional path:
+`omakure PATH` is a command-line error. Commands such as `run` and `describe`
+accept script names or paths within the selected workspace. Scripts, metadata,
+history, environments, and the search index share that root.
 
 ## Repository automation
 

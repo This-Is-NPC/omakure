@@ -1,6 +1,7 @@
 //! `omakure search <query>` — surface the SQLite-backed script index.
 
 use crate::cli::args::SearchArgs;
+use crate::cli::emit::emit_operation_error;
 use crate::cli::json::{self, codes};
 use crate::cli::list::ScriptListEntry;
 use crate::operations::search::{self, SearchScriptsRequest};
@@ -23,7 +24,7 @@ pub fn run(
         },
     ) {
         Ok(entries) => entries,
-        Err(err) => return emit_operation_error(json_output, err),
+        Err(err) => return emit_operation_error(json_output, err, search_error_code),
     };
 
     if json_output {
@@ -50,16 +51,11 @@ fn print_entry(entry: &ScriptListEntry) {
     }
 }
 
-fn emit_operation_error(json_output: bool, err: OperationError) -> Result<(), Box<dyn Error>> {
-    let code = match err.code {
+fn search_error_code(err: &OperationError) -> &'static str {
+    match err.code {
         OperationErrorCode::InvalidInput => codes::INVALID_ARGUMENT,
         _ => codes::INTERNAL,
-    };
-    if json_output {
-        json::print_err(code, err.message);
-        std::process::exit(1);
     }
-    Err(err.message.into())
 }
 
 #[cfg(test)]

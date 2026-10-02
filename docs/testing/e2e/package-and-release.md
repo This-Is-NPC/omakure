@@ -36,7 +36,7 @@ forward their remaining arguments, and long-running workflow gates use
 - Compose and installers document loopback management HTTP, workspace/state volumes, fixed uid/gid, token-file auth, and service installation paths.
 - Release matrices route Linux GNU/musl, Linux ARM64 GNU/musl, macOS Intel/ARM64, and Windows Intel/ARM64 through the four platform suites without naming collisions.
 - `binary-smoke` owns release `--version` execution; `musl-static` owns static-link verification; archives contain exactly one root binary.
-- Removed TUI dependencies/assets stay absent while vendored `mlua` remains for the `.lua` script kind.
+- `Cargo.toml` declares vendored `mlua` for the `.lua` script kind.
 
 ## Does Not Prove
 
@@ -55,9 +55,10 @@ always-run cleanup removes the test container and named volumes, then fails if
 any listed container, network, or volume remains.
 
 Each CI/release platform matrix job has a 60-minute job bound. The selected
-platform script forwards its target to native tests, release build,
-`binary-smoke`, and (for musl) `musl-static`; the workflow package step handles
-the per-target artifact, while `package:release` is the local
+platform script forwards its target to native tests on GNU/macOS/Windows in CI,
+release build, `binary-smoke`, and (for musl) `musl-static`. Release jobs pass
+`--build-only` to avoid repeating CI tests. The workflow
+package step handles the per-target artifact, while `package:release` is the local
 suite/package-release route and is not a substitute for matrix artifact
 packaging.
 

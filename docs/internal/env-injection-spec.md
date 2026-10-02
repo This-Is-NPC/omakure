@@ -12,7 +12,7 @@ Terminology: "env" means the ordered set of `KEY=value` pairs that will be
 handed to a script process. "Merged env" means the single map produced
 after all precedence layers have been folded together. Keys are compared
 **case-sensitively** at injection time (unlike schema-field matching in
-`src/adapters/environments.rs`, which lowercases keys to match schema
+`src/adapters/environments/layers.rs`, which lowercases keys to match schema
 fields — that path is unrelated to process injection).
 
 ---
@@ -51,7 +51,7 @@ key survives*.
     calls resolve the same `runs.sqlite`).
   - `OMAKURE_BIN` = path of this omakure executable (forward slashes on
     Windows).
-- This mirrors the existing injection in `src/run_executor.rs`
+- This mirrors the existing injection in `src/run_executor/lifecycle.rs`
   (`execute_with_heartbeat`), where the reserved pair is pushed onto the
   `env` vec **after** the caller-supplied `extra_env`. Layers 2 and 3 feed
   `extra_env`; the reserved-last ordering established there is the runtime
@@ -203,7 +203,7 @@ spawned. No layer of the persistence stack receives it.
 The env travels a single, narrow path and there is **no storage sink on
 it**:
 
-1. **Injection point** — `src/run_executor.rs`,
+1. **Injection point** — `src/run_executor/lifecycle.rs`,
    `execute_with_heartbeat(...)`: the `extra_env: Vec<(String, String)>`
    parameter is moved into a local `env` vec; the reserved pair is pushed;
    the vec is handed to
@@ -215,10 +215,10 @@ it**:
    `MultiScriptRunner::build_command(script, args, env)`: each pair is
    applied via `cmd.env(k, v)`. This is the *only* consumer of the env.
    The resulting `Command` is spawned in
-   `run_executor.rs` (`command.spawn()`); the env exists solely inside
+   `run_executor/lifecycle.rs` (`command.spawn()`); the env exists solely inside
    the child process from that point on.
 
-3. **Persistence point (env-value-free by construction)** — `src/runs.rs`,
+3. **Persistence point (env-value-free by construction)** — `src/runs/enqueue.rs`,
    `insert_run(conn, row)` executes `INSERT INTO runs (...)`. The `runs`
    table schema has columns for `args_json, actor, reason, state, ...,
    stdout, stderr, error, omakure_version` and so on — **there is no env value
@@ -229,7 +229,7 @@ it**:
    data_json` and likewise has no env-value sink.
 
 4. **Masking (defense in depth, diagnostic previews only)** —
-   `src/adapters/environments.rs`, `is_sensitive_key(key)` flags keys
+   `src/adapters/environments/values.rs`, `is_sensitive_key(key)` flags keys
    containing `password`, `secret`, `token`, `key`, `api`,
    `private`, or `cred`, and the Environments **preview** masks their
     values with `****`. This is a *display* control for diagnostic output,

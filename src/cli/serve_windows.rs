@@ -1,13 +1,16 @@
 /// Native Windows process and named-event primitives for `serve`.
+use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
 use windows_sys::Win32::Foundation::{
-    CloseHandle, GetLastError, ERROR_ALREADY_EXISTS, ERROR_FILE_NOT_FOUND, ERROR_INVALID_PARAMETER,
-    HANDLE, WAIT_FAILED, WAIT_OBJECT_0, WAIT_TIMEOUT,
+    ERROR_ALREADY_EXISTS, ERROR_FILE_NOT_FOUND, ERROR_INVALID_PARAMETER, GetLastError, HANDLE,
+    WAIT_FAILED, WAIT_OBJECT_0, WAIT_TIMEOUT,
 };
-use windows_sys::Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_WRITE_THROUGH};
+use windows_sys::Win32::Storage::FileSystem::{MOVEFILE_WRITE_THROUGH, MoveFileExW};
 use windows_sys::Win32::System::Threading::{
-    CreateEventW, OpenEventW, OpenProcess, SetEvent, WaitForSingleObject, EVENT_MODIFY_STATE,
-    PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE,
+    CreateEventW, EVENT_MODIFY_STATE, OpenEventW, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+    PROCESS_SYNCHRONIZE, SetEvent, WaitForSingleObject,
 };
+
+use crate::util::windows::{wide_path, wide_str};
 
 const STOP_EVENT_PREFIX: &str = "Local\\OmakureServeStop-";
 
@@ -17,62 +20,68 @@ pub(crate) fn is_stop_event_name(name: &str) -> bool {
 }
 
 pub(crate) struct StopEvent {
-    handle: HANDLE,
+    handle: OwnedHandle,
 }
 
 impl StopEvent {
-    pub(crate) fn is_signaled(&self) -> Result<bool, String> {
-        let result = unsafe { WaitForSingleObject(self.handle, 0) };
-        match result {
-            WAIT_OBJECT_0 => Ok(true),
-            WAIT_TIMEOUT => Ok(false),
-            WAIT_FAILED => Err(last_error("WaitForSingleObject")),
-            other => Err(format!(
-                "WaitForSingleObject returned unexpected status {other}"
-            )),
-        }
-    }
-}
-
-impl Drop for StopEvent {
-    fn drop(&mut self) {
-        unsafe {
-            CloseHandle(self.handle);
-        }
+    pub(crate) fn is_signaled(&self) -> Result<bool, WaitError> {
+        wait_for(&self.handle, 0)
     }
 }
 
 pub(crate) struct ProcessHandle {
-    handle: HANDLE,
+    handle: OwnedHandle,
 }
 
 impl ProcessHandle {
-    pub(crate) fn wait(&self, timeout: std::time::Duration) -> Result<bool, String> {
-        let milliseconds = timeout.as_millis().min(u32::MAX as u128) as u32;
-        let result = unsafe { WaitForSingleObject(self.handle, milliseconds) };
-        match result {
-            WAIT_OBJECT_0 => Ok(true),
-            WAIT_TIMEOUT => Ok(false),
-            WAIT_FAILED => Err(last_error("WaitForSingleObject")),
-            other => Err(format!(
-                "WaitForSingleObject returned unexpected status {other}"
-            )),
-        }
+    pub(crate) fn wait(&self, timeout: std::time::Duration) -> Result<bool, WaitError> {
+        wait_for(
+            &self.handle,
+            timeout.as_millis().min(u32::MAX as u128) as u32,
+        )
     }
 }
 
-impl Drop for ProcessHandle {
-    fn drop(&mut self) {
-        unsafe {
-            CloseHandle(self.handle);
-        }
+/// Take ownership of a handle a Win32 call just returned, so dropping it
+/// closes it.
+fn owned(handle: HANDLE) -> OwnedHandle {
+    // SAFETY: callers pass a non-null handle freshly returned by a Win32
+    // open/create call and never close or share it elsewhere.
+    unsafe { OwnedHandle::from_raw_handle(handle) }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum WaitError {
+    #[error("WaitForSingleObject failed with Windows error {code}")]
+    Failed { code: u32 },
+    #[error("WaitForSingleObject returned unexpected status {status}")]
+    UnexpectedStatus { status: u32 },
+}
+
+fn wait_for(handle: &OwnedHandle, milliseconds: u32) -> Result<bool, WaitError> {
+    let result = unsafe { WaitForSingleObject(handle.as_raw_handle(), milliseconds) };
+    match result {
+        WAIT_OBJECT_0 => Ok(true),
+        WAIT_TIMEOUT => Ok(false),
+        WAIT_FAILED => Err(WaitError::Failed {
+            code: unsafe { GetLastError() },
+        }),
+        status => Err(WaitError::UnexpectedStatus { status }),
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum ProcessProbeError {
+    #[error("OpenProcess({pid}) failed with Windows error {code}")]
+    OpenProcess { pid: u32, code: u32 },
+    #[error(transparent)]
+    Wait(#[from] WaitError),
 }
 
 pub(crate) enum ProcessProbe {
     Live(ProcessHandle),
     Dead,
-    Indeterminate(String),
+    Indeterminate(ProcessProbeError),
 }
 
 pub(crate) fn probe_process(pid: u32) -> ProcessProbe {
@@ -88,65 +97,86 @@ pub(crate) fn probe_process(pid: u32) -> ProcessProbe {
         return if error == ERROR_INVALID_PARAMETER {
             ProcessProbe::Dead
         } else {
-            ProcessProbe::Indeterminate(format!(
-                "OpenProcess({pid}) failed with Windows error {error}"
-            ))
+            ProcessProbe::Indeterminate(ProcessProbeError::OpenProcess { pid, code: error })
         };
     }
 
-    let process = ProcessHandle { handle };
+    let process = ProcessHandle {
+        handle: owned(handle),
+    };
     match process.wait(std::time::Duration::ZERO) {
         Ok(true) => ProcessProbe::Dead,
         Ok(false) => ProcessProbe::Live(process),
-        Err(error) => ProcessProbe::Indeterminate(error),
+        Err(error) => ProcessProbe::Indeterminate(error.into()),
     }
 }
 
-pub(crate) fn create_stop_event() -> Result<(String, StopEvent), String> {
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum CreateStopEventError {
+    #[error("CreateEventW failed with Windows error {code}")]
+    Create { code: u32 },
+    #[error("CreateEventW generated an existing event identity")]
+    IdentityCollision,
+}
+
+pub(crate) fn create_stop_event() -> Result<(String, StopEvent), CreateStopEventError> {
     let name = format!("{STOP_EVENT_PREFIX}{:032x}", rand::random::<u128>());
-    let wide_name = wide_null(&name);
+    let wide_name = wide_str(&name);
     let handle = unsafe { CreateEventW(std::ptr::null(), 1, 0, wide_name.as_ptr()) };
     if handle.is_null() {
-        return Err(last_error("CreateEventW"));
+        return Err(CreateStopEventError::Create {
+            code: unsafe { GetLastError() },
+        });
     }
-    if unsafe { GetLastError() } == ERROR_ALREADY_EXISTS {
-        unsafe {
-            CloseHandle(handle);
-        }
-        return Err("CreateEventW generated an existing event identity".to_string());
+    let already_exists = unsafe { GetLastError() } == ERROR_ALREADY_EXISTS;
+    let event = StopEvent {
+        handle: owned(handle),
+    };
+    if already_exists {
+        return Err(CreateStopEventError::IdentityCollision);
     }
-    Ok((name, StopEvent { handle }))
+    Ok((name, event))
 }
 
+#[derive(Debug, thiserror::Error)]
 pub(crate) enum OpenEventError {
+    #[error("the daemon stop event no longer exists")]
     NotFound,
-    Indeterminate(String),
+    #[error("OpenEventW failed with Windows error {code}")]
+    Indeterminate { code: u32 },
 }
 
 pub(crate) fn open_stop_event(name: &str) -> Result<StopEvent, OpenEventError> {
-    let wide_name = wide_null(name);
+    let wide_name = wide_str(name);
     let handle = unsafe { OpenEventW(EVENT_MODIFY_STATE, 0, wide_name.as_ptr()) };
     if handle.is_null() {
         let error = unsafe { GetLastError() };
         if error == ERROR_FILE_NOT_FOUND {
             Err(OpenEventError::NotFound)
         } else {
-            Err(OpenEventError::Indeterminate(format!(
-                "OpenEventW failed with Windows error {error}"
-            )))
+            Err(OpenEventError::Indeterminate { code: error })
         }
     } else {
-        Ok(StopEvent { handle })
+        Ok(StopEvent {
+            handle: owned(handle),
+        })
     }
 }
 
-pub(crate) fn signal_stop(name: &str) -> Result<(), String> {
-    let event = open_stop_event(name).map_err(|error| match error {
-        OpenEventError::NotFound => "the daemon stop event no longer exists".to_string(),
-        OpenEventError::Indeterminate(error) => error,
-    })?;
-    if unsafe { SetEvent(event.handle) } == 0 {
-        return Err(last_error("SetEvent"));
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum SignalStopError {
+    #[error(transparent)]
+    Open(#[from] OpenEventError),
+    #[error("SetEvent failed with Windows error {code}")]
+    Set { code: u32 },
+}
+
+pub(crate) fn signal_stop(name: &str) -> Result<(), SignalStopError> {
+    let event = open_stop_event(name)?;
+    if unsafe { SetEvent(event.handle.as_raw_handle()) } == 0 {
+        return Err(SignalStopError::Set {
+            code: unsafe { GetLastError() },
+        });
     }
     Ok(())
 }
@@ -154,34 +184,20 @@ pub(crate) fn signal_stop(name: &str) -> Result<(), String> {
 pub(crate) fn publish_exclusive(
     from: &std::path::Path,
     to: &std::path::Path,
-) -> Result<(), String> {
+) -> Result<(), PublishExclusiveError> {
     let from = wide_path(from);
     let to = wide_path(to);
     // Omitting MOVEFILE_REPLACE_EXISTING makes a competing starter fail rather
     // than replacing the already-published daemon identity.
     if unsafe { MoveFileExW(from.as_ptr(), to.as_ptr(), MOVEFILE_WRITE_THROUGH) } == 0 {
-        return Err(last_error("MoveFileExW"));
+        return Err(PublishExclusiveError(unsafe { GetLastError() }));
     }
     Ok(())
 }
 
-fn wide_null(value: &str) -> Vec<u16> {
-    value.encode_utf16().chain(std::iter::once(0)).collect()
-}
-
-fn wide_path(path: &std::path::Path) -> Vec<u16> {
-    use std::os::windows::ffi::OsStrExt;
-
-    path.as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect()
-}
-
-fn last_error(operation: &str) -> String {
-    let error = unsafe { GetLastError() };
-    format!("{operation} failed with Windows error {error}")
-}
+#[derive(Debug, thiserror::Error)]
+#[error("MoveFileExW failed with Windows error {0}")]
+pub(crate) struct PublishExclusiveError(u32);
 
 #[cfg(test)]
 mod tests {
@@ -198,6 +214,46 @@ mod tests {
     #[test]
     fn invalid_process_id_is_dead() {
         assert!(matches!(probe_process(u32::MAX), ProcessProbe::Dead));
+    }
+
+    #[test]
+    fn probe_and_wait_errors_keep_native_status_context() {
+        assert_eq!(
+            ProcessProbeError::OpenProcess { pid: 42, code: 5 }.to_string(),
+            "OpenProcess(42) failed with Windows error 5"
+        );
+        assert_eq!(
+            ProcessProbeError::Wait(WaitError::Failed { code: 6 }).to_string(),
+            "WaitForSingleObject failed with Windows error 6"
+        );
+        assert_eq!(
+            WaitError::UnexpectedStatus { status: 7 }.to_string(),
+            "WaitForSingleObject returned unexpected status 7"
+        );
+    }
+
+    #[test]
+    fn stop_event_errors_keep_native_codes_and_existing_messages() {
+        assert_eq!(
+            CreateStopEventError::Create { code: 5 }.to_string(),
+            "CreateEventW failed with Windows error 5"
+        );
+        assert_eq!(
+            CreateStopEventError::IdentityCollision.to_string(),
+            "CreateEventW generated an existing event identity"
+        );
+        assert_eq!(
+            SignalStopError::from(OpenEventError::NotFound).to_string(),
+            "the daemon stop event no longer exists"
+        );
+        assert_eq!(
+            SignalStopError::from(OpenEventError::Indeterminate { code: 6 }).to_string(),
+            "OpenEventW failed with Windows error 6"
+        );
+        assert_eq!(
+            SignalStopError::Set { code: 7 }.to_string(),
+            "SetEvent failed with Windows error 7"
+        );
     }
 
     #[test]

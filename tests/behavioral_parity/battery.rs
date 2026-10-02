@@ -1,9 +1,8 @@
 //! Real battery paired adapter probes, including HTTPS policy mismatches.
 
-use super::{evidence, require_path, BehavioralContext};
-use omakure::cli_http_parity::ProbeEvidence;
+use super::{BehavioralContext, ProbeEvidence, evidence, require_path};
 use omakure::operations::battery::{read_registry, write_registry};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::path::Path;
 use std::process::Command;
 use std::time::Duration;
@@ -538,6 +537,7 @@ fn verify_synced_cache(
     Ok(())
 }
 
+#[cfg(unix)]
 fn verify_installed_script(ctx: &BehavioralContext) -> Result<(), String> {
     let script = ctx.workspace.path().join("scripts/echo.sh");
     require_path(&script);
@@ -708,7 +708,7 @@ fn assert_auth(
         super::support::TestWorkspace::new(&format!("battery_forbidden_{}", ctx.forbidden_actor()));
     let denied_server = super::support::HttpServer::start_with_args(
         denied_workspace.path(),
-        super::API_TOKEN,
+        &[],
         &[],
         &[],
         Duration::from_secs(10),
@@ -717,7 +717,7 @@ fn assert_auth(
         method,
         endpoint,
         body_text,
-        super::support::AuthMode::Bearer(super::API_TOKEN),
+        super::support::AuthMode::Bearer(super::support::api_token()),
     );
     assert_eq!(
         forbidden.status, 403,

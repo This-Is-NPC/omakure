@@ -7,91 +7,64 @@ use rusqlite::Connection;
 use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
-use std::sync::OnceLock;
+use std::process::Output;
+use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
-const TARGET_API: &str = "http://127.0.0.1:17878";
+#[path = "support/compose_env.rs"]
+mod compose_env;
+use compose_env::{ComposeEnv, ComposePorts};
+#[path = "support/docker.rs"]
+mod docker;
+#[path = "support/docker_output.rs"]
+mod docker_output;
+use docker::{bounded_command, safe_generation_stderr};
+use docker_output::{json_output, output_text};
 
-fn compose_project() -> &'static str {
-    static PROJECT: OnceLock<String> = OnceLock::new();
-    PROJECT
-        .get_or_init(|| format!("omakure-discovery-{}", std::process::id()))
-        .as_str()
-}
-
-/// Every Docker call is bounded, so a wedged daemon cannot hang the suite.
-///
-/// Two different budgets, because two different things are being bounded. An
-/// operation on a stack that is already up is fast, and 120s is a generous
-/// ceiling for one. A call carrying `--build` may compile this crate inside the
-/// container from a cold layer cache, which on an ordinary machine does not fit
-/// in two minutes -- and when it did not, `timeout` killed the build and the
-/// test reported `compose up failed`, which reads exactly like the product
-/// refusing to start. One budget for both made a slow machine indistinguishable
-/// from a broken node.
-const COMPOSE_OPERATION_TIMEOUT: &str = "120s";
-const COMPOSE_BUILD_TIMEOUT: &str = "1800s";
-
-fn bounded_command_within(program: &str, budget: &str) -> Command {
-    let mut command = Command::new("timeout");
-    command.args(["--foreground", "--kill-after=10s", budget, program]);
-    command
-}
-
-fn bounded_command(program: &str) -> Command {
-    bounded_command_within(program, COMPOSE_OPERATION_TIMEOUT)
-}
-
-/// The budget a Compose invocation gets, decided by whether it can build.
-fn compose_timeout(args: &[&str]) -> &'static str {
-    if args.contains(&"--build") {
-        COMPOSE_BUILD_TIMEOUT
-    } else {
-        COMPOSE_OPERATION_TIMEOUT
-    }
-}
+static PROJECT: LazyLock<String> = LazyLock::new(|| docker::compose_project_name("discovery"));
 
 struct ComposeGuard {
     root: PathBuf,
     _tokens_dir: TempDir,
+    env: ComposeEnv,
     finalized: bool,
 }
 
 impl ComposeGuard {
     fn new() -> Self {
+        let guard = Self::prepare();
+        guard.start(false);
+        guard
+    }
+
+    fn prepare() -> Self {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let tokens_dir = TempDir::new().expect("create discovery token directory");
         let (target_tokens, target_client) = generate_auth(tokens_dir.path(), "discovery-target");
         let (candidate_tokens, candidate_client) =
             generate_auth(tokens_dir.path(), "discovery-candidate");
-        std::env::set_var("OMAKURE_ENROLLMENT_TARGET_TOKENS_FILE", &target_tokens);
-        std::env::set_var("OMAKURE_ENROLLMENT_TARGET_CLIENT_FILE", &target_client);
-        std::env::set_var(
-            "OMAKURE_ENROLLMENT_CANDIDATE_TOKENS_FILE",
-            &candidate_tokens,
-        );
-        std::env::set_var(
-            "OMAKURE_ENROLLMENT_CANDIDATE_CLIENT_FILE",
-            &candidate_client,
-        );
-        let guard = Self {
+        Self {
             root,
             _tokens_dir: tokens_dir,
+            env: ComposeEnv::new(
+                target_tokens,
+                target_client,
+                candidate_tokens,
+                candidate_client,
+                ComposePorts::from_environment(),
+            ),
             finalized: false,
-        };
-        guard.start();
-        guard
+        }
     }
 
-    fn start(&self) {
-        if std::env::var_os("OMAKURE_E2E_INDUCE_PARTIAL_UP").is_some() {
+    fn start(&self, induce_partial_up: bool) {
+        if induce_partial_up {
             let partial = compose(
-                &self.root,
+                self,
                 &[
                     "-p",
-                    compose_project(),
+                    PROJECT.as_str(),
                     "up",
                     "--build",
                     "-d",
@@ -102,13 +75,13 @@ impl ComposeGuard {
                 partial.status.success(),
                 "partial Compose setup failed: {}\n{}",
                 output_text(&partial),
-                compose_diagnostics(&self.root)
+                compose_diagnostics(self)
             );
             let failed = compose(
-                &self.root,
+                self,
                 &[
                     "-p",
-                    compose_project(),
+                    PROJECT.as_str(),
                     "up",
                     "--build",
                     "-d",
@@ -120,18 +93,15 @@ impl ComposeGuard {
                 !failed.status.success(),
                 "induced Compose failure unexpectedly passed: {}\n{}",
                 output_text(&failed),
-                compose_diagnostics(&self.root)
+                compose_diagnostics(self)
             );
-            panic!(
-                "induced partial-up failure\n{}",
-                compose_diagnostics(&self.root)
-            );
+            panic!("induced partial-up failure\n{}", compose_diagnostics(self));
         }
         let output = compose(
-            &self.root,
+            self,
             &[
                 "-p",
-                compose_project(),
+                PROJECT.as_str(),
                 "up",
                 "--build",
                 "-d",
@@ -143,12 +113,12 @@ impl ComposeGuard {
             output.status.success(),
             "docker compose up failed: {}\n{}",
             output_text(&output),
-            compose_diagnostics(&self.root)
+            compose_diagnostics(self)
         );
     }
 
     fn finalize(mut self) {
-        if let Err(error) = cleanup(&self.root) {
+        if let Err(error) = cleanup(&self) {
             panic!("discovery Docker cleanup failed: {error}");
         }
         self.finalized = true;
@@ -201,121 +171,51 @@ impl Drop for ComposeGuard {
         if !self.finalized {
             eprintln!(
                 "discovery Docker failure diagnostics:\n{}",
-                compose_diagnostics(&self.root)
+                compose_diagnostics(self)
             );
-            if let Err(error) = cleanup(&self.root) {
+            if let Err(error) = cleanup(self) {
                 eprintln!("discovery Docker cleanup after panic failed: {error}");
             }
         }
     }
 }
 
-fn cleanup(root: &Path) -> Result<(), String> {
-    let mut failures = Vec::new();
-    let down = compose(
-        root,
+fn cleanup(guard: &ComposeGuard) -> Result<(), String> {
+    docker::cleanup_project(
+        PROJECT.as_str(),
         &[
             "-p",
-            compose_project(),
+            PROJECT.as_str(),
             "down",
             "--volumes",
             "--remove-orphans",
         ],
-    );
-    if !down.status.success() {
-        failures.push(format!(
-            "compose down status={} stderr={}",
-            down.status,
-            safe_stderr(&down)
-        ));
-    }
-    for resource in ["container", "network", "volume"] {
-        let output = bounded_command("docker")
-            .args([
-                resource,
-                "ls",
-                "-q",
-                "--filter",
-                &format!("label=com.docker.compose.project={}", compose_project()),
-            ])
-            .output();
-        match output {
-            Ok(output) if !output.status.success() => failures.push(format!(
-                "inspect {resource} status={} stderr={}",
-                output.status,
-                safe_stderr(&output)
-            )),
-            Ok(output) if !String::from_utf8_lossy(&output.stdout).trim().is_empty() => {
-                failures.push(format!("project-labeled {resource} remains"));
-            }
-            Ok(_) => {}
-            Err(error) => failures.push(format!("inspect {resource}: {error}")),
-        }
-    }
-    cleanup_result(failures)
-}
-
-fn cleanup_result(failures: Vec<String>) -> Result<(), String> {
-    if failures.is_empty() {
-        Ok(())
-    } else {
-        Err(failures.join("; "))
-    }
-}
-
-#[cfg(test)]
-mod cleanup_tests {
-    use super::cleanup_result;
-
-    #[test]
-    fn cleanup_reports_all_failures() {
-        let error = cleanup_result(vec!["down failed".into(), "volume remains".into()])
-            .expect_err("cleanup failure should be returned");
-        assert!(error.contains("down failed"));
-        assert!(error.contains("volume remains"));
-    }
+        |args| compose(guard, args),
+    )
 }
 
 #[test]
 #[ignore]
 fn cleanup_after_induced_partial_up() {
-    std::env::set_var("OMAKURE_E2E_INDUCE_PARTIAL_UP", "1");
-    let result = std::panic::catch_unwind(ComposeGuard::new);
-    std::env::remove_var("OMAKURE_E2E_INDUCE_PARTIAL_UP");
+    let mut guard = ComposeGuard::prepare();
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| guard.start(true)));
     assert!(result.is_err(), "induced partial-up should fail");
-    cleanup(&PathBuf::from(env!("CARGO_MANIFEST_DIR")))
-        .expect("induced partial-up cleanup should leave no resources");
+    cleanup(&guard).expect("induced partial-up cleanup should leave no resources");
+    guard.finalized = true;
 }
 
-fn safe_stderr(output: &Output) -> String {
-    String::from_utf8_lossy(&output.stderr).trim().to_string()
-}
-
-fn safe_generation_stderr(output: &Output) -> String {
-    let stderr = safe_stderr(output);
-    let lower = stderr.to_ascii_lowercase();
-    assert!(
-        !lower.contains("bearer ") && !lower.contains("$argon2") && !lower.contains("token ="),
-        "token generation stderr contained sensitive material"
-    );
-    stderr
-}
-
-fn compose(root: &Path, args: &[&str]) -> Output {
-    bounded_command_within("docker", compose_timeout(args))
-        .current_dir(root)
-        .args(["compose"])
-        .args(args)
+fn compose(guard: &ComposeGuard, args: &[&str]) -> Output {
+    docker::compose_command(&guard.root, |command| guard.env.apply(command), &[], args)
         .output()
         .expect("run docker compose")
 }
-fn compose_diagnostics(root: &Path) -> String {
-    let ps = compose(root, &["-p", compose_project(), "ps", "-a"]);
+fn compose_diagnostics(guard: &ComposeGuard) -> String {
+    let ps = compose(guard, &["-p", PROJECT.as_str(), "ps", "-a"]);
     let logs = compose(
-        root,
+        guard,
         &[
             "-p",
-            compose_project(),
+            PROJECT.as_str(),
             "logs",
             "--no-color",
             "--tail",
@@ -331,37 +231,19 @@ fn compose_diagnostics(root: &Path) -> String {
     )
 }
 
-fn exec(service: &str, args: &[&str]) -> Output {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    bounded_command("docker")
-        .current_dir(root)
-        .args(["compose", "-p", compose_project(), "exec", "-T", service])
+fn exec(guard: &ComposeGuard, service: &str, args: &[&str]) -> Output {
+    let mut command = bounded_command("docker");
+    guard.env.apply(&mut command);
+    command
+        .current_dir(&guard.root)
+        .args(["compose", "-p", PROJECT.as_str(), "exec", "-T", service])
         .args(args)
         .output()
         .expect("run docker compose exec")
 }
 
-fn output_text(output: &Output) -> String {
-    format!(
-        "stdout={} stderr={}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    )
-}
-
-fn json_output(output: &Output) -> Value {
-    assert!(
-        output.status.success(),
-        "expected successful command: {}",
-        output_text(output)
-    );
-    serde_json::from_slice(&output.stdout)
-        .unwrap_or_else(|error| panic!("invalid JSON output ({error}): {}", output_text(output)))
-}
-
-fn container_ip(service: &str) -> String {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let id = compose(&root, &["-p", compose_project(), "ps", "-q", service]);
+fn container_ip(guard: &ComposeGuard, service: &str) -> String {
+    let id = compose(guard, &["-p", PROJECT.as_str(), "ps", "-q", service]);
     assert!(
         id.status.success(),
         "cannot locate {service}: {}",
@@ -385,9 +267,8 @@ fn container_ip(service: &str) -> String {
     String::from_utf8_lossy(&output.stdout).trim().to_string()
 }
 
-fn compose_service_healthy(service: &str) -> bool {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let id = compose(&root, &["-p", compose_project(), "ps", "-q", service]);
+fn compose_service_healthy(guard: &ComposeGuard, service: &str) -> bool {
+    let id = compose(guard, &["-p", PROJECT.as_str(), "ps", "-q", service]);
     if !id.status.success() {
         return false;
     }
@@ -409,56 +290,51 @@ fn compose_service_healthy(service: &str) -> bool {
         .is_some_and(|output| String::from_utf8_lossy(&output.stdout).trim() == "healthy")
 }
 
-fn readiness_http_ready(port: u16) -> bool {
+fn readiness_http_ready(guard: &ComposeGuard, port: u16) -> bool {
     let url = format!("http://127.0.0.1:{port}/v1/ready");
-    request_json("GET", &url, false, None)
+    request_json(guard, "GET", &url, false, None)
         .is_ok_and(|value| value["ok"] == true && value["data"]["status"] == "ready")
 }
 
-fn authenticated_node_status_ready(port: u16) -> bool {
+fn authenticated_node_status_ready(guard: &ComposeGuard, port: u16) -> bool {
     let url = format!("http://127.0.0.1:{port}/v1/node/status");
-    request_json("GET", &url, true, None).is_ok_and(|value| {
+    request_json(guard, "GET", &url, true, None).is_ok_and(|value| {
         value["ok"] == true
             && value["data"]["identity"]["node_id"].is_string()
             && value["data"]["trust"]["active_peer_count"].is_number()
     })
 }
 
-fn service_http_ready(service: &str, port: u16) -> bool {
-    compose_service_healthy(service)
-        && readiness_http_ready(port)
-        && authenticated_node_status_ready(port)
+fn service_http_ready(guard: &ComposeGuard, service: &str, port: u16) -> bool {
+    compose_service_healthy(guard, service)
+        && readiness_http_ready(guard, port)
+        && authenticated_node_status_ready(guard, port)
 }
 
-fn wait_for_service_ready(service: &str, port: u16) {
-    let deadline = Instant::now() + Duration::from_secs(60);
-    while Instant::now() < deadline {
-        if service_http_ready(service, port) {
-            return;
-        }
-        std::thread::sleep(Duration::from_millis(250));
-    }
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    panic!(
+fn wait_for_service_ready(guard: &ComposeGuard, service: &str, port: u16) {
+    assert!(
+        docker::wait_until(Duration::from_secs(60), Duration::from_millis(250), || {
+            service_http_ready(guard, service, port)
+        }),
         "Docker service {service} did not become semantically ready:\n{}",
-        compose_diagnostics(&root)
+        compose_diagnostics(guard)
     );
 }
 
-fn wait_for_health() {
-    wait_for_service_ready("enrollment-target", 17878);
-    wait_for_service_ready("enrollment-candidate", 17879);
+fn wait_for_health(guard: &ComposeGuard) {
+    let ports = guard.env.ports();
+    wait_for_service_ready(guard, "enrollment-target", ports.target);
+    wait_for_service_ready(guard, "enrollment-candidate", ports.candidate);
 }
 
-fn wait_for_stopped(service: &str) {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+fn wait_for_stopped(guard: &ComposeGuard, service: &str) {
     let deadline = Instant::now() + Duration::from_secs(10);
     while Instant::now() < deadline {
         let output = compose(
-            &root,
+            guard,
             &[
                 "-p",
-                compose_project(),
+                PROJECT.as_str(),
                 "ps",
                 "--status",
                 "running",
@@ -473,29 +349,24 @@ fn wait_for_stopped(service: &str) {
     }
     panic!(
         "Docker service did not stop: {service}\n{}",
-        compose_diagnostics(&root)
+        compose_diagnostics(guard)
     );
 }
 
-fn curl(method: &str, url: &str, include_addresses: bool) -> Value {
-    curl_json(method, url, include_addresses, None)
+fn curl(guard: &ComposeGuard, method: &str, url: &str, include_addresses: bool) -> Value {
+    curl_json(guard, method, url, include_addresses, None)
 }
 
 fn request_json(
+    guard: &ComposeGuard,
     method: &str,
     url: &str,
     authenticated: bool,
     body: Option<&str>,
 ) -> Result<Value, String> {
     let header_file = if authenticated {
-        let client_file = if url.contains(":17879/") {
-            std::env::var_os("OMAKURE_ENROLLMENT_CANDIDATE_CLIENT_FILE")
-                .ok_or_else(|| "candidate client file is unset".to_string())?
-        } else {
-            std::env::var_os("OMAKURE_ENROLLMENT_TARGET_CLIENT_FILE")
-                .ok_or_else(|| "target client file is unset".to_string())?
-        };
-        let token = fs::read_to_string(client_file).map_err(|error| error.to_string())?;
+        let token =
+            fs::read_to_string(guard.env.client_file(url)).map_err(|error| error.to_string())?;
         let file = tempfile::NamedTempFile::new().map_err(|error| error.to_string())?;
         fs::write(file.path(), format!("Authorization: Bearer {token}\n"))
             .map_err(|error| error.to_string())?;
@@ -531,28 +402,37 @@ fn request_json(
         .map_err(|error| format!("invalid JSON ({error}): {}", output_text(&output)))
 }
 
-fn curl_json(method: &str, url: &str, include_addresses: bool, body: Option<&str>) -> Value {
-    let value = request_json(method, url, true, body)
+fn curl_json(
+    guard: &ComposeGuard,
+    method: &str,
+    url: &str,
+    include_addresses: bool,
+    body: Option<&str>,
+) -> Value {
+    let value = request_json(guard, method, url, true, body)
         .unwrap_or_else(|error| panic!("curl failed: {error}"));
     if include_addresses {
-        assert!(value["data"]["candidates"]
-            .as_array()
-            .is_some_and(|candidates| candidates
-                .iter()
-                .all(|candidate| candidate["address"].is_string())));
+        assert!(
+            value["data"]["candidates"]
+                .as_array()
+                .is_some_and(|candidates| candidates
+                    .iter()
+                    .all(|candidate| candidate["address"].is_string()))
+        );
     }
     value
 }
 
-fn copy_state(service: &str, destination: &Path) {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+fn copy_state(guard: &ComposeGuard, service: &str, destination: &Path) {
     let destination = destination.to_str().expect("temporary path is UTF-8");
-    let output = bounded_command("docker")
-        .current_dir(root)
+    let mut command = bounded_command("docker");
+    guard.env.apply(&mut command);
+    let output = command
+        .current_dir(&guard.root)
         .args([
             "compose",
             "-p",
-            compose_project(),
+            PROJECT.as_str(),
             "cp",
             &format!("{service}:/var/lib/omakure/node.sqlite"),
             destination,
@@ -582,27 +462,16 @@ fn active_registry_counts(path: &Path) -> (i64, i64, i64, i64, i64) {
     )
 }
 
-fn lower_hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-}
-
-fn decode_hex(value: &str) -> Vec<u8> {
-    value
-        .as_bytes()
-        .chunks_exact(2)
-        .map(|chunk| u8::from_str_radix(std::str::from_utf8(chunk).unwrap(), 16).unwrap())
-        .collect()
-}
-
-fn copy_from_container(service: &str, source: &str, destination: &Path) {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+fn copy_from_container(guard: &ComposeGuard, service: &str, source: &str, destination: &Path) {
     let destination = destination.to_str().expect("temporary path is UTF-8");
-    let output = bounded_command("docker")
-        .current_dir(root)
+    let mut command = bounded_command("docker");
+    guard.env.apply(&mut command);
+    let output = command
+        .current_dir(&guard.root)
         .args([
             "compose",
             "-p",
-            compose_project(),
+            PROJECT.as_str(),
             "cp",
             &format!("{service}:{source}"),
             destination,
@@ -620,8 +489,11 @@ fn copy_from_container(service: &str, source: &str, destination: &Path) {
 #[ignore = "requires Docker/Linux bridge broadcast or multicast"]
 fn docker_discovery_finds_nodes_without_creating_trust_or_sessions() {
     let compose_guard = ComposeGuard::new();
-    wait_for_health();
+    let target_api = compose_guard.env.target_api();
+    let candidate_api = compose_guard.env.candidate_api();
+    wait_for_health(&compose_guard);
     let candidate_status = json_output(&exec(
+        &compose_guard,
         "enrollment-candidate",
         &["omakure", "--json", "node", "status"],
     ));
@@ -630,6 +502,7 @@ fn docker_discovery_finds_nodes_without_creating_trust_or_sessions() {
         .expect("candidate node id")
         .to_string();
     let target_status = json_output(&exec(
+        &compose_guard,
         "enrollment-target",
         &["omakure", "--json", "node", "status"],
     ));
@@ -642,8 +515,9 @@ fn docker_discovery_finds_nodes_without_creating_trust_or_sessions() {
     let deadline = Instant::now() + Duration::from_secs(15);
     let discovered = loop {
         let output = curl(
+            &compose_guard,
             "GET",
-            &format!("{TARGET_API}/v1/node/discovery?include_addresses=true"),
+            &format!("{target_api}/v1/node/discovery?include_addresses=true"),
             true,
         );
         if output["data"]["candidates"]
@@ -660,15 +534,23 @@ fn docker_discovery_finds_nodes_without_creating_trust_or_sessions() {
     };
     assert_eq!(discovered["data"]["secret_configured"], false);
 
-    let status = curl("GET", &format!("{TARGET_API}/v1/node/status"), false);
-    assert!(status["data"]["discovery"]["candidates"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .all(|candidate| candidate["address"].is_null()));
+    let status = curl(
+        &compose_guard,
+        "GET",
+        &format!("{target_api}/v1/node/status"),
+        false,
+    );
+    assert!(
+        status["data"]["discovery"]["candidates"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|candidate| candidate["address"].is_null())
+    );
 
-    let target_ip = container_ip("enrollment-target");
+    let target_ip = container_ip(&compose_guard, "enrollment-target");
     let blocked = exec(
+        &compose_guard,
         "enrollment-candidate",
         &[
             "omakure",
@@ -689,7 +571,7 @@ fn docker_discovery_finds_nodes_without_creating_trust_or_sessions() {
     for service in ["enrollment-target", "enrollment-candidate"] {
         let dir = TempDir::new().expect("discovery state snapshot directory");
         let path = dir.path().join("node.sqlite");
-        copy_state(service, &path);
+        copy_state(&compose_guard, service, &path);
         assert_eq!(
             active_registry_counts(&path),
             (0, 0, 0, 0, 0),
@@ -697,8 +579,9 @@ fn docker_discovery_finds_nodes_without_creating_trust_or_sessions() {
         );
     }
 
-    let target_endpoint = format!("{}:7988", container_ip("enrollment-target"));
+    let target_endpoint = format!("{}:7988", container_ip(&compose_guard, "enrollment-target"));
     let request_output = exec(
+        &compose_guard,
         "enrollment-candidate",
         &[
             "omakure",
@@ -720,30 +603,37 @@ fn docker_discovery_finds_nodes_without_creating_trust_or_sessions() {
         output_text(&request_output)
     );
     let request = json_output(&request_output);
-    let pending = curl("GET", &format!("{TARGET_API}/v1/node/enrollments"), false);
+    let pending = curl(
+        &compose_guard,
+        "GET",
+        &format!("{target_api}/v1/node/enrollments"),
+        false,
+    );
     assert_eq!(pending["data"].as_array().unwrap().len(), 1);
     let pending_node_id = pending["data"][0]["node_id"].as_str().unwrap();
     let request_hex = request["data"]["request_hex"].as_str().unwrap();
-    let request_bytes = decode_hex(request_hex);
+    let request_bytes = omakure::hex::decode(request_hex).expect("decode discovery request hex");
     assert_eq!(request_bytes[4], 2);
     let certificate_dir = TempDir::new().expect("candidate certificate directory");
     let certificate_file = certificate_dir.path().join("transport.cert");
     copy_from_container(
+        &compose_guard,
         "enrollment-candidate",
         "/var/lib/omakure/transport.cert",
         &certificate_file,
     );
     let approval_body = serde_json::json!({
         "request_hex": request_hex,
-        "transport_certificate": lower_hex(&fs::read(&certificate_file).unwrap()),
+        "transport_certificate": omakure::hex::encode(&fs::read(&certificate_file).unwrap()),
         "code": request["data"]["code"].as_str().unwrap(),
         "actor": "discovery-e2e",
         "reason": "explicit discovery follow-up enrollment",
         "confirmed": true
     });
     let approved = curl_json(
+        &compose_guard,
         "POST",
-        &format!("{TARGET_API}/v1/node/enrollments/{pending_node_id}/approve"),
+        &format!("{target_api}/v1/node/enrollments/{pending_node_id}/approve"),
         false,
         Some(&approval_body.to_string()),
     );
@@ -752,26 +642,29 @@ fn docker_discovery_finds_nodes_without_creating_trust_or_sessions() {
     let target_certificate_dir = TempDir::new().expect("target certificate directory");
     let target_certificate_file = target_certificate_dir.path().join("transport.cert");
     copy_from_container(
+        &compose_guard,
         "enrollment-target",
         "/var/lib/omakure/transport.cert",
         &target_certificate_file,
     );
     let reciprocal_body = serde_json::json!({
         "request_hex": request["data"]["reciprocal_request_hex"].as_str().unwrap(),
-        "transport_certificate": lower_hex(&fs::read(&target_certificate_file).unwrap()),
+        "transport_certificate": omakure::hex::encode(&fs::read(&target_certificate_file).unwrap()),
         "code": request["data"]["reciprocal_code"].as_str().unwrap(),
         "actor": "discovery-e2e",
         "reason": "explicit reciprocal discovery follow-up enrollment",
         "confirmed": true
     });
     let reciprocal = curl_json(
+        &compose_guard,
         "POST",
-        &format!("http://127.0.0.1:17879/v1/node/enrollments/{target_node_id}/approve"),
+        &format!("{candidate_api}/v1/node/enrollments/{target_node_id}/approve"),
         false,
         Some(&reciprocal_body.to_string()),
     );
     assert_eq!(reciprocal["data"]["state"], "active");
     let accepted = exec(
+        &compose_guard,
         "enrollment-candidate",
         &[
             "omakure",
@@ -786,36 +679,50 @@ fn docker_discovery_finds_nodes_without_creating_trust_or_sessions() {
     );
     assert_eq!(json_output(&accepted)["data"]["accepted"], true);
 
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    assert!(compose(
-        &root,
-        &["-p", compose_project(), "stop", "enrollment-candidate"]
-    )
-    .status
-    .success());
-    wait_for_stopped("enrollment-candidate");
-    assert!(compose(
-        &root,
-        &["-p", compose_project(), "stop", "enrollment-target"]
-    )
-    .status
-    .success());
-    wait_for_stopped("enrollment-target");
-    assert!(compose(
-        &root,
-        &[
-            "-p",
-            compose_project(),
-            "up",
-            "-d",
-            "--no-deps",
-            "enrollment-target"
-        ]
-    )
-    .status
-    .success());
-    wait_for_service_ready("enrollment-target", 17878);
-    let empty_after_restart = curl("GET", &format!("{TARGET_API}/v1/node/discovery"), false);
+    assert!(
+        compose(
+            &compose_guard,
+            &["-p", PROJECT.as_str(), "stop", "enrollment-candidate"]
+        )
+        .status
+        .success()
+    );
+    wait_for_stopped(&compose_guard, "enrollment-candidate");
+    assert!(
+        compose(
+            &compose_guard,
+            &["-p", PROJECT.as_str(), "stop", "enrollment-target"]
+        )
+        .status
+        .success()
+    );
+    wait_for_stopped(&compose_guard, "enrollment-target");
+    assert!(
+        compose(
+            &compose_guard,
+            &[
+                "-p",
+                PROJECT.as_str(),
+                "up",
+                "-d",
+                "--no-deps",
+                "enrollment-target"
+            ]
+        )
+        .status
+        .success()
+    );
+    wait_for_service_ready(
+        &compose_guard,
+        "enrollment-target",
+        compose_guard.env.ports().target,
+    );
+    let empty_after_restart = curl(
+        &compose_guard,
+        "GET",
+        &format!("{target_api}/v1/node/discovery"),
+        false,
+    );
     assert!(
         empty_after_restart["data"]["candidates"]
             .as_array()
@@ -824,16 +731,23 @@ fn docker_discovery_finds_nodes_without_creating_trust_or_sessions() {
         "observer retained or rediscovered candidates before sender restart: {empty_after_restart}"
     );
 
-    assert!(compose(
-        &root,
-        &["-p", compose_project(), "start", "enrollment-candidate"]
-    )
-    .status
-    .success());
-    wait_for_health();
+    assert!(
+        compose(
+            &compose_guard,
+            &["-p", PROJECT.as_str(), "start", "enrollment-candidate"]
+        )
+        .status
+        .success()
+    );
+    wait_for_health(&compose_guard);
     let restart_deadline = Instant::now() + Duration::from_secs(15);
     loop {
-        let output = curl("GET", &format!("{TARGET_API}/v1/node/discovery"), false);
+        let output = curl(
+            &compose_guard,
+            "GET",
+            &format!("{target_api}/v1/node/discovery"),
+            false,
+        );
         if output["data"]["candidates"]
             .as_array()
             .is_some_and(|candidates| {
@@ -851,6 +765,7 @@ fn docker_discovery_finds_nodes_without_creating_trust_or_sessions() {
         std::thread::sleep(Duration::from_millis(250));
     }
     let accepted_after_restart = exec(
+        &compose_guard,
         "enrollment-candidate",
         &[
             "omakure",

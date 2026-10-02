@@ -1,16 +1,16 @@
 //! `omakure node serve` — HTTP API + optional in-process workers + scheduler.
 //!
-//! Composes existing `api::serve_http`, `queue::worker_loop`, and
+//! Composes existing `api::serve_http`, `operations::worker::worker_loop`, and
 //! `serve::scheduler_tick` under one cancel flag. Shutdown order:
 //! stop accepting HTTP → stop scheduling → stop claiming → drain/join workers.
 
 use crate::cli::api::{self, ReadinessGate};
 use crate::cli::args::{ApiArgs, NodeServeArgs};
-use crate::cli::queue;
 use crate::cli::serve;
 use crate::workspace::Workspace;
 use chrono::Utc;
 use std::error::Error;
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -104,14 +104,153 @@ fn start_discovery_service(
     }
 }
 
+fn resolve_direct_bind(
+    override_bind: Option<SocketAddr>,
+    configured_bind: Option<&str>,
+    allow_non_loopback: bool,
+) -> Result<Option<SocketAddr>, Box<dyn Error>> {
+    let bind = match (override_bind, configured_bind) {
+        (Some(bind), _) => Some(bind),
+        (None, Some(bind)) => Some(bind.parse()?),
+        (None, None) => None,
+    };
+    if let Some(bind) = bind.filter(|bind| !bind.ip().is_loopback() && !allow_non_loopback) {
+        return Err(format!(
+            "refusing to bind direct transport {bind}; pass --allow-non-loopback-direct to opt in"
+        )
+        .into());
+    }
+    Ok(bind)
+}
+
+fn scheduler_enabled(no_scheduler: bool, scheduler: bool, configured: Option<bool>) -> bool {
+    if no_scheduler {
+        false
+    } else if scheduler {
+        true
+    } else {
+        configured.unwrap_or(true)
+    }
+}
+
+fn resolve_discovery_secret(
+    config: &crate::domain::NodeConfig,
+    workspace: &Workspace,
+) -> Result<Option<String>, Box<dyn Error>> {
+    if !config.discovery.enabled || config.organization.discovery_secret_ref.is_empty() {
+        return Ok(None);
+    }
+    crate::secrets::resolve_secret_value(
+        workspace,
+        &config.organization.discovery_secret_ref,
+        &crate::secrets::SecretAccess::allow_all(),
+    )
+    .map(Some)
+    .map_err(|_| "discovery_secret_invalid".into())
+}
+
+fn spawn_transport_watcher(
+    status: Option<&crate::direct_service::TransportStatusHandle>,
+    readiness: &Arc<ReadinessGate>,
+) -> Option<(Arc<AtomicBool>, thread::JoinHandle<()>)> {
+    status.map(|status| {
+        let status = Arc::clone(status);
+        let readiness = Arc::clone(readiness);
+        let cancel = Arc::new(AtomicBool::new(false));
+        let cancel_for_thread = Arc::clone(&cancel);
+        let handle = thread::spawn(move || {
+            while !cancel_for_thread.load(Ordering::SeqCst) {
+                let connected = status.lock().ok().is_some_and(|status| {
+                    status.expected_peer_count == 0
+                        || status.expected_connected_peer_count == status.expected_peer_count
+                });
+                readiness.set_transport_alive(connected);
+                thread::sleep(Duration::from_millis(100));
+            }
+        });
+        (cancel, handle)
+    })
+}
+
+fn spawn_workers(
+    workers: u32,
+    workspace: &Workspace,
+    context: &crate::node::NodeContext,
+    args: &NodeServeArgs,
+    readiness: &Arc<ReadinessGate>,
+    cancel_flag: &Arc<AtomicBool>,
+) -> Vec<thread::JoinHandle<()>> {
+    let mut handles = Vec::new();
+    if workers >= 1 {
+        let worker_lifecycle =
+            LoopLifecycle::new(Arc::clone(readiness), LoopKind::Workers, workers as usize);
+        for thread_idx in 0..workers {
+            let ws = workspace.clone_for_executor();
+            let flag = Arc::clone(cancel_flag);
+            let worker_context = context.clone();
+            let actor_filter = args.worker_actor_filter.clone();
+            let script_filter = args.worker_script_filter.clone();
+            let worker_id = format!("node-worker:{}-t{}", std::process::id(), thread_idx);
+            let lifecycle = Arc::clone(&worker_lifecycle);
+            handles.push(thread::spawn(move || {
+                run_tracked_loop(lifecycle, || {
+                    crate::operations::worker::worker_loop_with_context(
+                        ws,
+                        worker_id,
+                        flag,
+                        actor_filter,
+                        script_filter,
+                        false,
+                        worker_context,
+                    );
+                });
+            }));
+        }
+    }
+    handles
+}
+
+fn stop_live_services(
+    cancel_flag: &Arc<AtomicBool>,
+    transport_watcher: Option<(Arc<AtomicBool>, thread::JoinHandle<()>)>,
+    direct_service: &mut Option<crate::direct_service::DirectService>,
+    discovery_service: &mut Option<crate::discovery::DiscoveryService>,
+    readiness: &Arc<ReadinessGate>,
+) {
+    cancel_flag.store(true, Ordering::SeqCst);
+    if let Some((watcher_cancel, watcher)) = transport_watcher {
+        watcher_cancel.store(true, Ordering::SeqCst);
+        let _ = watcher.join();
+    }
+    if let Some(service) = direct_service.as_mut() {
+        service.stop();
+    }
+    if let Some(service) = discovery_service.as_mut() {
+        service.stop();
+    }
+    readiness.set_workers_alive(false);
+    readiness.set_scheduler_alive(false);
+}
+
+fn join_background_loops(
+    scheduler_handle: Option<thread::JoinHandle<()>>,
+    health_maintenance: thread::JoinHandle<()>,
+    worker_handles: Vec<thread::JoinHandle<()>>,
+) {
+    if let Some(handle) = scheduler_handle {
+        let _ = handle.join();
+    }
+    let _ = health_maintenance.join();
+    for handle in worker_handles {
+        let _ = handle.join();
+    }
+}
+
 pub fn run(
     scripts_dir: PathBuf,
     context: crate::node::NodeContext,
     args: NodeServeArgs,
 ) -> Result<(), Box<dyn Error>> {
-    if let Some(path) = &args.bootstrap_token_file {
-        std::env::set_var("OMAKURE_BOOTSTRAP_TOKEN_FILE", path);
-    }
     let lifecycle = context.acquire_lifecycle_lock()?;
     context.validate_existing_state_directory()?;
     let initialized = crate::operations::node::initialize_node_locked(
@@ -119,7 +258,10 @@ pub fn run(
         &crate::domain::NodeConfig::default(),
         lifecycle.state_was_present(),
     )?;
-    crate::operations::node::recover_local_bootstrap_token_tombstones(&context)?;
+    crate::operations::node::recover_local_bootstrap_token_tombstones(
+        &context,
+        args.bootstrap_token_file.as_deref(),
+    )?;
     let configured = initialized
         .status
         .config
@@ -132,7 +274,6 @@ pub fn run(
         allow_non_loopback: args.allow_non_loopback,
         policy: args.policy.clone(),
         tokens_file: args.tokens_file.clone(),
-        capabilities: args.capabilities.clone(),
         secret_refs: args.secret_refs.clone(),
     };
     // Fail before bind: policy parse, auth, non-loopback guard.
@@ -140,30 +281,20 @@ pub fn run(
 
     let workspace = Workspace::new(scripts_dir);
     workspace.ensure_layout()?;
-    let direct_bind = match (args.direct_bind, configured.direct_bind.as_deref()) {
-        (Some(bind), _) => Some(bind),
-        (None, Some(bind)) => Some(bind.parse()?),
-        (None, None) => None,
-    };
     let allow_non_loopback_direct =
         args.allow_non_loopback_direct || boot.deploy.node.allow_non_loopback_direct;
-    if let Some(bind) = direct_bind {
-        if !bind.ip().is_loopback() && !allow_non_loopback_direct {
-            return Err(format!(
-                "refusing to bind direct transport {bind}; pass --allow-non-loopback-direct to opt in"
-            )
-            .into());
-        }
-    }
+    let direct_bind = resolve_direct_bind(
+        args.direct_bind,
+        configured.direct_bind.as_deref(),
+        allow_non_loopback_direct,
+    )?;
     let static_peers = configured.static_peers.clone();
     let workers = args.workers.or(boot.deploy.node.workers).unwrap_or(1);
-    let scheduler_enabled = if args.no_scheduler {
-        false
-    } else if args.scheduler {
-        true
-    } else {
-        boot.deploy.node.scheduler.unwrap_or(true)
-    };
+    let scheduler_enabled = scheduler_enabled(
+        args.no_scheduler,
+        args.scheduler,
+        boot.deploy.node.scheduler,
+    );
     // The Performer-side Health Plane reporter. It reads only local facts and
     // only ever reports to a peer the local registry records as an active
     // trusted Conductor; the transport decides nothing about authorization.
@@ -185,7 +316,7 @@ pub fn run(
     }
 
     let cancel_flag = Arc::new(AtomicBool::new(false));
-    queue::install_signal_handlers(Arc::clone(&cancel_flag));
+    crate::adapters::signals::install_signal_handlers(Arc::clone(&cancel_flag));
 
     let mut direct_service = if direct_bind.is_some() || !static_peers.is_empty() {
         Some(crate::direct_service::DirectService::start(
@@ -199,22 +330,7 @@ pub fn run(
         None
     };
 
-    let discovery_secret = if node_config.discovery.enabled {
-        if node_config.organization.discovery_secret_ref.is_empty() {
-            None
-        } else {
-            Some(
-                crate::secrets::resolve_secret_value(
-                    &workspace,
-                    &node_config.organization.discovery_secret_ref,
-                    &crate::secrets::SecretAccess::allow_all(),
-                )
-                .map_err(|_| "discovery_secret_invalid")?,
-            )
-        }
-    } else {
-        None
-    };
+    let discovery_secret = resolve_discovery_secret(&node_config, &workspace)?;
     let mut discovery_service = start_discovery_service(
         node_config.discovery.clone(),
         context.clone(),
@@ -247,55 +363,18 @@ pub fn run(
     let transport_status = direct_service.as_ref().map(|service| service.status());
     let discovery_status = discovery_service.as_ref().map(|service| service.status());
     let transport_readiness = transport_status.clone();
-    let transport_watcher = transport_status.as_ref().map(|status| {
-        let status = Arc::clone(status);
-        let readiness = Arc::clone(&readiness);
-        let cancel = Arc::new(AtomicBool::new(false));
-        let cancel_for_thread = Arc::clone(&cancel);
-        let handle = thread::spawn(move || {
-            while !cancel_for_thread.load(Ordering::SeqCst) {
-                let connected = status.lock().ok().is_some_and(|status| {
-                    status.expected_peer_count == 0
-                        || status.expected_connected_peer_count == status.expected_peer_count
-                });
-                readiness.set_transport_alive(connected);
-                thread::sleep(Duration::from_millis(100));
-            }
-        });
-        (cancel, handle)
-    });
+    let transport_watcher = spawn_transport_watcher(transport_status.as_ref(), &readiness);
 
-    if boot.auth.is_file_mode() {
-        crate::auth::install_sighup_reload(boot.auth.clone());
-    }
+    crate::auth::install_sighup_reload(boot.auth.clone());
 
-    let mut worker_handles = Vec::new();
-    if workers >= 1 {
-        let worker_lifecycle =
-            LoopLifecycle::new(Arc::clone(&readiness), LoopKind::Workers, workers as usize);
-        for thread_idx in 0..workers {
-            let ws = workspace.clone_for_executor();
-            let flag = Arc::clone(&cancel_flag);
-            let worker_context = context.clone();
-            let actor_filter = args.worker_actor_filter.clone();
-            let script_filter = args.worker_script_filter.clone();
-            let worker_id = format!("node-worker:{}-t{}", std::process::id(), thread_idx);
-            let lifecycle = Arc::clone(&worker_lifecycle);
-            worker_handles.push(thread::spawn(move || {
-                run_tracked_loop(lifecycle, || {
-                    queue::worker_loop_with_context(
-                        ws,
-                        worker_id,
-                        flag,
-                        actor_filter,
-                        script_filter,
-                        false,
-                        worker_context,
-                    );
-                });
-            }));
-        }
-    }
+    let worker_handles = spawn_workers(
+        workers,
+        &workspace,
+        &context,
+        &args,
+        &readiness,
+        &cancel_flag,
+    );
 
     // Health Plane retention. The frozen bounds - 64 Signals per Performer,
     // the 7-day Signal window, the 60-second reorder-buffer lifetime, the
@@ -330,7 +409,7 @@ pub fn run(
     );
     let _endpoint_guard = ServiceEndpointFile(endpoint_path);
 
-    let health_registry = Arc::new(crate::operations::health::open_observational_registry(
+    let health_registry = Arc::new(crate::operations::node::open_observational_registry(
         &context,
     )?);
     let body_limit = boot.deploy.http.body_limit_bytes.max(1);
@@ -338,7 +417,6 @@ pub fn run(
     let health_plane = api::health_plane_router(
         Arc::clone(&health_registry),
         boot.auth.clone(),
-        boot.api_policy.clone(),
         boot.deploy.clone(),
         Arc::clone(&auth_verification_gate),
         body_limit,
@@ -348,47 +426,33 @@ pub fn run(
     let readiness_for_http = Arc::clone(&readiness);
     let http_result = runtime.block_on(async move {
         api::serve_http(
-            boot.bind,
-            boot.auth,
+            boot,
             workspace,
-            boot.api_policy,
-            boot.deploy,
-            Some(readiness_for_http),
-            transport_readiness,
-            discovery_status,
-            cue_dispatcher,
-            baseline_dispatcher,
-            health_plane,
+            api::ApiSurfaces {
+                readiness: Some(readiness_for_http),
+                transport: transport_readiness,
+                discovery: discovery_status,
+                cues: cue_dispatcher,
+                baselines: baseline_dispatcher,
+                health_plane,
+                bootstrap_token_path: args.bootstrap_token_file,
+            },
             auth_verification_gate,
             cancel_for_http,
-            None,
         )
         .await
     });
 
     // HTTP stopped (cancel or error). Ensure cancel is set so loops exit, then
     // join scheduler and workers (stop scheduling → stop claiming → drain).
-    cancel_flag.store(true, Ordering::SeqCst);
-    if let Some((watcher_cancel, watcher)) = transport_watcher {
-        watcher_cancel.store(true, Ordering::SeqCst);
-        let _ = watcher.join();
-    }
-    if let Some(service) = direct_service.as_mut() {
-        service.stop();
-    }
-    if let Some(service) = discovery_service.as_mut() {
-        service.stop();
-    }
-    readiness.set_workers_alive(false);
-    readiness.set_scheduler_alive(false);
-
-    if let Some(h) = scheduler_handle {
-        let _ = h.join();
-    }
-    let _ = health_maintenance.join();
-    for h in worker_handles {
-        let _ = h.join();
-    }
+    stop_live_services(
+        &cancel_flag,
+        transport_watcher,
+        &mut direct_service,
+        &mut discovery_service,
+        &readiness,
+    );
+    join_background_loops(scheduler_handle, health_maintenance, worker_handles);
 
     http_result
 }
@@ -404,12 +468,8 @@ const HEALTH_MAINTENANCE_INTERVAL: Duration =
 /// Slice between cancellation checks inside one maintenance wait.
 const HEALTH_MAINTENANCE_SLICE: Duration = Duration::from_millis(200);
 
-/// Run the frozen Health Plane retention rules on a bounded cadence.
-///
-/// Every decision belongs to the Wave 2 shared operations: this loop chooses
-/// nothing, writes no Health Plane row itself, and never touches identity,
-/// trust, revocation, or run state. A failure is a bounded no-op that is
-/// retried on the next pass rather than a reason to stop serving.
+/// Retry run recovery, revoked Cue cleanup, and Health Plane retention on a
+/// bounded cadence without stopping the service after an individual failure.
 fn health_maintenance_loop(
     context: crate::node::NodeContext,
     workspace: Workspace,
@@ -431,15 +491,8 @@ fn health_maintenance_loop(
 }
 
 fn run_health_maintenance(context: &crate::node::NodeContext, workspace: &Workspace) {
-    match crate::runs::open(workspace)
-        .and_then(|conn| crate::runs::recover_abandoned_cue_runs(&conn))
-    {
-        Ok(recovered) => {
-            for run_id in recovered {
-                eprintln!("omakure: resolved abandoned remote run {run_id} without re-running it");
-            }
-        }
-        Err(error) => eprintln!("omakure: abandoned Cue recovery remains pending: {error}"),
+    if let Err(error) = crate::operations::worker::recover_abandoned_remote_runs(workspace) {
+        eprintln!("omakure: abandoned Cue recovery remains pending: {error}");
     }
     if let Err(error) = crate::operations::node::reconcile_revoked_cue_runs(context, workspace) {
         eprintln!("omakure: revoked Cue cleanup remains pending: {error}");
@@ -453,9 +506,6 @@ fn run_health_maintenance(context: &crate::node::NodeContext, workspace: &Worksp
         return;
     };
     let plane = crate::health_plane::HealthPlane::new(&registry);
-    if !plane.enabled().unwrap_or(false) {
-        return;
-    }
     // Revocation cleanup first: a peer that is no longer actively trusted must
     // stop occupying Health Plane capacity before retention is measured.
     let _ = plane.purge_revoked();
@@ -493,6 +543,108 @@ impl Drop for ServiceEndpointFile {
 mod tests {
     use super::*;
     use std::sync::mpsc;
+
+    #[test]
+    fn direct_bind_override_and_loopback_guard_keep_the_same_errors() {
+        let loopback: SocketAddr = "127.0.0.1:7879".parse().unwrap();
+        let public: SocketAddr = "0.0.0.0:7879".parse().unwrap();
+        assert_eq!(resolve_direct_bind(None, None, false).unwrap(), None);
+        assert_eq!(
+            resolve_direct_bind(Some(loopback), Some("invalid-bind"), false).unwrap(),
+            Some(loopback)
+        );
+        assert_eq!(
+            resolve_direct_bind(None, Some("127.0.0.1:7879"), false).unwrap(),
+            Some(loopback)
+        );
+        assert_eq!(
+            resolve_direct_bind(Some(public), None, true).unwrap(),
+            Some(public)
+        );
+        assert_eq!(
+            resolve_direct_bind(Some(public), None, false)
+                .unwrap_err()
+                .to_string(),
+            "refusing to bind direct transport 0.0.0.0:7879; pass --allow-non-loopback-direct to opt in"
+        );
+        assert_eq!(
+            resolve_direct_bind(None, Some("invalid-bind"), true)
+                .unwrap_err()
+                .to_string(),
+            "invalid socket address syntax"
+        );
+    }
+
+    #[test]
+    fn scheduler_flags_keep_their_precedence() {
+        assert!(!scheduler_enabled(true, true, Some(true)));
+        assert!(scheduler_enabled(false, true, Some(false)));
+        assert!(!scheduler_enabled(false, false, Some(false)));
+        assert!(scheduler_enabled(false, false, None));
+    }
+
+    #[test]
+    fn discovery_secret_is_resolved_only_when_enabled_and_named() {
+        let temp = tempfile::tempdir().unwrap();
+        let workspace = Workspace::new(temp.path().to_path_buf());
+        let mut config = crate::domain::NodeConfig::default();
+        config.organization.discovery_secret_ref = "invalid-ref".to_string();
+        config.discovery.enabled = false;
+        assert_eq!(resolve_discovery_secret(&config, &workspace).unwrap(), None);
+        config.discovery.enabled = true;
+        config.organization.discovery_secret_ref.clear();
+        assert_eq!(resolve_discovery_secret(&config, &workspace).unwrap(), None);
+        config.organization.discovery_secret_ref = "literal-secret".to_string();
+        assert_eq!(
+            resolve_discovery_secret(&config, &workspace).unwrap(),
+            Some("literal-secret".to_string())
+        );
+        config.organization.discovery_secret_ref = "secret://".to_string();
+        assert_eq!(
+            resolve_discovery_secret(&config, &workspace)
+                .unwrap_err()
+                .to_string(),
+            "discovery_secret_invalid"
+        );
+        config.organization.discovery_secret_ref = "secret://prod/absent".to_string();
+        assert_eq!(
+            resolve_discovery_secret(&config, &workspace)
+                .unwrap_err()
+                .to_string(),
+            "discovery_secret_invalid"
+        );
+    }
+
+    #[test]
+    fn shutdown_stops_watcher_before_clearing_loop_readiness() {
+        let readiness = ReadinessGate::new(true, true, true, true);
+        readiness.set_workers_alive(true);
+        readiness.set_scheduler_alive(true);
+        assert!(readiness.is_ready());
+        let cancel_flag = Arc::new(AtomicBool::new(false));
+        let watcher_cancel = Arc::new(AtomicBool::new(false));
+        let watcher_flag = Arc::clone(&watcher_cancel);
+        let watcher_readiness = Arc::clone(&readiness);
+        let (observed_tx, observed_rx) = mpsc::channel();
+        let watcher = thread::spawn(move || {
+            while !watcher_flag.load(Ordering::SeqCst) {
+                thread::yield_now();
+            }
+            observed_tx.send(watcher_readiness.is_ready()).unwrap();
+        });
+        let mut direct_service = None;
+        let mut discovery_service = None;
+        stop_live_services(
+            &cancel_flag,
+            Some((watcher_cancel, watcher)),
+            &mut direct_service,
+            &mut discovery_service,
+            &readiness,
+        );
+        assert!(cancel_flag.load(Ordering::SeqCst));
+        assert!(observed_rx.recv().unwrap());
+        assert!(!readiness.is_ready());
+    }
 
     #[test]
     fn readiness_gate_defaults_ready_without_requirements() {

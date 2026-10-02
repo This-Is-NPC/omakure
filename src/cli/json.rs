@@ -19,7 +19,7 @@
 //! `{ "code": "<stable-string>", "message": "<human message>" }`.
 
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Stable schema version for the AI JSON envelope. Bumped when the envelope
 /// or any documented `data` shape changes in a non-backward-compatible way.
@@ -28,7 +28,9 @@ pub const SCHEMA_VERSION: &str = "1";
 /// Stable error codes returned in `error.code`. Strings are stable parts of
 /// the AI contract; renaming any of them is a breaking change.
 pub mod codes {
-    pub const NOT_FOUND: &str = "not_found";
+    use crate::operations::OperationErrorCode;
+
+    pub const NOT_FOUND: &str = OperationErrorCode::NotFound.as_str();
     pub const SCHEMA_INVALID: &str = "schema_invalid";
     pub const SCRIPT_EXISTS: &str = "script_exists";
     pub const MISSING_REQUIRED_FIELD: &str = "missing_required_field";
@@ -37,6 +39,29 @@ pub mod codes {
     pub const INTERNAL: &str = "internal";
     pub const DAEMON_ALREADY_RUNNING: &str = "daemon_already_running";
     pub const DAEMON_NOT_RUNNING: &str = "daemon_not_running";
+    pub const UNAUTHORIZED: &str = "unauthorized";
+
+    pub const DOCUMENTED: [&str; 19] = [
+        NOT_FOUND,
+        SCHEMA_INVALID,
+        SCRIPT_EXISTS,
+        MISSING_REQUIRED_FIELD,
+        INVALID_ARGUMENT,
+        OperationErrorCode::InvalidInput.as_str(),
+        UNAUTHORIZED,
+        NOT_IMPLEMENTED,
+        INTERNAL,
+        OperationErrorCode::AlreadyExists.as_str(),
+        OperationErrorCode::NotSynced.as_str(),
+        OperationErrorCode::ManifestInvalid.as_str(),
+        OperationErrorCode::UnsafePath.as_str(),
+        OperationErrorCode::UnsupportedScript.as_str(),
+        OperationErrorCode::Conflict.as_str(),
+        OperationErrorCode::GitFailed.as_str(),
+        OperationErrorCode::IoFailed.as_str(),
+        OperationErrorCode::RegistryInvalid.as_str(),
+        OperationErrorCode::PayloadTooLarge.as_str(),
+    ];
 }
 
 /// Build an `ok: true` envelope around a serializable payload.
@@ -119,6 +144,31 @@ mod tests {
         assert_eq!(codes::INTERNAL, "internal");
         assert_eq!(codes::DAEMON_ALREADY_RUNNING, "daemon_already_running");
         assert_eq!(codes::DAEMON_NOT_RUNNING, "daemon_not_running");
+        assert_eq!(codes::UNAUTHORIZED, "unauthorized");
+        assert_eq!(
+            codes::DOCUMENTED,
+            [
+                "not_found",
+                "schema_invalid",
+                "script_exists",
+                "missing_required_field",
+                "invalid_argument",
+                "invalid_input",
+                "unauthorized",
+                "not_implemented",
+                "internal",
+                "already_exists",
+                "not_synced",
+                "manifest_invalid",
+                "unsafe_path",
+                "unsupported_script",
+                "conflict",
+                "git_failed",
+                "io_failed",
+                "registry_invalid",
+                "payload_too_large",
+            ]
+        );
     }
 
     #[test]

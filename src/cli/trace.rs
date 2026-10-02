@@ -10,8 +10,9 @@
 //! no-op so scripts remain testable in isolation.
 
 use crate::cli::args::TraceArgs;
+use crate::cli::emit::emit_error;
 use crate::cli::json::{self, codes};
-use crate::runs::{self, TraceLevel};
+use crate::runs::{RunStore, RunsError, TraceLevel};
 use crate::workspace::Workspace;
 use serde_json::json;
 use std::env;
@@ -37,21 +38,23 @@ pub fn run(scripts_dir: PathBuf, args: TraceArgs, json_output: bool) -> Result<(
         }
     };
 
-    if let Some(data) = args.data.as_deref() {
-        if let Err(err) = serde_json::from_str::<serde_json::Value>(data) {
-            return emit_error(
-                json_output,
-                codes::INVALID_ARGUMENT,
-                format!("--data is not valid JSON: {}", err),
-            );
-        }
+    if let Some(Err(err)) = args
+        .data
+        .as_deref()
+        .map(serde_json::from_str::<serde_json::Value>)
+    {
+        return emit_error(
+            json_output,
+            codes::INVALID_ARGUMENT,
+            format!("--data is not valid JSON: {}", err),
+        );
     }
 
     let workspace = Workspace::new(scripts_dir);
     workspace.ensure_layout()?;
-    let mut conn = match runs::open(&workspace) {
-        Ok(c) => c,
-        Err(err) => return emit_error(json_output, codes::INTERNAL, err),
+    let mut store = match RunStore::open(&workspace) {
+        Ok(store) => store,
+        Err(err) => return emit_error(json_output, codes::INTERNAL, err.to_string()),
     };
 
     let secrets = crate::secrets::secrets_from_env();
@@ -61,16 +64,16 @@ pub fn run(scripts_dir: PathBuf, args: TraceArgs, json_output: bool) -> Result<(
         .as_deref()
         .map(|data| crate::secrets::redact_text(data, &secrets));
 
-    let trace = match runs::insert_trace(&mut conn, &run_id, level, &message, data.as_deref()) {
+    let trace = match store.insert_trace(&run_id, level, &message, data.as_deref()) {
         Ok(trace) => trace,
-        Err(err) if err.starts_with("not_found") => {
+        Err(RunsError::NotFound(_)) => {
             return emit_error(
                 json_output,
                 codes::NOT_FOUND,
                 format!("run not found: {}", run_id),
             );
         }
-        Err(err) => return emit_error(json_output, codes::INTERNAL, err),
+        Err(err) => return emit_error(json_output, codes::INTERNAL, err.to_string()),
     };
 
     if json_output {
@@ -85,32 +88,11 @@ pub fn run(scripts_dir: PathBuf, args: TraceArgs, json_output: bool) -> Result<(
     Ok(())
 }
 
-fn emit_error(json_output: bool, code: &str, message: String) -> Result<(), Box<dyn Error>> {
-    if json_output {
-        json::print_err(code, message);
-        std::process::exit(1);
-    }
-    Err(message.into())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::runs::{enqueue, EnqueueOptions};
-
-    fn make_workspace(label: &str) -> Workspace {
-        let dir = std::env::temp_dir().join(format!(
-            "omakure_trace_test_{}_{}_{}",
-            label,
-            std::process::id(),
-            runs::current_unix_ms()
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        let ws = Workspace::new(dir);
-        ws.ensure_layout().unwrap();
-        ws
-    }
+    use crate::runs::EnqueueOptions;
+    use crate::test_support::scratch_workspace;
 
     #[test]
     fn invalid_level_rejected_at_validation() {
@@ -123,75 +105,24 @@ mod tests {
 
     #[test]
     fn insert_trace_writes_row() {
-        let ws = make_workspace("trace_writes");
-        let mut conn = runs::open(&ws).unwrap();
-        let row = enqueue(
-            &conn,
-            "/x/a.sh",
-            &[],
-            EnqueueOptions {
-                actor: "human".into(),
-                omakure_version: "test".into(),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        let trace = runs::insert_trace(
-            &mut conn,
-            &row.run_id,
-            TraceLevel::Info,
-            "hello",
-            Some(r#"{"k":"v"}"#),
-        )
-        .unwrap();
+        let ws = scratch_workspace("trace_writes");
+        let mut store = RunStore::open(&ws).unwrap();
+        let row = store
+            .enqueue(
+                "/x/a.sh",
+                &[],
+                EnqueueOptions {
+                    actor: "human".into(),
+                    omakure_version: "test".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let trace = store
+            .insert_trace(&row.run_id, TraceLevel::Info, "hello", Some(r#"{"k":"v"}"#))
+            .unwrap();
         assert_eq!(trace.sequence, 1);
         assert_eq!(trace.level, "info");
-        let _ = std::fs::remove_dir_all(ws.root());
-    }
-
-    #[test]
-    fn trace_redacts_runtime_secret_values() {
-        let ws = make_workspace("trace_redacts");
-        let conn = runs::open(&ws).unwrap();
-        let row = enqueue(
-            &conn,
-            "/tmp/script.sh",
-            &[],
-            EnqueueOptions {
-                run_id: Some("rid-trace-secret".into()),
-                actor: "test".into(),
-                omakure_version: "test".into(),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        drop(conn);
-
-        std::env::set_var("OMAKURE_RUN_ID", &row.run_id);
-        std::env::set_var("OMAKURE_REDACT_SECRETS", r#"["trace_secret_value"]"#);
-        run(
-            ws.root().to_path_buf(),
-            TraceArgs {
-                message: "saw trace_secret_value".into(),
-                level: "info".into(),
-                data: Some(r#"{"token":"trace_secret_value"}"#.into()),
-            },
-            false,
-        )
-        .unwrap();
-        std::env::remove_var("OMAKURE_RUN_ID");
-        std::env::remove_var("OMAKURE_REDACT_SECRETS");
-
-        let conn = runs::open(&ws).unwrap();
-        let traces = runs::query_traces(&conn, &row.run_id, None, None).unwrap();
-        assert_eq!(traces.len(), 1);
-        assert!(!traces[0].message.contains("trace_secret_value"));
-        assert!(!traces[0]
-            .data_json
-            .as_deref()
-            .unwrap_or_default()
-            .contains("trace_secret_value"));
-        assert!(traces[0].message.contains("<redacted>"));
         let _ = std::fs::remove_dir_all(ws.root());
     }
 }

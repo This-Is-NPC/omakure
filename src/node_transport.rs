@@ -5,13 +5,13 @@
 //! in-process Noise builder.
 
 use crate::direct_transport::{
-    unix_seconds, x25519_public_from_private, HandshakeRole, NoiseHandshake, TransportCertificate,
-    TransportError, CERTIFICATE_MAX_LIFETIME_SECONDS,
+    CERTIFICATE_MAX_LIFETIME_SECONDS, HandshakeRole, NoiseHandshake, TransportCertificate,
+    TransportError, unix_seconds, x25519_public_from_private,
 };
-use crate::node::{write_atomic_new, NodeContext, NodeError};
+use crate::node::{NodeContext, NodeError, write_new_file_atomically};
 use crate::node_identity::NodeIdentity;
-use rand::rngs::OsRng;
-use rand::RngCore;
+use crate::util::entropy;
+use crate::util::hex;
 use std::fs;
 use std::io;
 use thiserror::Error;
@@ -81,7 +81,7 @@ impl LocalTransport {
 
     fn create(context: &NodeContext, identity: &NodeIdentity) -> Result<Self, NodeTransportError> {
         let mut private_key = [0u8; 32];
-        OsRng.fill_bytes(&mut private_key);
+        entropy::fill_bytes(&mut private_key);
         let public_key = x25519_public_from_private(&private_key)?;
         let now = unix_seconds();
         let certificate = TransportCertificate::issue(
@@ -92,8 +92,8 @@ impl LocalTransport {
             now.saturating_add(CERTIFICATE_MAX_LIFETIME_SECONDS),
             random_certificate_id(),
         )?;
-        write_atomic_new(&context.transport_key_path(), &private_key, 0o600)?;
-        if let Err(error) = write_atomic_new(
+        write_new_file_atomically(&context.transport_key_path(), &private_key, 0o600)?;
+        if let Err(error) = write_new_file_atomically(
             &context.transport_certificate_path(),
             certificate.as_bytes(),
             0o600,
@@ -126,7 +126,7 @@ impl LocalTransport {
         }
         let status = identity.public_status();
         if certificate.node_id() != status.node_id
-            || hex(certificate.identity_key()) != status.public_key_hex
+            || hex::encode(certificate.identity_key()) != status.public_key_hex
         {
             return Err(NodeTransportError::State(
                 "transport certificate does not match node identity".to_string(),
@@ -142,12 +142,8 @@ impl LocalTransport {
 
 fn random_certificate_id() -> [u8; 16] {
     let mut id = [0u8; 16];
-    OsRng.fill_bytes(&mut id);
+    entropy::fill_bytes(&mut id);
     id
-}
-
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 fn regular_file_exists(path: &std::path::Path) -> Result<bool, NodeTransportError> {
@@ -165,28 +161,14 @@ fn regular_file_exists(path: &std::path::Path) -> Result<bool, NodeTransportErro
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::node::{NodeContext, NodePathOverrides, NodePlatform};
-    use tempfile::TempDir;
+    use crate::test_support::node_context;
 
-    fn context(temp: &TempDir) -> NodeContext {
-        NodeContext::resolve_for(
-            NodePlatform::current(),
-            NodePathOverrides::new(
-                Some(temp.path().join("state")),
-                Some(temp.path().join("node.toml")),
-            ),
-            true,
-            None,
-            None,
-            None,
-        )
-        .unwrap()
-    }
+    use tempfile::TempDir;
 
     #[test]
     fn load_existing_never_reprovisions_deleted_transport_state() {
         let temp = TempDir::new().unwrap();
-        let context = context(&temp);
+        let context = node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         let provisioned = LocalTransport::provision_new(&context, &identity).unwrap();
         let certificate = provisioned.certificate().clone();
@@ -206,7 +188,7 @@ mod tests {
     #[test]
     fn provision_new_refuses_to_replace_existing_transport_state() {
         let temp = TempDir::new().unwrap();
-        let context = context(&temp);
+        let context = node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         LocalTransport::provision_new(&context, &identity).unwrap();
         assert!(matches!(

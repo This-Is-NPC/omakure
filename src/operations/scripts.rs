@@ -1,15 +1,12 @@
-use crate::adapters::workspace_repository::FsWorkspaceRepository;
-use crate::ports::{ScriptRepository, WorkspaceEntryKind};
+use crate::adapters::workspace_repository::{FsWorkspaceRepository, WorkspaceEntryKind};
 use crate::runtime::script_kind;
 use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};
 use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 
-use super::{OperationError, OperationErrorCode, OperationResult};
-
-pub const MAX_SCRIPT_CONTENT_BYTES: u64 = 1024 * 1024;
-pub const MAX_TREE_ENTRIES: usize = 1000;
+use super::path::{canonical_relative_path, canonical_scripts_root, has_windows_prefix};
+use super::{OperationError, OperationErrorCode, OperationResult, io_error};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ListTreeRequest {
@@ -39,16 +36,9 @@ pub struct ScriptContent {
 pub fn list_tree(
     workspace: &Workspace,
     request: ListTreeRequest,
-) -> OperationResult<Vec<TreeEntry>> {
-    list_tree_limited(workspace, request, MAX_TREE_ENTRIES)
-}
-
-pub fn list_tree_limited(
-    workspace: &Workspace,
-    request: ListTreeRequest,
     max_entries: usize,
 ) -> OperationResult<Vec<TreeEntry>> {
-    let root = canonical_scripts_root(workspace)?;
+    let root = canonical_scripts_root(workspace.scripts_root())?;
     let dir = resolve_workspace_path(request.path.as_deref().unwrap_or(""), &root)?;
     if !dir.is_dir() {
         return Err(OperationError::new(
@@ -69,7 +59,7 @@ pub fn list_tree_limited(
     Ok(entries
         .into_iter()
         .map(|entry| {
-            let relative_path = logical_relative_path(&entry.path, &root);
+            let relative_path = canonical_relative_path(&entry.path, &root);
             let name = entry
                 .path
                 .file_name()
@@ -93,16 +83,9 @@ pub fn list_tree_limited(
 pub fn read_script_content(
     workspace: &Workspace,
     request: ReadScriptContentRequest,
-) -> OperationResult<ScriptContent> {
-    read_script_content_limited(workspace, request, MAX_SCRIPT_CONTENT_BYTES)
-}
-
-pub fn read_script_content_limited(
-    workspace: &Workspace,
-    request: ReadScriptContentRequest,
     max_bytes: u64,
 ) -> OperationResult<ScriptContent> {
-    let root = canonical_scripts_root(workspace)?;
+    let root = canonical_scripts_root(workspace.scripts_root())?;
     let path = resolve_workspace_path(&request.script, &root)?;
     if !path.is_file() {
         return Err(OperationError::new(
@@ -139,43 +122,13 @@ pub fn read_script_content_limited(
             "script content is not valid UTF-8",
         )
     })?;
-    let relative_path = logical_relative_path(&path, &root);
+    let relative_path = canonical_relative_path(&path, &root);
     Ok(ScriptContent {
         absolute_path: path.to_string_lossy().to_string(),
         relative_path,
         size_bytes: metadata.len(),
         content,
     })
-}
-
-fn canonical_scripts_root(workspace: &Workspace) -> OperationResult<PathBuf> {
-    workspace.scripts_root().canonicalize().map_err(|err| {
-        OperationError::new(
-            OperationErrorCode::IoFailed,
-            format!("failed to canonicalize scripts root: {err}"),
-        )
-    })
-}
-fn logical_relative_path(path: &Path, root: &Path) -> String {
-    let canonical_root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
-    let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-    let path_text = canonical_path.to_string_lossy().replace('\\', "/");
-    let root_text = canonical_root
-        .to_string_lossy()
-        .replace('\\', "/")
-        .trim_end_matches('/')
-        .to_string();
-    path_text
-        .strip_prefix(&root_text)
-        .and_then(|rest| rest.strip_prefix('/'))
-        .unwrap_or(&path_text)
-        .to_string()
-}
-
-fn has_windows_prefix(path: &str) -> bool {
-    path.starts_with("\\\\")
-        || (path.as_bytes().get(1).is_some_and(|colon| *colon == b':')
-            && path.as_bytes()[0].is_ascii_alphabetic())
 }
 
 fn resolve_workspace_path(path: &str, root: &Path) -> OperationResult<PathBuf> {
@@ -239,8 +192,12 @@ fn resolve_workspace_path(path: &str, root: &Path) -> OperationResult<PathBuf> {
     }
 }
 
-fn open_script_file(path: &Path, root: &Path) -> OperationResult<std::fs::File> {
-    let file = open_no_follow(path)?;
+fn open_script_file(
+    path: &Path,
+    #[cfg(unix)] root: &Path,
+    #[cfg(not(unix))] _root: &Path,
+) -> OperationResult<std::fs::File> {
+    let file = crate::adapters::fs::open_existing_file_read(path).map_err(io_error)?;
     #[cfg(unix)]
     {
         let canonical_root = root.canonicalize().map_err(|err| {
@@ -251,54 +208,39 @@ fn open_script_file(path: &Path, root: &Path) -> OperationResult<std::fs::File> 
         })?;
         use std::os::unix::io::AsRawFd;
         let fd_path = PathBuf::from(format!("/proc/self/fd/{}", file.as_raw_fd()));
-        if let Ok(opened) = fd_path.canonicalize() {
-            if !opened.starts_with(&canonical_root) {
-                return Err(OperationError::new(
-                    OperationErrorCode::UnsafePath,
-                    "path escapes scripts root",
-                ));
-            }
+        if fd_path
+            .canonicalize()
+            .is_ok_and(|opened| !opened.starts_with(&canonical_root))
+        {
+            return Err(OperationError::new(
+                OperationErrorCode::UnsafePath,
+                "path escapes scripts root",
+            ));
         }
     }
     Ok(file)
-}
-
-#[cfg(unix)]
-fn open_no_follow(path: &Path) -> OperationResult<std::fs::File> {
-    use std::os::unix::fs::OpenOptionsExt;
-    std::fs::OpenOptions::new()
-        .read(true)
-        .custom_flags(0o400000)
-        .open(path)
-        .map_err(io_error)
-}
-
-#[cfg(not(unix))]
-fn open_no_follow(path: &Path) -> OperationResult<std::fs::File> {
-    std::fs::File::open(path).map_err(io_error)
 }
 
 fn is_hidden_metadata_component(component: Component<'_>) -> bool {
     matches!(
         component,
         Component::Normal(name)
-            if name == ".omakure" || name == ".history" || name == ".git"
+            if crate::workspace::RESERVED_DIR_NAMES.iter().any(|reserved| name == *reserved)
     )
-}
-
-fn io_error(err: impl std::error::Error) -> OperationError {
-    OperationError::new(OperationErrorCode::IoFailed, err.to_string())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::workspace_in;
     use tempfile::TempDir;
 
-    fn workspace_in(dir: &TempDir) -> Workspace {
-        let workspace = Workspace::new(dir.path().to_path_buf());
-        workspace.ensure_layout().unwrap();
-        workspace
+    fn max_content_bytes() -> u64 {
+        crate::policy::ScriptsPolicy::default().max_content_bytes as u64
+    }
+
+    fn tree_entry_limit() -> usize {
+        crate::policy::ScriptsPolicy::default().tree_entry_limit
     }
 
     #[test]
@@ -327,6 +269,7 @@ mod tests {
             ListTreeRequest {
                 path: Some("scripts".into()),
             },
+            tree_entry_limit(),
         )
         .unwrap();
 
@@ -344,6 +287,7 @@ mod tests {
             ReadScriptContentRequest {
                 script: "../outside.sh".into(),
             },
+            max_content_bytes(),
         )
         .unwrap_err();
 
@@ -360,6 +304,7 @@ mod tests {
             ReadScriptContentRequest {
                 script: "/tmp/outside.sh".into(),
             },
+            max_content_bytes(),
         )
         .unwrap_err();
 
@@ -370,7 +315,7 @@ mod tests {
     fn list_tree_rejects_too_many_entries() {
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
-        for idx in 0..=MAX_TREE_ENTRIES {
+        for idx in 0..=tree_entry_limit() {
             std::fs::write(
                 workspace.scripts_root().join(format!("script-{idx}.sh")),
                 "#!/bin/sh\n",
@@ -378,7 +323,12 @@ mod tests {
             .unwrap();
         }
 
-        let err = list_tree(&workspace, ListTreeRequest { path: None }).unwrap_err();
+        let err = list_tree(
+            &workspace,
+            ListTreeRequest { path: None },
+            tree_entry_limit(),
+        )
+        .unwrap_err();
 
         assert_eq!(err.code, OperationErrorCode::PayloadTooLarge);
     }
@@ -394,6 +344,7 @@ mod tests {
                 ListTreeRequest {
                     path: Some(path.into()),
                 },
+                tree_entry_limit(),
             )
             .unwrap_err();
             assert_eq!(tree_err.code, OperationErrorCode::UnsafePath);
@@ -403,6 +354,7 @@ mod tests {
                 ReadScriptContentRequest {
                     script: format!("{path}/secret.sh"),
                 },
+                max_content_bytes(),
             )
             .unwrap_err();
             assert_eq!(content_err.code, OperationErrorCode::UnsafePath);
@@ -415,7 +367,7 @@ mod tests {
         let workspace = workspace_in(&dir);
         std::fs::write(
             workspace.scripts_root().join("big.sh"),
-            vec![b'a'; MAX_SCRIPT_CONTENT_BYTES as usize + 1],
+            vec![b'a'; max_content_bytes() as usize + 1],
         )
         .unwrap();
 
@@ -424,6 +376,7 @@ mod tests {
             ReadScriptContentRequest {
                 script: "big.sh".into(),
             },
+            max_content_bytes(),
         )
         .unwrap_err();
 
@@ -446,6 +399,7 @@ mod tests {
             ReadScriptContentRequest {
                 script: "binary.sh".into(),
             },
+            max_content_bytes(),
         )
         .unwrap_err();
         assert_eq!(binary_err.code, OperationErrorCode::UnsupportedScript);
@@ -455,6 +409,7 @@ mod tests {
             ReadScriptContentRequest {
                 script: "bad-utf8.sh".into(),
             },
+            max_content_bytes(),
         )
         .unwrap_err();
         assert_eq!(utf8_err.code, OperationErrorCode::UnsupportedScript);
@@ -480,10 +435,40 @@ mod tests {
             ReadScriptContentRequest {
                 script: "escape.sh".into(),
             },
+            max_content_bytes(),
         )
         .unwrap_err();
 
         assert_eq!(err.code, OperationErrorCode::UnsafePath);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn opened_script_fd_outside_the_workspace_is_rejected() {
+        let dir = TempDir::new().unwrap();
+        let outside = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        let outside_path = outside.path().join("outside.sh");
+        std::fs::write(&outside_path, "#!/bin/sh\n").unwrap();
+
+        let err = open_script_file(&outside_path, workspace.scripts_root()).unwrap_err();
+        assert_eq!(err.code, OperationErrorCode::UnsafePath);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn open_script_file_rejects_final_symlink_without_following_it() {
+        use std::os::unix::fs::symlink;
+
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        let target = workspace.scripts_root().join("target.sh");
+        let link = workspace.scripts_root().join("link.sh");
+        std::fs::write(&target, "#!/bin/sh\n").unwrap();
+        symlink(&target, &link).unwrap();
+
+        let err = open_script_file(&link, workspace.scripts_root()).unwrap_err();
+        assert_eq!(err.code, OperationErrorCode::IoFailed);
     }
 
     #[test]
@@ -498,7 +483,7 @@ mod tests {
             resolve_workspace_path(r"tools\deploy.sh", workspace.scripts_root()).unwrap();
         assert_eq!(resolved, script.canonicalize().unwrap());
         assert_eq!(
-            logical_relative_path(&resolved, workspace.scripts_root()),
+            canonical_relative_path(&resolved, workspace.scripts_root()),
             "tools/deploy.sh"
         );
     }
@@ -525,14 +510,6 @@ mod tests {
     }
 
     #[test]
-    fn logical_relative_paths_handle_verbatim_windows_fixtures() {
-        let root = Path::new(r"\\?\C:\workspace\scripts");
-        let path = Path::new(r"\\?\C:\workspace\scripts\tools\deploy.cmd");
-
-        assert_eq!(logical_relative_path(path, root), "tools/deploy.cmd");
-    }
-
-    #[test]
     fn read_script_content_returns_text_script() {
         let dir = TempDir::new().unwrap();
         let workspace = workspace_in(&dir);
@@ -547,6 +524,7 @@ mod tests {
             ReadScriptContentRequest {
                 script: "ok.sh".into(),
             },
+            max_content_bytes(),
         )
         .unwrap();
 

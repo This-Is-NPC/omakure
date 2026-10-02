@@ -9,124 +9,17 @@
 //!
 //! Two real `node serve` processes, real transport, no mocks.
 
-mod support;
+pub mod support;
 
-use serde_json::Value;
 use std::path::Path;
-use std::process::{Command, Output};
 use std::time::{Duration, Instant};
 
-const TOKEN: &str = "remote-cue-e2e-token-with-enough-entropy-000001";
 /// A Cue that is going to be authorized should be decided in well under this.
 const CUE_EFFECT_TIMEOUT: Duration = Duration::from_secs(30);
 /// The Signal rides the Performer's standing reporting session, which has its
 /// own tick, so this is deliberately looser than the effect timeout.
 const SIGNAL_TIMEOUT: Duration = Duration::from_secs(90);
-
-fn run_node(workspace: &Path, args: &[String]) -> Output {
-    let output = Command::new(support::omakure_bin())
-        .arg("--scripts-dir")
-        .arg(workspace)
-        .arg("--json")
-        .arg("node")
-        .arg("--node-state-dir")
-        .arg(workspace.join(".node-state"))
-        .arg("--node-config")
-        .arg(workspace.join("node.toml"))
-        .args(args)
-        .env("OMAKURE_NODE_TEST_MODE", "1")
-        .env("OMAKURE_API_TOKEN", TOKEN)
-        .output()
-        .expect("run node command");
-    // Carried on the failure message: a test that only reports "a node command
-    // failed" costs a bisect every time it goes red.
-    assert!(
-        output.status.code().is_some(),
-        "node {args:?} was killed by a signal"
-    );
-    output
-}
-
-fn assert_success_named(label: &str, output: &Output) -> Value {
-    assert!(
-        output.status.success(),
-        "node {label} failed: stdout={:?} stderr={:?}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let envelope = support::json_envelope(&output.stdout);
-    assert_eq!(envelope["ok"], true, "node {label} envelope: {envelope}");
-    envelope["data"].clone()
-}
-
-fn init_node(workspace: &Path) -> Value {
-    assert_success_named("init", &run_node(workspace, &["init".to_string()]));
-    assert_success_named("status", &run_node(workspace, &["status".to_string()]))
-}
-
-fn serve(workspace: &Path) -> support::HttpServer {
-    support::HttpServer::start_node_service(
-        workspace,
-        TOKEN,
-        &[
-            "--workers",
-            "1",
-            "--no-scheduler",
-            "--capability",
-            "node:read",
-            // Dispatching a Cue is a node write, and the same scope that
-            // governs the rest of the node surface governs this.
-            "--capability",
-            "node:write",
-        ],
-        &[],
-        Duration::from_secs(20),
-    )
-}
-
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-}
-
-fn trust_peer(
-    workspace: &Path,
-    peer_workspace: &Path,
-    peer_status: &Value,
-    role: &str,
-    capabilities: &[&str],
-) {
-    let certificate = hex(
-        &std::fs::read(peer_workspace.join(".node-state/transport.cert"))
-            .expect("read peer transport certificate"),
-    );
-    let mut args = vec![
-        "trust".to_string(),
-        "--node-id".to_string(),
-        peer_status["identity"]["node_id"].as_str().unwrap().into(),
-        "--public-key".to_string(),
-        peer_status["identity"]["public_key"]
-            .as_str()
-            .unwrap()
-            .into(),
-        "--transport-certificate".to_string(),
-        certificate,
-        "--role".to_string(),
-        role.to_string(),
-        "--actor".to_string(),
-        "remote-cue-e2e".to_string(),
-        "--reason".to_string(),
-        "remote cue certification".to_string(),
-        "--confirmed".to_string(),
-    ];
-    for capability in capabilities {
-        args.push("--capability".to_string());
-        args.push((*capability).to_string());
-    }
-    assert_eq!(
-        assert_success_named("trust", &run_node(workspace, &args))["state"],
-        "active"
-    );
-}
+const TRUST_AUDIT: (&str, &str) = ("remote-cue-e2e", "remote cue certification");
 
 /// Bind the direct listener, point at the peer, and declare the remote policy.
 ///
@@ -253,8 +146,8 @@ fn an_authorized_cue_runs_the_declared_script_exactly_once() {
     let conductor_port = support::unique_loopback_port();
     let performer_port = support::unique_loopback_port();
 
-    let conductor_status = init_node(conductor);
-    let performer_status = init_node(performer);
+    let conductor_status = support::init_node_checked_signal(conductor);
+    let performer_status = support::init_node_checked_signal(performer);
     let performer_id = performer_status["identity"]["node_id"].as_str().unwrap();
 
     let marker = performer.join("effects.log");
@@ -262,19 +155,21 @@ fn an_authorized_cue_runs_the_declared_script_exactly_once() {
 
     // The Performer trusts the Conductor with exactly the two capabilities the
     // gates require, and declares exactly one script as remotely runnable.
-    trust_peer(
+    support::trust_fleet_peer(
         performer,
         conductor,
         &conductor_status,
         "conductor",
         &["inventory-health", "notifications", "remote-run"],
+        TRUST_AUDIT,
     );
-    trust_peer(
+    support::trust_fleet_peer(
         conductor,
         performer,
         &performer_status,
         "performer",
         &["inventory-health", "notifications", "remote-run"],
+        TRUST_AUDIT,
     );
     // No static peer on either side, and that is a limitation rather than a
     // preference: a Performer that already holds a session with this Conductor
@@ -284,14 +179,14 @@ fn an_authorized_cue_runs_the_declared_script_exactly_once() {
     configure(performer, performer_port, None, true, &["deploy.sh"]);
     configure(conductor, conductor_port, None, false, &[]);
 
-    let _performer_service = serve(performer);
-    let _conductor_service = serve(conductor);
+    let _performer_service = support::serve_fleet_node(performer);
+    let _conductor_service = support::serve_fleet_node(conductor);
 
     assert_eq!(effect_count(&marker), 0, "nothing has run yet");
 
-    let dispatched = assert_success_named(
+    let dispatched = support::assert_node_success_named(
         "cue",
-        &run_node(
+        &support::run_node_checked_signal(
             conductor,
             &[
                 "cue".to_string(),
@@ -328,12 +223,13 @@ fn an_authorized_cue_runs_the_declared_script_exactly_once() {
     );
 
     // Give any duplicate a chance to appear before asserting there is none.
-    std::thread::sleep(Duration::from_secs(2));
-    assert_eq!(
-        effect_count(&marker),
-        1,
-        "an authorized Cue must run the script exactly once"
-    );
+    support::assert_throughout(Duration::from_secs(2), Duration::from_millis(250), || {
+        assert_eq!(
+            effect_count(&marker),
+            1,
+            "an authorized Cue must run the script exactly once"
+        );
+    });
 
     // The correlation half: the Conductor derives the run id it will see from
     // the cue id it minted, with no message carrying a correlation field. The
@@ -361,9 +257,9 @@ fn an_authorized_cue_runs_the_declared_script_exactly_once() {
         .as_str()
         .expect("the dispatcher must return the minted cue id")
         .to_string();
-    let redispatched = assert_success_named(
+    let redispatched = support::assert_node_success_named(
         "cue-retry",
-        &run_node(
+        &support::run_node_checked_signal(
             conductor,
             &[
                 "cue".to_string(),
@@ -380,12 +276,13 @@ fn an_authorized_cue_runs_the_declared_script_exactly_once() {
             ],
         ),
     );
-    std::thread::sleep(Duration::from_secs(2));
-    assert_eq!(
-        effect_count(&marker),
-        1,
-        "retrying with the same cue id must not run the script twice"
-    );
+    support::assert_throughout(Duration::from_secs(2), Duration::from_millis(250), || {
+        assert_eq!(
+            effect_count(&marker),
+            1,
+            "retrying with the same cue id must not run the script twice"
+        );
+    });
     assert_eq!(
         redispatched["cue_id"].as_str(),
         Some(first_cue_id.as_str()),
@@ -405,7 +302,10 @@ fn an_authorized_cue_runs_the_declared_script_exactly_once() {
         wait_for_signal(conductor, &expected),
         "the Conductor's own Signal feed must show the outcome it correlated. \
          expected={expected} feed={}",
-        assert_success_named("signals", &run_node(conductor, &["signals".to_string()]))
+        support::assert_node_success_named(
+            "signals",
+            &support::run_node_checked_signal(conductor, &["signals".to_string()])
+        )
     );
 }
 
@@ -415,26 +315,6 @@ fn an_authorized_cue_runs_the_declared_script_exactly_once() {
 /// derivations instead of comparing a value to itself.
 fn derived_run_id(cue_id: &str) -> String {
     omakure::health_plane::report::opaque_run_id(&omakure::remote_cue::derive_run_id(cue_id))
-}
-
-/// Wait until every configured static peer is connected.
-fn wait_for_standing_session(service: &support::HttpServer) -> bool {
-    let deadline = Instant::now() + Duration::from_secs(30);
-    while Instant::now() < deadline {
-        let status = service.get("/v1/node/status");
-        if status.status == 200 {
-            let transport = status.json()["data"]["transport"].clone();
-            let expected = transport["expected_peer_count"].as_u64();
-            if expected.is_some_and(|expected| {
-                expected > 0
-                    && transport["expected_connected_peer_count"].as_u64() == Some(expected)
-            }) {
-                return true;
-            }
-        }
-        std::thread::sleep(Duration::from_millis(250));
-    }
-    false
 }
 
 /// Poll the Conductor's own Signal feed for a `run-completed` carrying this id.
@@ -449,15 +329,19 @@ fn wait_for_standing_session(service: &support::HttpServer) -> bool {
 fn wait_for_signal(conductor: &Path, expected_run_id: &str) -> bool {
     let deadline = Instant::now() + SIGNAL_TIMEOUT;
     while Instant::now() < deadline {
-        let feed = run_node(conductor, &["signals".to_string()]);
+        let feed = support::run_node_checked_signal(conductor, &["signals".to_string()]);
         if feed.status.success() {
             let envelope = support::json_envelope(&feed.stdout);
-            if let Some(signals) = envelope["data"]["signals"].as_array() {
-                if signals.iter().any(|entry| {
-                    entry["kind"] == "run-completed" && entry["run"]["run_id"] == expected_run_id
-                }) {
-                    return true;
-                }
+            if envelope["data"]["signals"]
+                .as_array()
+                .is_some_and(|signals| {
+                    signals.iter().any(|entry| {
+                        entry["kind"] == "run-completed"
+                            && entry["run"]["run_id"] == expected_run_id
+                    })
+                })
+            {
+                return true;
             }
         }
         std::thread::sleep(Duration::from_millis(500));
@@ -486,27 +370,29 @@ fn a_cue_reaches_a_peer_this_node_already_has_a_session_with() {
     let conductor_port = support::unique_loopback_port();
     let performer_port = support::unique_loopback_port();
 
-    let conductor_status = init_node(conductor);
-    let performer_status = init_node(performer);
+    let conductor_status = support::init_node_checked_signal(conductor);
+    let performer_status = support::init_node_checked_signal(performer);
     let conductor_id = conductor_status["identity"]["node_id"].as_str().unwrap();
     let performer_id = performer_status["identity"]["node_id"].as_str().unwrap();
 
     let marker = performer.join("effects.log");
     write_effect_script(performer, &marker);
 
-    trust_peer(
+    support::trust_fleet_peer(
         performer,
         conductor,
         &conductor_status,
         "conductor",
         &["inventory-health", "notifications", "remote-run"],
+        TRUST_AUDIT,
     );
-    trust_peer(
+    support::trust_fleet_peer(
         conductor,
         performer,
         &performer_status,
         "performer",
         &["inventory-health", "notifications", "remote-run"],
+        TRUST_AUDIT,
     );
     // Both sides name the other, which is what a managed fleet looks like and
     // what dial ownership requires: `should_initiate` gives the dial to
@@ -527,21 +413,21 @@ fn a_cue_reaches_a_peer_this_node_already_has_a_session_with() {
         &["deploy.sh"],
     );
 
-    let _performer_service = serve(performer);
-    let conductor_service = serve(conductor);
+    let _performer_service = support::serve_fleet_node(performer);
+    let conductor_service = support::serve_fleet_node(conductor);
 
     // Wait on the fact, not on a duration. Dispatching before the session is up
     // would fall back to the direct dial and pass for the wrong reason: the Cue
     // would arrive, but over the path this test exists to avoid.
     assert!(
-        wait_for_standing_session(&conductor_service),
+        support::wait_for_standing_session(&conductor_service),
         "the Conductor never established its standing session to the Performer"
     );
     assert_eq!(effect_count(&marker), 0, "nothing has run yet");
 
-    let dispatched = assert_success_named(
+    let dispatched = support::assert_node_success_named(
         "cue",
-        &run_node(
+        &support::run_node_checked_signal(
             conductor,
             &[
                 "cue".to_string(),
@@ -574,12 +460,13 @@ fn a_cue_reaches_a_peer_this_node_already_has_a_session_with() {
         wait_for_effect(&marker, 1),
         "the declared script never ran on the Performer"
     );
-    std::thread::sleep(Duration::from_secs(2));
-    assert_eq!(
-        effect_count(&marker),
-        1,
-        "one Cue is still exactly one run, whichever path carried it"
-    );
+    support::assert_throughout(Duration::from_secs(2), Duration::from_millis(250), || {
+        assert_eq!(
+            effect_count(&marker),
+            1,
+            "one Cue is still exactly one run, whichever path carried it"
+        );
+    });
 }
 
 /// The refusal half, on the same real topology.
@@ -599,37 +486,39 @@ fn an_undeclared_script_is_refused_by_a_fully_trusted_conductor() {
     let conductor_port = support::unique_loopback_port();
     let performer_port = support::unique_loopback_port();
 
-    let conductor_status = init_node(conductor);
-    let performer_status = init_node(performer);
+    let conductor_status = support::init_node_checked_signal(conductor);
+    let performer_status = support::init_node_checked_signal(performer);
     let performer_id = performer_status["identity"]["node_id"].as_str().unwrap();
 
     let marker = performer.join("effects.log");
     write_effect_script(performer, &marker);
 
-    trust_peer(
+    support::trust_fleet_peer(
         performer,
         conductor,
         &conductor_status,
         "conductor",
         &["inventory-health", "notifications", "remote-run"],
+        TRUST_AUDIT,
     );
-    trust_peer(
+    support::trust_fleet_peer(
         conductor,
         performer,
         &performer_status,
         "performer",
         &["inventory-health", "notifications", "remote-run"],
+        TRUST_AUDIT,
     );
     // Cues enabled, full trust, full capabilities — and nothing declared.
     configure(performer, performer_port, None, true, &[]);
     configure(conductor, conductor_port, None, false, &[]);
 
-    let _performer_service = serve(performer);
-    let _conductor_service = serve(conductor);
+    let _performer_service = support::serve_fleet_node(performer);
+    let _conductor_service = support::serve_fleet_node(conductor);
 
-    assert_success_named(
+    support::assert_node_success_named(
         "cue",
-        &run_node(
+        &support::run_node_checked_signal(
             conductor,
             &[
                 "cue".to_string(),
@@ -647,10 +536,11 @@ fn an_undeclared_script_is_refused_by_a_fully_trusted_conductor() {
 
     // The dispatch itself succeeds — it is one-shot and does not wait for a
     // verdict. What must not happen is the script running.
-    std::thread::sleep(Duration::from_secs(5));
-    assert_eq!(
-        effect_count(&marker),
-        0,
-        "an undeclared script must not run, however trusted the sender is"
-    );
+    support::assert_throughout(Duration::from_secs(5), Duration::from_millis(250), || {
+        assert_eq!(
+            effect_count(&marker),
+            0,
+            "an undeclared script must not run, however trusted the sender is"
+        );
+    });
 }

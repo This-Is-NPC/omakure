@@ -14,12 +14,11 @@ Run the internal HTTP management API
 
 - `--allow-non-loopback` — Explicitly allow the HTTP API to bind to non-loopback addresses (values: `false`, `true`)
 - `--bind BIND` — Address to bind the HTTP API server to (default: `127.0.0.1:7878`)
-- `--capability CAPABILITIES` — API capability to grant in legacy single-token mode (`OMAKURE_API_TOKEN`). Repeatable. Ignored when `--tokens-file` is set. Supported: config:read, scripts:read, env:read / envs:read, env:write / envs:write, env:activate / envs:activate, env:use / envs:use, secrets:use, secrets:read-metadata, credentials:use, runs:read, runs:write / runs:enqueue, batteries:read, batteries:write, admin:status, all. Node management uses narrow node:read, node:write, and trust:write capabilities. `all` grants every route capability but does not bypass `--secret-ref` (pass `--secret-ref '*'` for unrestricted refs)
 - `--json` — Emit machine-readable JSON output for AI-facing subcommands (values: `false`, `true`)
 - `--policy POLICY` — Deploy-only policy.toml (route groups + auth/node-service defaults). Overrides `OMAKURE_POLICY_FILE`. Separate from workspace omakure.toml
 - `--scripts-dir SCRIPTS_DIR` — Scripts directory override
 - `--secret-ref SECRET_REFS` — Allowed secret provider ref for secrets:use / credentials:use, e.g. secret://prod/token or secret://prod/*; repeatable. Empty denies provider refs
-- `--tokens-file TOKENS_FILE` — Multi-token TOML file (Argon2id hashes + per-token scopes). Overrides `OMAKURE_TOKENS_FILE`. When set, process-wide `--capability` is ignored; scopes come from each token
+- `--tokens-file TOKENS_FILE` — Multi-token TOML file (Argon2id hashes + per-token scopes). Overrides `OMAKURE_TOKENS_FILE`. Required unless the deploy policy sets `auth.tokens_file`
 
 ## `omakure battery`
 
@@ -452,10 +451,9 @@ Create a new script template
 - `--body-stdin` — Read the script body from stdin and write it verbatim under the schema header when `--schema-json` is set. Without `--schema-json`, stdin is ignored and the default placeholder template is written (values: `false`, `true`)
 - `--force` — Overwrite an existing script of the same name (values: `false`, `true`)
 - `--json` — Emit machine-readable JSON output for AI-facing subcommands (values: `false`, `true`)
-- `--name SCRIPT` — Script path (legacy)
 - `--schema-json SCHEMA_JSON` — Inline schema JSON or `@path/to/schema.json`. When set, the new script is generated with this schema embedded between the `OMAKURE_SCHEMA_START` / `OMAKURE_SCHEMA_END` markers instead of the default placeholder template
 - `--scripts-dir SCRIPTS_DIR` — Scripts directory override
-- `SCRIPT` — Script path
+- `SCRIPT` — Script path **(required)**
 
 ## `omakure node`
 
@@ -849,7 +847,6 @@ Run the machine-owned HTTP node service with optional workers and scheduler
 - `--allow-non-loopback-direct` — Explicitly allow the direct transport to bind to non-loopback addresses (values: `false`, `true`)
 - `--bind BIND` — Address to bind the HTTP API server to; defaults to node.toml `api.bind`
 - `--bootstrap-token-file BOOTSTRAP_TOKEN_FILE` — Node-local one-time bootstrap token file for the signed-bundle API
-- `--capability CAPABILITIES` — API capability to grant in legacy single-token mode. Repeatable
 - `--direct-bind DIRECT_BIND` — Optional direct transport listener address
 - `--json` — Emit machine-readable JSON output for AI-facing subcommands (values: `false`, `true`)
 - `--no-scheduler` — Disable the in-process schedule scanner (default: `false`) (values: `false`, `true`)
@@ -1142,7 +1139,7 @@ Update omakure from GitHub releases
 ### Options
 
 - `--json` — Emit machine-readable JSON output for AI-facing subcommands (values: `false`, `true`)
-- `--repo REPO` — GitHub repository (`owner/name`). Defaults to `$OMAKURE_REPO` / `$OVERTURE_REPO` / `$CLOUD_MGMT_REPO` / `$REPO` / `This-Is-NPC/omakure`
+- `--repo REPO` — GitHub repository (`owner/name`). Defaults to `$OMAKURE_REPO` / `$REPO` / `This-Is-NPC/omakure`
 - `--scripts-dir SCRIPTS_DIR` — Scripts directory override
 - `--version VERSION` — Release tag to install (e.g. `v0.1.9`). Defaults to `$VERSION` or the latest GitHub release for the configured repo
 

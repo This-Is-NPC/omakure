@@ -33,7 +33,7 @@ COPY tests ./tests
 # Built in the debug profile deliberately, exactly like the host-side adversary
 # harness. `NodeContext::resolve_for` refuses a state-directory override outside
 # `cfg!(debug_assertions)` (the `test_mode && !cfg!(debug_assertions)` guard in
-# src/node.rs), which is a security property of the shipped binary; a release
+# src/node/context.rs), which is a security property of the shipped binary; a release
 # harness cannot read the adversary's node material.
 # Only the harness is affected -- the node under test is the release `runtime`
 # image, unchanged.
@@ -80,10 +80,7 @@ RUN apt-get update \
           'bind = "127.0.0.1:7878"' \
           '' \
           '[network]' \
-          'mode = "direct"' \
-          'relays = []' \
           'static_peers = []' \
-          'max_message_bytes = 1048576' \
           '' \
           '[trust]' \
           'enrollment = "disabled"' \
@@ -124,6 +121,6 @@ EXPOSE 7878
 #
 # CMD binds 0.0.0.0 inside the container so published ports work. Host-side
 # publish should stay on 127.0.0.1 (see compose.yaml / docs/deployment.md).
-# Prefer OMAKURE_TOKENS_FILE over legacy OMAKURE_API_TOKEN in production.
+# Management auth requires OMAKURE_TOKENS_FILE / --tokens-file.
 ENTRYPOINT ["tini", "--", "omakure"]
 CMD ["node", "serve", "--bind", "0.0.0.0:7878", "--allow-non-loopback"]

@@ -3,7 +3,7 @@
 #[cfg(unix)]
 mod unix {
     use omakure::discovery::{
-        Beacon, DiscoveryService, DISCOVERY_PORT, MAX_CANDIDATES, MAX_DATAGRAM_BYTES,
+        Beacon, DISCOVERY_PORT, DiscoveryService, MAX_CANDIDATES, MAX_DATAGRAM_BYTES,
         MAX_DISCOVERY_SECRET_BYTES, MAX_SOURCE_ENTRIES,
     };
     use omakure::domain::NodeConfig;
@@ -108,10 +108,12 @@ mod unix {
                 .public_status(false, now);
             if status.accepted_datagrams >= 1 && status.dropped_datagrams >= 5 {
                 assert!(status.candidate_count <= MAX_CANDIDATES);
-                assert!(status
-                    .candidates
-                    .iter()
-                    .all(|candidate| candidate.address.is_none()));
+                assert!(
+                    status
+                        .candidates
+                        .iter()
+                        .all(|candidate| candidate.address.is_none())
+                );
                 assert!(status.limits.datagram_bytes == MAX_DATAGRAM_BYTES);
                 assert!(status.limits.source_entries == MAX_SOURCE_ENTRIES);
                 assert!(status.limits.source_entries <= MAX_SOURCE_ENTRIES);

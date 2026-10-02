@@ -3,7 +3,7 @@ use crate::adapters::system_checks::{
     ensure_powershell_installed_with_env, ensure_python_installed_with_env,
 };
 use crate::error::{AppResult, ScriptError};
-use crate::runtime::{command_for_script_with_env, script_kind, ScriptKind};
+use crate::runtime::{ScriptKind, command_for_script_with_env, script_kind};
 use std::path::Path;
 use std::process::{Command, Stdio};
 
@@ -76,11 +76,12 @@ mod tests {
 
         let cmd = MultiScriptRunner::build_command(&script, &[], &[]).unwrap();
         #[cfg(windows)]
-        assert!(cmd
-            .get_program()
-            .to_string_lossy()
-            .to_ascii_lowercase()
-            .ends_with(r"\bash.exe"));
+        assert!(
+            cmd.get_program()
+                .to_string_lossy()
+                .to_ascii_lowercase()
+                .ends_with(r"\bash.exe")
+        );
         #[cfg(not(windows))]
         assert_eq!(cmd.get_program(), "bash");
     }
@@ -109,9 +110,10 @@ mod tests {
         assert!(cmd_args.iter().any(|a| *a == "arg1"));
 
         let envs: Vec<_> = cmd.get_envs().collect();
-        assert!(envs
-            .iter()
-            .any(|(k, v)| *k == "MY_VAR" && *v == Some(std::ffi::OsStr::new("my_value"))));
+        assert!(
+            envs.iter()
+                .any(|(k, v)| *k == "MY_VAR" && *v == Some(std::ffi::OsStr::new("my_value")))
+        );
     }
 
     #[test]
@@ -123,9 +125,10 @@ mod tests {
         let env = vec![(API_TOKEN_ENV.to_string(), "secret".to_string())];
         let cmd = MultiScriptRunner::build_command(&script, &[], &env).unwrap();
 
-        assert!(cmd
-            .get_envs()
-            .any(|(k, v)| k == API_TOKEN_ENV && v.is_none()));
+        assert!(
+            cmd.get_envs()
+                .any(|(k, v)| k == API_TOKEN_ENV && v.is_none())
+        );
     }
 
     #[test]
@@ -144,7 +147,7 @@ mod tests {
         // Shim `python3` on an injected PATH must become the command program
         // as an absolute path, proving build_command threads env into
         // interpreter resolution (task 1755 wiring).
-        let shim_dir = crate::util::generated_executable_tempdir().unwrap();
+        let shim_dir = crate::util::exec::generated_executable_tempdir().unwrap();
         crate::adapters::system_checks::write_test_executable_shim(shim_dir.path(), "python3");
 
         let script_dir = TempDir::new().unwrap();
@@ -183,7 +186,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn test_build_command_resolves_bash_against_injected_path() {
-        let bin_dir = crate::util::generated_executable_tempdir().unwrap();
+        let bin_dir = crate::util::exec::generated_executable_tempdir().unwrap();
         for program in ["bash", "git", "jq"] {
             crate::adapters::system_checks::write_test_executable_shim(bin_dir.path(), program);
         }
@@ -203,7 +206,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn test_build_command_resolves_powershell_against_injected_path() {
-        let bin_dir = crate::util::generated_executable_tempdir().unwrap();
+        let bin_dir = crate::util::exec::generated_executable_tempdir().unwrap();
         let program = crate::runtime::powershell_program();
         crate::adapters::system_checks::write_test_executable_shim(bin_dir.path(), program);
 

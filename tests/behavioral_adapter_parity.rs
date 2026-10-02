@@ -3,7 +3,7 @@
 //! Family modules own real probes; this file owns deterministic fixture setup,
 //! adapter invocation and registry aggregation.
 
-mod support;
+pub mod support;
 
 #[path = "behavioral_parity/battery.rs"]
 mod battery;
@@ -14,13 +14,42 @@ mod env_history_queue;
 #[path = "behavioral_parity/node.rs"]
 mod node;
 
-use omakure::cli_http_parity::{ProbeEvidence, ProbeFixture};
 use serde_json::Value;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Output;
 use std::time::Duration;
 
-pub const API_TOKEN: &str = "behavioral-parity-token-000000000000000000000000";
+/// Fixture passed to every paired adapter probe. Probes derive paths, clock
+/// and actors from it rather than from wall-clock or random process state.
+pub struct ProbeFixture {
+    pub workspace: PathBuf,
+    pub repository: PathBuf,
+    pub clock_seconds: u64,
+    pub authorized_actor: String,
+    pub unauthenticated_actor: String,
+    pub forbidden_actor: String,
+}
+
+impl ProbeFixture {
+    fn new(workspace: &Path, repository: &Path) -> Self {
+        Self {
+            workspace: workspace.to_path_buf(),
+            repository: repository.to_path_buf(),
+            clock_seconds: omakure::direct_transport::unix_seconds(),
+            authorized_actor: "authorized".into(),
+            unauthenticated_actor: "unauthenticated".into(),
+            forbidden_actor: "forbidden".into(),
+        }
+    }
+}
+
+pub struct ProbeEvidence {
+    pub cli: Value,
+    pub http: Value,
+    /// Semantic mismatch probes name the manifest difference they exercised.
+    /// Exact probes leave this unset and are compared by the harness.
+    pub semantic_difference: Option<String>,
+}
 
 pub struct BehavioralContext {
     pub workspace: support::TestWorkspace,
@@ -33,19 +62,14 @@ impl BehavioralContext {
     pub fn new(label: &str, capabilities: &[&str]) -> Self {
         let workspace = support::TestWorkspace::new(label);
         let repository = support::TestWorkspace::new(&format!("{label}_repo"));
-        let mut args = Vec::with_capacity(capabilities.len() * 2);
-        for capability in capabilities {
-            args.extend(["--capability", *capability]);
-        }
         let server = support::HttpServer::start_with_args(
             workspace.path(),
-            API_TOKEN,
-            &args,
+            capabilities,
+            &[],
             &[],
             Duration::from_secs(10),
         );
-        let mut fixture = ProbeFixture::deterministic(workspace.path(), repository.path());
-        fixture.clock_seconds = omakure::enrollment::now_seconds();
+        let fixture = ProbeFixture::new(workspace.path(), repository.path());
         Self {
             workspace,
             repository,
@@ -73,7 +97,6 @@ impl BehavioralContext {
             &config_arg,
             "init",
         ])
-        .env("OMAKURE_API_TOKEN", API_TOKEN)
         .env("OMAKURE_NODE_TEST_MODE", "1")
         .env("OMAKURE_NODE_STATE_DIR", &state_arg)
         .env("OMAKURE_NODE_CONFIG", &config_arg);
@@ -105,22 +128,17 @@ impl BehavioralContext {
                 ))
                 .unwrap_or_else(|| envelope.to_string())
         );
-        let mut args = Vec::with_capacity(capabilities.len() * 2);
-        for capability in capabilities {
-            args.extend(["--capability", *capability]);
-        }
         let server = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             support::HttpServer::start_node_service(
                 workspace.path(),
-                API_TOKEN,
-                &args,
+                capabilities,
+                &[],
                 &[],
                 Duration::from_secs(10),
             )
         }))
         .unwrap_or_else(|_| panic!("node fixture {label} failed startup"));
-        let mut fixture = ProbeFixture::deterministic(workspace.path(), repository.path());
-        fixture.clock_seconds = omakure::enrollment::now_seconds();
+        let fixture = ProbeFixture::new(workspace.path(), repository.path());
         Self {
             workspace,
             repository,
@@ -132,7 +150,6 @@ impl BehavioralContext {
     pub fn derive(&self, suffix: &str, capabilities: &[&str]) -> Self {
         let mut derived = Self::new(&format!("parity_{suffix}"), capabilities);
         derived.fixture.clock_seconds = self.fixture.clock_seconds;
-        derived.fixture.generated_ids = self.fixture.generated_ids.clone();
         derived.fixture.authorized_actor = self.fixture.authorized_actor.clone();
         derived.fixture.unauthenticated_actor = self.fixture.unauthenticated_actor.clone();
         derived.fixture.forbidden_actor = self.fixture.forbidden_actor.clone();
@@ -142,7 +159,6 @@ impl BehavioralContext {
     pub fn derive_node(&self, suffix: &str, capabilities: &[&str]) -> Self {
         let mut derived = Self::new_node(&format!("parity_{suffix}"), capabilities);
         derived.fixture.clock_seconds = self.fixture.clock_seconds;
-        derived.fixture.generated_ids = self.fixture.generated_ids.clone();
         derived.fixture.authorized_actor = self.fixture.authorized_actor.clone();
         derived.fixture.unauthenticated_actor = self.fixture.unauthenticated_actor.clone();
         derived.fixture.forbidden_actor = self.fixture.forbidden_actor.clone();
@@ -165,7 +181,7 @@ impl BehavioralContext {
         self.fixture.clock_seconds
     }
     pub fn fresh_clock_seconds(&self) -> u64 {
-        omakure::enrollment::now_seconds()
+        omakure::direct_transport::unix_seconds()
     }
 
     pub fn cli(&self, args: &[&str]) -> Output {
@@ -173,16 +189,25 @@ impl BehavioralContext {
     }
 
     pub fn cli_with_env(&self, args: &[&str], envs: &[(&str, &str)]) -> Output {
+        self.cli_with_env_timeout(args, envs, Duration::from_secs(10))
+    }
+
+    pub fn cli_with_env_timeout(
+        &self,
+        args: &[&str],
+        envs: &[(&str, &str)],
+        timeout: Duration,
+    ) -> Output {
         let mut command = support::omakure_command();
         command
             .arg("--scripts-dir")
             .arg(self.workspace.path())
             .args(args)
-            .env("OMAKURE_API_TOKEN", API_TOKEN);
+            .env("OMAKURE_API_TOKEN", support::api_token());
         for (key, value) in envs {
             command.env(key, value);
         }
-        support::command_with_timeout(&mut command, Duration::from_secs(10))
+        support::command_with_timeout(&mut command, timeout)
     }
 
     pub fn cli_json(&self, args: &[&str]) -> Value {
@@ -389,10 +414,10 @@ fn derived_contexts_retain_fixture_actor_and_clock_values() {
 #[test]
 fn fresh_clock_seconds_is_current_and_monotonic() {
     let context = BehavioralContext::new("parity_fresh_clock", &["config:read"]);
-    let before = omakure::enrollment::now_seconds();
+    let before = omakure::direct_transport::unix_seconds();
     let first = context.fresh_clock_seconds();
     let second = context.fresh_clock_seconds();
-    let after = omakure::enrollment::now_seconds();
+    let after = omakure::direct_transport::unix_seconds();
 
     assert!(
         before <= first && first <= second && second <= after,

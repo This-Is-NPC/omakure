@@ -1,0 +1,230 @@
+use std::ffi::{CStr, CString, OsStr};
+use std::fs::File;
+use std::fs::OpenOptions;
+use std::io;
+use std::os::fd::{AsRawFd, FromRawFd};
+use std::os::unix::ffi::OsStrExt;
+use std::os::unix::fs::OpenOptionsExt;
+use std::path::Path;
+
+#[derive(Debug)]
+pub(crate) enum FsError {
+    Nul,
+    Io(io::Error),
+}
+
+fn cstring(value: &OsStr) -> Result<CString, FsError> {
+    CString::new(value.as_bytes()).map_err(|_| FsError::Nul)
+}
+
+pub(crate) fn open_existing_file_read(path: &Path) -> io::Result<File> {
+    OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(path)
+}
+
+pub(crate) fn open_dir_no_follow(path: &Path) -> Result<File, FsError> {
+    let path = cstring(path.as_os_str())?;
+    let fd = unsafe {
+        libc::open(
+            path.as_ptr(),
+            libc::O_RDONLY | libc::O_DIRECTORY | libc::O_CLOEXEC | libc::O_NOFOLLOW,
+        )
+    };
+    if fd < 0 {
+        return Err(FsError::Io(io::Error::last_os_error()));
+    }
+    Ok(unsafe { File::from_raw_fd(fd) })
+}
+
+pub(crate) fn create_new_file_at(parent: &File, name: &OsStr) -> Result<File, FsError> {
+    let name = cstring(name)?;
+    let fd = unsafe {
+        libc::openat(
+            parent.as_raw_fd(),
+            name.as_ptr(),
+            libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL | libc::O_CLOEXEC,
+            0o600,
+        )
+    };
+    if fd < 0 {
+        return Err(FsError::Io(io::Error::last_os_error()));
+    }
+    Ok(unsafe { File::from_raw_fd(fd) })
+}
+
+pub(crate) fn open_existing_file_at_no_follow(
+    parent: &File,
+    name: &OsStr,
+) -> Result<File, FsError> {
+    let name = cstring(name)?;
+    let fd = unsafe {
+        libc::openat(
+            parent.as_raw_fd(),
+            name.as_ptr(),
+            libc::O_RDONLY | libc::O_CLOEXEC | libc::O_NOFOLLOW,
+        )
+    };
+    if fd < 0 {
+        return Err(FsError::Io(io::Error::last_os_error()));
+    }
+    Ok(unsafe { File::from_raw_fd(fd) })
+}
+
+pub(crate) fn renameat_file(parent: &File, from: &OsStr, to: &OsStr) -> Result<(), FsError> {
+    let from = cstring(from)?;
+    let to = cstring(to)?;
+    let rc = unsafe {
+        libc::renameat(
+            parent.as_raw_fd(),
+            from.as_ptr(),
+            parent.as_raw_fd(),
+            to.as_ptr(),
+        )
+    };
+    if rc == 0 {
+        Ok(())
+    } else {
+        Err(FsError::Io(io::Error::last_os_error()))
+    }
+}
+
+pub(crate) fn linkat_file(parent: &File, from: &OsStr, to: &OsStr) -> Result<(), FsError> {
+    let from = cstring(from)?;
+    let to = cstring(to)?;
+    let rc = unsafe {
+        libc::linkat(
+            parent.as_raw_fd(),
+            from.as_ptr(),
+            parent.as_raw_fd(),
+            to.as_ptr(),
+            0,
+        )
+    };
+    if rc == 0 {
+        Ok(())
+    } else {
+        Err(FsError::Io(io::Error::last_os_error()))
+    }
+}
+
+pub(crate) fn unlinkat_file(parent: &File, name: &OsStr) -> Result<(), FsError> {
+    let name = cstring(name)?;
+    let rc = unsafe { libc::unlinkat(parent.as_raw_fd(), name.as_ptr(), 0) };
+    if rc == 0 {
+        Ok(())
+    } else {
+        Err(FsError::Io(io::Error::last_os_error()))
+    }
+}
+
+/// Create a private directory with the platform's atomic creation mode.
+pub(crate) fn mkdir_private(path: &CStr) -> io::Result<()> {
+    let status = unsafe { libc::mkdir(path.as_ptr(), 0o700) };
+    if status == 0 {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error())
+    }
+}
+
+pub(crate) fn effective_owner() -> (u32, u32) {
+    (unsafe { libc::geteuid() }, unsafe { libc::getegid() })
+}
+
+/// Perform one reentrant passwd lookup. The caller owns retry bounds and errors.
+pub(crate) fn user_id_by_name(name: &CStr, buffer: &mut [u8]) -> Result<Option<u32>, i32> {
+    let mut entry = unsafe { std::mem::zeroed::<libc::passwd>() };
+    let mut result = std::ptr::null_mut();
+    let status = unsafe {
+        libc::getpwnam_r(
+            name.as_ptr(),
+            &mut entry,
+            buffer.as_mut_ptr().cast(),
+            buffer.len(),
+            &mut result,
+        )
+    };
+    if status != 0 {
+        Err(status)
+    } else {
+        Ok((!result.is_null()).then_some(entry.pw_uid))
+    }
+}
+
+/// Perform one reentrant group lookup. The caller owns retry bounds and errors.
+pub(crate) fn group_id_by_name(name: &CStr, buffer: &mut [u8]) -> Result<Option<u32>, i32> {
+    let mut entry = unsafe { std::mem::zeroed::<libc::group>() };
+    let mut result = std::ptr::null_mut();
+    let status = unsafe {
+        libc::getgrnam_r(
+            name.as_ptr(),
+            &mut entry,
+            buffer.as_mut_ptr().cast(),
+            buffer.len(),
+            &mut result,
+        )
+    };
+    if status != 0 {
+        Err(status)
+    } else {
+        Ok((!result.is_null()).then_some(entry.gr_gid))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Read;
+    use std::os::unix::fs::symlink;
+
+    #[test]
+    fn no_follow_open_rejects_symlinks_and_nul_components() {
+        let temp = tempfile::tempdir().unwrap();
+        let directory = temp.path().join("directory");
+        std::fs::create_dir(&directory).unwrap();
+        let directory_link = temp.path().join("directory-link");
+        symlink(&directory, &directory_link).unwrap();
+        assert!(matches!(
+            open_dir_no_follow(&directory_link),
+            Err(FsError::Io(_))
+        ));
+
+        let parent = open_dir_no_follow(&directory).unwrap();
+        std::fs::write(directory.join("target"), "safe").unwrap();
+        symlink("target", directory.join("target-link")).unwrap();
+        assert!(matches!(
+            open_existing_file_at_no_follow(&parent, OsStr::new("target-link")),
+            Err(FsError::Io(error)) if error.raw_os_error() == Some(libc::ELOOP)
+        ));
+        assert!(matches!(
+            create_new_file_at(&parent, OsStr::from_bytes(b"invalid\0name")),
+            Err(FsError::Nul)
+        ));
+        assert_eq!(
+            std::fs::read_to_string(directory.join("target")).unwrap(),
+            "safe"
+        );
+    }
+
+    #[test]
+    fn path_open_rejects_final_symlink_and_reads_regular_file() {
+        let temp = tempfile::tempdir().unwrap();
+        let target = temp.path().join("target");
+        let link = temp.path().join("link");
+        std::fs::write(&target, "safe").unwrap();
+        symlink(&target, &link).unwrap();
+
+        assert_eq!(
+            open_existing_file_read(&link).unwrap_err().raw_os_error(),
+            Some(libc::ELOOP)
+        );
+        let mut contents = String::new();
+        open_existing_file_read(&target)
+            .unwrap()
+            .read_to_string(&mut contents)
+            .unwrap();
+        assert_eq!(contents, "safe");
+    }
+}

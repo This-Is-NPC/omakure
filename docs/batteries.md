@@ -37,7 +37,6 @@ first command that fetches it.
 
 ## Non-Goals
 
-- No legacy compatibility layer, migration, alias, or fallback behavior.
 - No direct execution from a Battery cache checkout.
 - No submodule checkout by default.
 - No manifest generator, hook, or repository-provided code execution during

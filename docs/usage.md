@@ -20,9 +20,9 @@ omakure --scripts-dir /path/to/workspace --json scripts
 ```
 
 The workspace is selected by `--scripts-dir`, then `OMAKURE_SCRIPTS_DIR`, then
-legacy environment overrides, then the debug `scripts/workspace` fixture and
-platform defaults. A positional path is not accepted and must not be
-reintroduced as a headless alias.
+the debug `scripts/workspace` fixture and platform defaults. A bare positional
+argument does not select the workspace root; script commands accept names and
+paths confined to the selected workspace.
 
 `check` is the visible alias for the same workspace diagnostics:
 
@@ -109,8 +109,9 @@ certification belong to [Deployment](deployment.md).
 API-only mode:
 
 ```bash
-export OMAKURE_API_TOKEN="$(openssl rand -hex 32)"
-omakure api --capability all
+omakure token generate --id local --scope '*' \
+  --append secrets/omakure_tokens.toml --confirmed
+omakure api --tokens-file secrets/omakure_tokens.toml
 ```
 
 The recommended single-process deployment is:
@@ -121,8 +122,8 @@ omakure node serve --workers 1 --tokens-file /run/secrets/omakure_tokens.toml
 ```
 
 The default bind is `127.0.0.1:7878`; non-loopback binding requires
-`--allow-non-loopback`. Prefer tokens-file auth with per-token scopes. Legacy
-`OMAKURE_API_TOKEN` plus `--capability` remains available for local migration.
+`--allow-non-loopback`. Both commands require a tokens file with per-token
+scopes.
 
 Unauthenticated probes:
 

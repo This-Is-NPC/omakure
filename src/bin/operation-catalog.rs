@@ -1,3 +1,4 @@
+use omakure::cli::command_metadata::current_cli_ids;
 use omakure::operation_catalog::{
     self, CatalogError, DOCS_PATH, MANIFEST_PATH, SUPPORT_MATRIX_PATH,
 };
@@ -14,7 +15,7 @@ fn main() {
 
 fn run() -> Result<(), CatalogError> {
     let root = PathBuf::from(env::var_os("MISE_PROJECT_ROOT").unwrap_or_else(|| ".".into()));
-    let catalog = operation_catalog::validate_current()?;
+    let catalog = operation_catalog::validate_current(&current_cli_ids())?;
     let command = env::args().nth(1).unwrap_or_else(|| "--write".into());
     let docs = operation_catalog::render_markdown(&catalog);
     let support_matrix = operation_catalog::render_support_matrix(&catalog);
@@ -36,7 +37,7 @@ fn run() -> Result<(), CatalogError> {
         other => {
             return Err(CatalogError::Parse(format!(
                 "unknown argument {other}; expected --write or --check"
-            )))
+            )));
         }
     }
     println!("operation catalog {command}: {MANIFEST_PATH}, {DOCS_PATH}, {SUPPORT_MATRIX_PATH}");

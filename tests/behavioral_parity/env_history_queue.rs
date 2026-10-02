@@ -1,8 +1,7 @@
 //! Real paired probes for history, queue, and managed-environment adapters.
 
-use super::{evidence, require_path, BehavioralContext};
-use omakure::cli_http_parity::ProbeEvidence;
-use serde_json::{json, Value};
+use super::{BehavioralContext, ProbeEvidence, evidence, require_path};
+use serde_json::{Value, json};
 use std::time::Duration;
 
 use super::support::AuthMode;
@@ -86,7 +85,7 @@ fn auth_projection(
     let denied_workspace = super::support::TestWorkspace::new(&denied_label);
     let denied_server = super::support::HttpServer::start_with_args(
         denied_workspace.path(),
-        super::API_TOKEN,
+        &[],
         &[],
         &[],
         Duration::from_secs(10),
@@ -95,7 +94,7 @@ fn auth_projection(
         method,
         path,
         body.map(|value| value.to_string()),
-        AuthMode::Bearer(super::API_TOKEN),
+        AuthMode::Bearer(super::support::api_token()),
     );
     json!({
         "unauthenticated_rejected": missing.status == 401,

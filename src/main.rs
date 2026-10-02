@@ -5,7 +5,9 @@ use std::env;
 use std::error::Error;
 use std::path::PathBuf;
 
-fn scripts_dir_for(name: &str) -> PathBuf {
+fn default_scripts_dir() -> PathBuf {
+    let name = "omakure-scripts";
+
     #[cfg(windows)]
     {
         if let Some(documents) = windows_documents_dir() {
@@ -29,8 +31,8 @@ fn scripts_dir_for(name: &str) -> PathBuf {
 
 #[cfg(windows)]
 fn windows_documents_dir() -> Option<PathBuf> {
-    use winreg::enums::HKEY_CURRENT_USER;
     use winreg::RegKey;
+    use winreg::enums::HKEY_CURRENT_USER;
 
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let subkeys = [
@@ -39,12 +41,12 @@ fn windows_documents_dir() -> Option<PathBuf> {
     ];
 
     for subkey in subkeys {
-        if let Ok(key) = hkcu.open_subkey(subkey) {
-            if let Ok(value) = key.get_value::<String, _>("Personal") {
-                let trimmed = value.trim();
-                if !trimmed.is_empty() {
-                    return Some(PathBuf::from(expand_windows_env_vars(trimmed)));
-                }
+        if let Ok(key) = hkcu.open_subkey(subkey)
+            && let Ok(value) = key.get_value::<String, _>("Personal")
+        {
+            let trimmed = value.trim();
+            if !trimmed.is_empty() {
+                return Some(PathBuf::from(expand_windows_env_vars(trimmed)));
             }
         }
     }
@@ -65,7 +67,7 @@ fn expand_windows_env_vars(value: &str) -> String {
 
         let mut name = String::new();
         let mut found_end = false;
-        while let Some(next) = chars.next() {
+        for next in chars.by_ref() {
             if next == '%' {
                 found_end = true;
                 break;
@@ -96,20 +98,8 @@ fn expand_windows_env_vars(value: &str) -> String {
     output
 }
 
-fn default_scripts_dir() -> PathBuf {
-    scripts_dir_for("omakure-scripts")
-}
-
 fn scripts_dir() -> PathBuf {
     if let Ok(dir) = env::var("OMAKURE_SCRIPTS_DIR") {
-        return PathBuf::from(dir);
-    }
-
-    if let Ok(dir) = env::var("OVERTURE_SCRIPTS_DIR") {
-        return PathBuf::from(dir);
-    }
-
-    if let Ok(dir) = env::var("CLOUD_MGMT_SCRIPTS_DIR") {
         return PathBuf::from(dir);
     }
 
@@ -120,21 +110,7 @@ fn scripts_dir() -> PathBuf {
         }
     }
 
-    let default_dir = default_scripts_dir();
-    if default_dir.is_dir() {
-        return default_dir;
-    }
-
-    for legacy_dir in [
-        scripts_dir_for("overture-scripts"),
-        scripts_dir_for("cloud-mgmt-scripts"),
-    ] {
-        if legacy_dir.is_dir() {
-            return legacy_dir;
-        }
-    }
-
-    default_dir
+    default_scripts_dir()
 }
 
 /// Run a Lua script in the embedded runtime and exit.
@@ -217,11 +193,11 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     let Some(command) = cli.command else {
         if json_output {
-            cli::json::print_err(
+            cli::emit::exit_with_error(
+                json_output,
                 cli::json::codes::INVALID_ARGUMENT,
                 "a subcommand is required; use `omakure --help` for usage",
             );
-            std::process::exit(1);
         }
 
         use clap::CommandFactory;
@@ -261,7 +237,7 @@ fn run() -> Result<(), Box<dyn Error>> {
 
 fn generate_completions(shell: Shell) {
     use clap::CommandFactory;
-    use clap_complete::{generate, Shell as ClapShell};
+    use clap_complete::{Shell as ClapShell, generate};
 
     let mut cmd = Cli::command();
     let shell = match shell {

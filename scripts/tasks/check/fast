@@ -20,6 +20,7 @@ for script in \
     scripts/tasks/atomic/git-hook-contract \
     scripts/tasks/atomic/fmt \
     scripts/tasks/atomic/clippy \
+    scripts/tasks/atomic/test-target \
     scripts/tasks/atomic/test-lib
 do
     require_script "$script"
@@ -41,5 +42,7 @@ printf 'check:fast: formatting\n'
 "$root/scripts/tasks/atomic/fmt"
 printf 'check:fast: Clippy\n'
 "$root/scripts/tasks/atomic/clippy"
+printf 'check:fast: architecture contract\n'
+"$root/scripts/tasks/atomic/test-target" architecture_contract
 printf 'check:fast: library tests\n'
 exec "$root/scripts/tasks/atomic/test-lib"

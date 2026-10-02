@@ -6,17 +6,18 @@
 //! can never silently persist sensitive data.
 
 use super::bounds::{
-    BASELINE_ID_HEX_CHARS, CAPABILITY_ALLOWLIST, MAX_AGENT_VERSION_BYTES, MAX_ARRAY_LENGTH,
-    MAX_CAPABILITY_BYTES, MAX_CAPABILITY_COUNT, MAX_DISPLAY_NAME_BYTES, MAX_DISTRO_ID_BYTES,
-    MAX_DISTRO_VERSION_BYTES, MAX_EXIT_CODE, MAX_FIELD_NAME_BYTES, MAX_JSON_DEPTH,
-    MAX_PAYLOAD_FIELDS, MAX_QUEUE_DEPTH, MAX_RUNTIME_COUNT, MAX_SAFE_INTEGER, MAX_SCRIPT_BYTES,
-    MAX_STRING_BYTES, MAX_UPTIME_SECONDS, MAX_WORKERS, MIN_EXIT_CODE, NODE_ID_BYTES,
+    BASELINE_ID_HEX_CHARS, MAX_AGENT_VERSION_BYTES, MAX_ARRAY_LENGTH, MAX_DISPLAY_NAME_BYTES,
+    MAX_DISTRO_ID_BYTES, MAX_DISTRO_VERSION_BYTES, MAX_EXIT_CODE, MAX_FIELD_NAME_BYTES,
+    MAX_JSON_DEPTH, MAX_PAYLOAD_FIELDS, MAX_QUEUE_DEPTH, MAX_RUNTIME_COUNT, MAX_SAFE_INTEGER,
+    MAX_SCRIPT_BYTES, MAX_STRING_BYTES, MAX_UPTIME_SECONDS, MAX_WORKERS, MIN_EXIT_CODE,
     OPAQUE_ID_HEX_CHARS, RUNTIME_NAMES,
 };
 use super::model::{
     AckBody, ErrorBody, HealthBody, HealthCode, HealthKind, HealthPayload, ProfileSnapshot,
     PulseSnapshot, RunFact, RunnerFact, RuntimeFact, SignalKind, SignalRecord,
 };
+use crate::domain::is_node_id;
+use crate::util::hex;
 use serde_json::{Map, Value};
 
 const RUN_STATES: [&str; 5] = [
@@ -159,14 +160,10 @@ fn hex16(value: Option<&Value>) -> Result<String, HealthCode> {
     let text = value
         .and_then(Value::as_str)
         .ok_or(HealthCode::InvalidMessage)?;
-    if text.len() != OPAQUE_ID_HEX_CHARS || !text.bytes().all(is_lower_hex) {
+    if text.len() != OPAQUE_ID_HEX_CHARS || !hex::is_lower(text) {
         return Err(HealthCode::InvalidMessage);
     }
     Ok(text.to_string())
-}
-
-fn is_lower_hex(byte: u8) -> bool {
-    byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)
 }
 
 /// A baseline identity as the Profile carries it: empty, or the exact width
@@ -179,8 +176,7 @@ fn baseline_id_field(value: Option<&Value>) -> Result<String, HealthCode> {
     let text = value
         .and_then(Value::as_str)
         .ok_or(HealthCode::InvalidMessage)?;
-    if !text.is_empty() && (text.len() != BASELINE_ID_HEX_CHARS || !text.bytes().all(is_lower_hex))
-    {
+    if !text.is_empty() && (text.len() != BASELINE_ID_HEX_CHARS || !hex::is_lower(text)) {
         return Err(HealthCode::InvalidMessage);
     }
     Ok(text.to_string())
@@ -190,10 +186,7 @@ fn node_id_field(value: Option<&Value>) -> Result<String, HealthCode> {
     let text = value
         .and_then(Value::as_str)
         .ok_or(HealthCode::InvalidMessage)?;
-    if text.len() != NODE_ID_BYTES
-        || !text.starts_with("omk1_")
-        || !text[5..].bytes().all(is_lower_hex)
-    {
+    if !is_node_id(text) {
         return Err(HealthCode::InvalidMessage);
     }
     Ok(text.to_string())
@@ -364,22 +357,12 @@ fn validate_profile(object: &Map<String, Value>) -> Result<ProfileSnapshot, Heal
         .get("capabilities")
         .and_then(Value::as_array)
         .ok_or(HealthCode::InvalidMessage)?;
-    if entries.len() > MAX_CAPABILITY_COUNT {
-        return Err(HealthCode::InvalidMessage);
-    }
-    let mut capabilities = Vec::with_capacity(entries.len());
-    let mut previous = "";
-    for entry in entries {
-        let text = entry.as_str().ok_or(HealthCode::InvalidMessage)?;
-        if text.len() > MAX_CAPABILITY_BYTES
-            || !CAPABILITY_ALLOWLIST.contains(&text)
-            || text <= previous
-        {
-            return Err(HealthCode::InvalidMessage);
-        }
-        previous = text;
-        capabilities.push(text.to_string());
-    }
+    let capabilities = entries
+        .iter()
+        .map(|entry| entry.as_str().ok_or(HealthCode::InvalidMessage))
+        .collect::<Result<Vec<_>, _>>()?;
+    crate::domain::check_capability_list(&capabilities).map_err(|_| HealthCode::InvalidMessage)?;
+    let capabilities: Vec<String> = capabilities.into_iter().map(str::to_string).collect();
     let display_name = object
         .get("display_name")
         .and_then(Value::as_str)

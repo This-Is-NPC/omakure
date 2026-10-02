@@ -1,0 +1,183 @@
+use std::path::Path;
+use std::process::{Command, Output};
+use std::time::{Duration, Instant};
+
+const COMPOSE_OPERATION_TIMEOUT: &str = "120s";
+const COMPOSE_BUILD_TIMEOUT: &str = "1800s";
+#[cfg(not(windows))]
+pub const BOUNDED_RUNNER: &str = "scripts/tasks/atomic/run-bounded";
+
+pub fn compose_project_name(label: &str) -> String {
+    format!("omakure-{label}-{}", std::process::id())
+}
+
+fn bounded_command_within(program: &str, budget: &str) -> Command {
+    #[cfg(windows)]
+    {
+        let _ = budget;
+        Command::new(program)
+    }
+    #[cfg(not(windows))]
+    {
+        let mut command = Command::new("bash");
+        command
+            .current_dir(env!("CARGO_MANIFEST_DIR"))
+            .args([BOUNDED_RUNNER, budget, program]);
+        command
+    }
+}
+
+pub fn bounded_command(program: &str) -> Command {
+    bounded_command_within(program, COMPOSE_OPERATION_TIMEOUT)
+}
+
+fn compose_timeout(args: &[&str]) -> &'static str {
+    if args.contains(&"--build") {
+        COMPOSE_BUILD_TIMEOUT
+    } else {
+        COMPOSE_OPERATION_TIMEOUT
+    }
+}
+
+pub fn compose_command(
+    root: &Path,
+    apply_env: impl FnOnce(&mut Command),
+    prefix: &[&str],
+    args: &[&str],
+) -> Command {
+    let mut command = bounded_command_within("docker", compose_timeout(args));
+    apply_env(&mut command);
+    command
+        .current_dir(root)
+        .arg("compose")
+        .args(prefix)
+        .args(args);
+    command
+}
+
+pub fn wait_until(timeout: Duration, interval: Duration, mut ready: impl FnMut() -> bool) -> bool {
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        if ready() {
+            return true;
+        }
+        std::thread::sleep(interval);
+    }
+    false
+}
+
+pub fn cleanup_project(
+    project: &str,
+    down_args: &[&str],
+    compose: impl FnOnce(&[&str]) -> Output,
+) -> Result<(), String> {
+    let mut failures = Vec::new();
+    let down = compose(down_args);
+    if !down.status.success() {
+        failures.push(format!(
+            "compose down status={} stderr={}",
+            down.status,
+            safe_stderr(&down)
+        ));
+    }
+    for resource in ["container", "network", "volume"] {
+        let output = bounded_command("docker")
+            .args([
+                resource,
+                "ls",
+                "-q",
+                "--filter",
+                &format!("label=com.docker.compose.project={project}"),
+            ])
+            .output();
+        match output {
+            Ok(output) if !output.status.success() => failures.push(format!(
+                "inspect {resource} status={} stderr={}",
+                output.status,
+                safe_stderr(&output)
+            )),
+            Ok(output) if !String::from_utf8_lossy(&output.stdout).trim().is_empty() => {
+                failures.push(format!("project-labeled {resource} remains"));
+            }
+            Ok(_) => {}
+            Err(error) => failures.push(format!("inspect {resource}: {error}")),
+        }
+    }
+    cleanup_result(failures)
+}
+
+fn cleanup_result(failures: Vec<String>) -> Result<(), String> {
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(failures.join("; "))
+    }
+}
+
+pub fn safe_stderr(output: &Output) -> String {
+    String::from_utf8_lossy(&output.stderr).trim().to_string()
+}
+
+pub fn safe_generation_stderr(output: &Output) -> String {
+    let stderr = safe_stderr(output);
+    let lower = stderr.to_ascii_lowercase();
+    assert!(
+        !lower.contains("bearer ") && !lower.contains("$argon2") && !lower.contains("token ="),
+        "token generation stderr contained sensitive material"
+    );
+    stderr
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cleanup_reports_all_failures() {
+        let error = cleanup_result(vec!["down failed".into(), "volume remains".into()])
+            .expect_err("cleanup failure should be returned");
+        assert!(error.contains("down failed"));
+        assert!(error.contains("volume remains"));
+    }
+
+    #[test]
+    fn compose_command_keeps_build_budget_and_child_only_environment() {
+        let command = compose_command(
+            Path::new("/workspace"),
+            |command| {
+                command.env("OMAKURE_ENROLLMENT_TARGET_TOKENS_FILE", "target.tokens");
+            },
+            &["-p", "project"],
+            &["up", "--build", "-d"],
+        );
+        let args: Vec<_> = command
+            .get_args()
+            .map(|arg| arg.to_string_lossy())
+            .collect();
+        #[cfg(not(windows))]
+        assert_eq!(
+            args,
+            [
+                super::BOUNDED_RUNNER,
+                "1800s",
+                "docker",
+                "compose",
+                "-p",
+                "project",
+                "up",
+                "--build",
+                "-d"
+            ]
+        );
+        #[cfg(windows)]
+        {
+            assert_eq!(command.get_program(), "docker");
+            assert_eq!(args, ["compose", "-p", "project", "up", "--build", "-d"]);
+        }
+        assert!(
+            command
+                .get_envs()
+                .any(|(key, _)| key == "OMAKURE_ENROLLMENT_TARGET_TOKENS_FILE")
+        );
+    }
+}

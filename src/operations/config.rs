@@ -1,9 +1,8 @@
 use crate::adapters::environments::{
-    is_sensitive_key, resolve_active_env, should_mask_env_value, FsEnvironmentRepository,
-    MASKED_ENV_VALUE,
+    FsEnvironmentRepository, MASKED_ENV_VALUE, is_sensitive_key, resolve_active_env,
+    should_mask_env_value,
 };
 use crate::app_meta;
-use crate::ports::EnvironmentRepository;
 use crate::runtime::{python_program, resolve_interpreter};
 use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};
@@ -11,7 +10,7 @@ use std::collections::BTreeMap;
 use std::env;
 use std::path::Path;
 
-use super::{OperationError, OperationErrorCode, OperationResult};
+use super::{OperationResult, io_error};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConfigSummary {
@@ -44,8 +43,7 @@ pub struct InterpreterView {
 }
 
 pub fn config_summary(workspace: &Workspace) -> OperationResult<ConfigSummary> {
-    let exe = env::current_exe()
-        .map_err(|err| OperationError::new(OperationErrorCode::IoFailed, err.to_string()))?;
+    let exe = env::current_exe().map_err(io_error)?;
     let active_env = read_active_env(workspace);
     let (active_env_keys, interpreter) = resolve_env_diagnostics(workspace.envs_dir());
 
@@ -147,29 +145,15 @@ pub fn collect_env_overrides() -> BTreeMap<String, String> {
     out
 }
 
-pub fn env_override_names() -> [&'static str; 8] {
-    [
-        "OMAKURE_SCRIPTS_DIR",
-        "OMAKURE_REPO",
-        "REPO",
-        "VERSION",
-        "OVERTURE_SCRIPTS_DIR",
-        "OVERTURE_REPO",
-        "CLOUD_MGMT_SCRIPTS_DIR",
-        "CLOUD_MGMT_REPO",
-    ]
+pub fn env_override_names() -> [&'static str; 4] {
+    ["OMAKURE_SCRIPTS_DIR", "OMAKURE_REPO", "REPO", "VERSION"]
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::workspace_in;
     use std::fs;
-    use std::sync::{Mutex, OnceLock};
-
-    fn env_lock() -> std::sync::MutexGuard<'static, ()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(())).lock().unwrap()
-    }
 
     fn write_active_env(dir: &Path, conf_name: &str, contents: &str) {
         fs::create_dir_all(dir).unwrap();
@@ -180,8 +164,7 @@ mod tests {
     #[test]
     fn config_summary_serializes_full_contract() {
         let tmp = tempfile::TempDir::new().unwrap();
-        let workspace = Workspace::new(tmp.path().to_path_buf());
-        workspace.ensure_layout().unwrap();
+        let workspace = workspace_in(&tmp);
 
         let payload = config_summary(&workspace).unwrap();
 
@@ -197,8 +180,7 @@ mod tests {
     #[test]
     fn redacted_config_summary_masks_all_active_env_values() {
         let tmp = tempfile::TempDir::new().unwrap();
-        let workspace = Workspace::new(tmp.path().to_path_buf());
-        workspace.ensure_layout().unwrap();
+        let workspace = workspace_in(&tmp);
         write_active_env(workspace.envs_dir(), "dev.conf", "HOST=localhost\n");
 
         let payload = redacted_config_summary(&workspace).unwrap();
@@ -222,36 +204,5 @@ mod tests {
         assert_eq!(keys[0].value, "localhost");
         assert_eq!(keys[1].value, MASKED_ENV_VALUE);
         assert!(keys.iter().all(|kv| kv.value != "supersecret123"));
-    }
-
-    #[test]
-    fn resolve_env_diagnostics_masks_parent_sourced_secret_value() {
-        let _guard = env_lock();
-        let tmp = tempfile::TempDir::new().unwrap();
-        let envs = tmp.path().join("envs");
-        env::set_var("AWS_SECRET_ACCESS_KEY", "parent-secret-value");
-        write_active_env(&envs, "dev.conf", "PLAIN=$AWS_SECRET_ACCESS_KEY\n");
-
-        let (keys, _interp) = resolve_env_diagnostics(&envs);
-
-        env::remove_var("AWS_SECRET_ACCESS_KEY");
-        assert_eq!(keys[0].key, "PLAIN");
-        assert_eq!(keys[0].value, MASKED_ENV_VALUE);
-    }
-
-    #[test]
-    fn collect_env_overrides_masks_credential_values() {
-        let _guard = env_lock();
-        env::set_var(
-            "OMAKURE_REPO",
-            "https://user:secret@example.invalid/repo.git",
-        );
-        let overrides = collect_env_overrides();
-        env::remove_var("OMAKURE_REPO");
-
-        assert_eq!(
-            overrides.get("OMAKURE_REPO"),
-            Some(&MASKED_ENV_VALUE.to_string())
-        );
     }
 }

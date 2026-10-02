@@ -1,29 +1,26 @@
-mod support;
+pub mod support;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::fs;
 use std::path::Path;
-use std::process::Output;
 use std::time::Duration;
+use support::{assert_no_plaintext, assert_success};
 
-const API_TOKEN: &str = "http-api-e2e-token-with-enough-entropy-0001";
 const SECRET_DEFAULT: &str = "http-schema-secret-default-plain-value";
 const QUEUE_SECRET: &str = "http-queue-secret-provider-plain-value";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RouteCoverage {
     Covered(&'static str),
-    #[allow(dead_code)]
-    Excluded(&'static str),
 }
 
-/// Inventory of every `(method, route)` declared by `src/cli/api.rs` router.
+/// Inventory of every `(method, route)` declared by `src/inventory/routes.rs`.
 /// Coverage notes stay here; the route list itself is parsed from
-/// `HTTP_ROUTE_INVENTORY` markers in `src/cli/api.rs`.
+/// `HTTP_ROUTE_INVENTORY` markers in `src/inventory/routes.rs`.
 ///
 /// Coverage-guarantee boundary: this is a DRIFT TRIPWIRE. The keys are asserted
 /// to equal `HTTP_ROUTE_INVENTORY` (and that inventory is asserted equal to the
-/// router's `.route(...)` registrations in `src/cli/api.rs`), so a route added
+/// router's `.route(...)` registrations in `src/cli/api/router.rs`), so a route added
 /// to the router without an inventory entry fails the suite. The
 /// `Covered("test_name")` note is a human-authored pointer — it is NOT asserted
 /// to reference a test that actually calls the route. A route can be "listed
@@ -66,7 +63,7 @@ const HTTP_ROUTE_COVERAGE_NOTES: &[((&str, &str), RouteCoverage)] = &[
         RouteCoverage::Covered("scripts_search_tree_family_routes"),
     ),
     (
-        ("GET", "/v1/tree/*path"),
+        ("GET", "/v1/tree/{*path}"),
         RouteCoverage::Covered("scripts_search_tree_family_routes"),
     ),
     (
@@ -74,7 +71,7 @@ const HTTP_ROUTE_COVERAGE_NOTES: &[((&str, &str), RouteCoverage)] = &[
         RouteCoverage::Covered("scripts_search_tree_family_routes"),
     ),
     (
-        ("GET", "/v1/scripts/*script_id"),
+        ("GET", "/v1/scripts/{*script_id}"),
         RouteCoverage::Covered("scripts_search_tree_family_routes (+ /schema /content)"),
     ),
     (
@@ -90,31 +87,31 @@ const HTTP_ROUTE_COVERAGE_NOTES: &[((&str, &str), RouteCoverage)] = &[
         RouteCoverage::Covered("envs_family_routes"),
     ),
     (
-        ("GET", "/v1/envs/:name"),
+        ("GET", "/v1/envs/{name}"),
         RouteCoverage::Covered("envs_family_routes"),
     ),
     (
-        ("PUT", "/v1/envs/:name"),
+        ("PUT", "/v1/envs/{name}"),
         RouteCoverage::Covered("envs_family_routes"),
     ),
     (
-        ("PATCH", "/v1/envs/:name"),
+        ("PATCH", "/v1/envs/{name}"),
         RouteCoverage::Covered("envs_family_routes"),
     ),
     (
-        ("DELETE", "/v1/envs/:name"),
+        ("DELETE", "/v1/envs/{name}"),
         RouteCoverage::Covered("envs_family_routes"),
     ),
     (
-        ("POST", "/v1/envs/:name/activate"),
+        ("POST", "/v1/envs/{name}/activate"),
         RouteCoverage::Covered("envs_family_routes"),
     ),
     (
-        ("PUT", "/v1/envs/:name/params/:key"),
+        ("PUT", "/v1/envs/{name}/params/{key}"),
         RouteCoverage::Covered("envs_family_routes"),
     ),
     (
-        ("DELETE", "/v1/envs/:name/params/:key"),
+        ("DELETE", "/v1/envs/{name}/params/{key}"),
         RouteCoverage::Covered("envs_family_routes"),
     ),
     (
@@ -126,19 +123,19 @@ const HTTP_ROUTE_COVERAGE_NOTES: &[((&str, &str), RouteCoverage)] = &[
         RouteCoverage::Covered("runs_queue_family_routes + secret tests"),
     ),
     (
-        ("GET", "/v1/runs/:run_id"),
+        ("GET", "/v1/runs/{run_id}"),
         RouteCoverage::Covered("runs_queue_family_routes + secret tests"),
     ),
     (
-        ("GET", "/v1/runs/:run_id/traces"),
+        ("GET", "/v1/runs/{run_id}/traces"),
         RouteCoverage::Covered("runs_queue_family_routes"),
     ),
     (
-        ("POST", "/v1/runs/:run_id/cancel"),
+        ("POST", "/v1/runs/{run_id}/cancel"),
         RouteCoverage::Covered("runs_queue_family_routes"),
     ),
     (
-        ("POST", "/v1/runs/:run_id/dead-letter"),
+        ("POST", "/v1/runs/{run_id}/dead-letter"),
         RouteCoverage::Covered("runs_queue_family_routes"),
     ),
     (
@@ -154,26 +151,26 @@ const HTTP_ROUTE_COVERAGE_NOTES: &[((&str, &str), RouteCoverage)] = &[
         RouteCoverage::Covered("batteries_family_routes"),
     ),
     (
-        ("GET", "/v1/batteries/:battery_id"),
+        ("GET", "/v1/batteries/{battery_id}"),
         RouteCoverage::Covered("batteries_family_routes"),
     ),
     (
-        ("DELETE", "/v1/batteries/:battery_id"),
+        ("DELETE", "/v1/batteries/{battery_id}"),
         RouteCoverage::Covered("batteries_family_routes"),
     ),
     (
-        ("GET", "/v1/batteries/:battery_id/scripts"),
+        ("GET", "/v1/batteries/{battery_id}/scripts"),
         RouteCoverage::Covered("batteries_family_routes"),
     ),
     (
         (
             "POST",
-            "/v1/batteries/:battery_id/scripts/:script_id/install",
+            "/v1/batteries/{battery_id}/scripts/{script_id}/install",
         ),
         RouteCoverage::Covered("batteries_family_routes"),
     ),
     (
-        ("POST", "/v1/batteries/:battery_id/sync"),
+        ("POST", "/v1/batteries/{battery_id}/sync"),
         RouteCoverage::Covered(
             "batteries_family_routes (https-only validation; no remote network)",
         ),
@@ -231,11 +228,11 @@ const HTTP_ROUTE_COVERAGE_NOTES: &[((&str, &str), RouteCoverage)] = &[
         RouteCoverage::Covered("node_enrollment_routes"),
     ),
     (
-        ("POST", "/v1/node/enrollments/:node_id/approve"),
+        ("POST", "/v1/node/enrollments/{node_id}/approve"),
         RouteCoverage::Covered("node_enrollment_routes"),
     ),
     (
-        ("POST", "/v1/node/enrollments/:node_id/reject"),
+        ("POST", "/v1/node/enrollments/{node_id}/reject"),
         RouteCoverage::Covered("node_enrollment_routes"),
     ),
     (
@@ -243,11 +240,11 @@ const HTTP_ROUTE_COVERAGE_NOTES: &[((&str, &str), RouteCoverage)] = &[
         RouteCoverage::Covered("signed_bundle_enrollment_routes"),
     ),
     (
-        ("PATCH", "/v1/node/peers/:node_id/capabilities"),
+        ("PATCH", "/v1/node/peers/{node_id}/capabilities"),
         RouteCoverage::Covered("node_management_routes"),
     ),
     (
-        ("POST", "/v1/node/peers/:node_id/revoke"),
+        ("POST", "/v1/node/peers/{node_id}/revoke"),
         RouteCoverage::Covered("node_management_routes"),
     ),
 ];
@@ -261,18 +258,20 @@ fn http_route_inventory_maps_all_current_router_entries() {
         .collect();
     assert_eq!(
         notes, from_source,
-        "HTTP_ROUTE_COVERAGE_NOTES must match HTTP_ROUTE_INVENTORY in src/cli/api.rs"
+        "HTTP_ROUTE_COVERAGE_NOTES must match HTTP_ROUTE_INVENTORY in src/inventory/routes.rs"
     );
-    assert!(HTTP_ROUTE_COVERAGE_NOTES
-        .iter()
-        .all(|(_, coverage)| match coverage {
-            RouteCoverage::Covered(note) | RouteCoverage::Excluded(note) => !note.trim().is_empty(),
-        }));
+    assert!(
+        HTTP_ROUTE_COVERAGE_NOTES
+            .iter()
+            .all(|(_, coverage)| match coverage {
+                RouteCoverage::Covered(note) => !note.trim().is_empty(),
+            })
+    );
 }
 
 fn parse_http_route_inventory_from_source() -> Vec<(&'static str, &'static str)> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/cli/api.rs");
-    let source = fs::read_to_string(&path).expect("read src/cli/api.rs");
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/inventory/routes.rs");
+    let source = fs::read_to_string(&path).expect("read src/inventory/routes.rs");
     let start = source
         .find("// OMAKURE_HTTP_ROUTE_INVENTORY_START")
         .expect("inventory start marker");
@@ -341,8 +340,8 @@ fn runs_post_is_forbidden_without_write_capability() {
     write_secret_echo_script(workspace.path(), "secret-echo.sh", None);
     let server = support::HttpServer::start_with_args(
         workspace.path(),
-        API_TOKEN,
-        &["--capability", "scripts:read"],
+        &["scripts:read"],
+        &[],
         &[],
         Duration::from_secs(10),
     );
@@ -365,8 +364,8 @@ fn script_schema_redacts_secret_defaults_over_http() {
     write_secret_echo_script(workspace.path(), "secret-default.sh", Some(SECRET_DEFAULT));
     let server = support::HttpServer::start_with_args(
         workspace.path(),
-        API_TOKEN,
-        &["--capability", "scripts:read"],
+        &["scripts:read"],
+        &[],
         &[],
         Duration::from_secs(10),
     );
@@ -392,8 +391,8 @@ fn runs_post_rejects_plaintext_secret_fields_and_secret_args() {
     write_secret_echo_script(workspace.path(), "secret-echo.sh", None);
     let server = support::HttpServer::start_with_args(
         workspace.path(),
-        API_TOKEN,
-        &["--capability", "runs:write", "--capability", "secrets:use"],
+        &["runs:write", "secrets:use"],
+        &[],
         &[],
         Duration::from_secs(10),
     );
@@ -437,17 +436,8 @@ fn authorized_secret_ref_enqueue_worker_and_history_do_not_leak_secret() {
     write_secret_echo_script(workspace.path(), "secret-echo.sh", None);
     let server = support::HttpServer::start_with_args(
         workspace.path(),
-        API_TOKEN,
-        &[
-            "--capability",
-            "runs:read",
-            "--capability",
-            "runs:write",
-            "--capability",
-            "secrets:use",
-            "--secret-ref",
-            "secret://env/OMAKURE_HTTP_QUEUE_TOKEN",
-        ],
+        &["runs:read", "runs:write", "secrets:use"],
+        &["--secret-ref", "secret://env/OMAKURE_HTTP_QUEUE_TOKEN"],
         &[
             ("OMAKURE_HTTP_QUEUE_TOKEN", QUEUE_SECRET),
             ("OMAKURE_EXPECTED_TOKEN", QUEUE_SECRET),
@@ -469,7 +459,7 @@ fn authorized_secret_ref_enqueue_worker_and_history_do_not_leak_secret() {
         .expect("run id")
         .to_string();
 
-    let worker = omakure_with_env(
+    let worker = support::workspace_command_with_env::<15>(
         workspace.path(),
         &["--json", "queue", "worker", "--once"],
         &[
@@ -501,15 +491,8 @@ fn unauthorized_secret_provider_ref_is_forbidden_without_leaking_secret() {
     write_secret_echo_script(workspace.path(), "secret-echo.sh", None);
     let server = support::HttpServer::start_with_args(
         workspace.path(),
-        API_TOKEN,
-        &[
-            "--capability",
-            "runs:write",
-            "--capability",
-            "secrets:use",
-            "--secret-ref",
-            "secret://env/ALLOWED_ONLY",
-        ],
+        &["runs:write", "secrets:use"],
+        &["--secret-ref", "secret://env/ALLOWED_ONLY"],
         &[("OMAKURE_HTTP_QUEUE_TOKEN", QUEUE_SECRET)],
         Duration::from_secs(10),
     );
@@ -533,8 +516,8 @@ fn health_and_config_family_routes() {
     let workspace = support::TestWorkspace::new("http_config_family");
     let denied = support::HttpServer::start_with_args(
         workspace.path(),
-        API_TOKEN,
-        &["--capability", "scripts:read"],
+        &["scripts:read"],
+        &[],
         &[],
         Duration::from_secs(10),
     );
@@ -551,8 +534,8 @@ fn health_and_config_family_routes() {
 
     let server = support::HttpServer::start_with_args(
         workspace.path(),
-        API_TOKEN,
-        &["--capability", "config:read"],
+        &["config:read"],
+        &[],
         &[],
         Duration::from_secs(10),
     );
@@ -578,8 +561,8 @@ fn search_refresh_failure_returns_http_error() {
     workspace.write_schema_script("job.sh", "job", "echo ok");
     let server = support::HttpServer::start_with_args(
         workspace.path(),
-        API_TOKEN,
-        &["--capability", "scripts:read"],
+        &["scripts:read"],
+        &[],
         &[],
         Duration::from_secs(10),
     );
@@ -606,8 +589,8 @@ fn scripts_search_tree_family_routes() {
 
     let denied = support::HttpServer::start_with_args(
         workspace.path(),
-        API_TOKEN,
-        &["--capability", "config:read"],
+        &["config:read"],
+        &[],
         &[],
         Duration::from_secs(10),
     );
@@ -628,8 +611,8 @@ fn scripts_search_tree_family_routes() {
 
     let server = support::HttpServer::start_with_args(
         workspace.path(),
-        API_TOKEN,
-        &["--capability", "scripts:read"],
+        &["scripts:read"],
+        &[],
         &[],
         Duration::from_secs(10),
     );
@@ -648,10 +631,12 @@ fn scripts_search_tree_family_routes() {
 
     let content = server.get("/v1/scripts/tools/job.sh/content");
     assert_eq!(content.status, 200, "body: {}", content.safe_body());
-    assert!(content.json()["data"]["content"]
-        .as_str()
-        .unwrap_or("")
-        .contains("OMAKURE_SCHEMA_START"));
+    assert!(
+        content.json()["data"]["content"]
+            .as_str()
+            .unwrap_or("")
+            .contains("OMAKURE_SCHEMA_START")
+    );
 
     let search = server.get("/v1/search?q=job");
     assert_eq!(search.status, 200, "body: {}", search.safe_body());
@@ -699,8 +684,8 @@ fn envs_family_routes() {
     let workspace = support::TestWorkspace::new("http_envs_family");
     let denied = support::HttpServer::start_with_args(
         workspace.path(),
-        API_TOKEN,
-        &["--capability", "config:read"],
+        &["config:read"],
+        &[],
         &[],
         Duration::from_secs(10),
     );
@@ -709,15 +694,8 @@ fn envs_family_routes() {
 
     let server = support::HttpServer::start_with_args(
         workspace.path(),
-        API_TOKEN,
-        &[
-            "--capability",
-            "env:read",
-            "--capability",
-            "env:write",
-            "--capability",
-            "env:activate",
-        ],
+        &["env:read", "env:write", "env:activate"],
+        &[],
         &[],
         Duration::from_secs(10),
     );
@@ -815,8 +793,8 @@ fn enqueue_capability_cannot_execute_uninstalled_battery_cache() {
     workspace.write_schema_script("installed/job.sh", "installed", "exit 0");
     let server = support::HttpServer::start_with_args(
         workspace.path(),
-        API_TOKEN,
-        &["--capability", "runs:enqueue"],
+        &["runs:enqueue"],
+        &[],
         &[],
         Duration::from_secs(10),
     );
@@ -852,8 +830,8 @@ fn runs_queue_family_routes() {
 
     let denied = support::HttpServer::start_with_args(
         workspace.path(),
-        API_TOKEN,
-        &["--capability", "scripts:read"],
+        &["scripts:read"],
+        &[],
         &[],
         Duration::from_secs(10),
     );
@@ -862,8 +840,8 @@ fn runs_queue_family_routes() {
 
     let server = support::HttpServer::start_with_args(
         workspace.path(),
-        API_TOKEN,
-        &["--capability", "runs:read", "--capability", "runs:write"],
+        &["runs:read", "runs:write"],
+        &[],
         &[],
         Duration::from_secs(10),
     );
@@ -896,7 +874,10 @@ fn runs_queue_family_routes() {
         "body: {}",
         fail_enqueue.safe_body()
     );
-    let worker = omakure(workspace.path(), &["--json", "queue", "worker", "--once"]);
+    let worker = support::workspace_command::<15>(
+        workspace.path(),
+        &["--json", "queue", "worker", "--once"],
+    );
     assert_success(&worker);
 
     let dead = server.post_json("/v1/runs/http-dead-letter/dead-letter", &json!({}));
@@ -960,8 +941,8 @@ fn batteries_family_routes() {
 
     let denied = support::HttpServer::start_with_args(
         workspace.path(),
-        API_TOKEN,
-        &["--capability", "config:read"],
+        &["config:read"],
+        &[],
         &[],
         Duration::from_secs(10),
     );
@@ -970,13 +951,8 @@ fn batteries_family_routes() {
 
     let server = support::HttpServer::start_with_args(
         workspace.path(),
-        API_TOKEN,
-        &[
-            "--capability",
-            "batteries:read",
-            "--capability",
-            "batteries:write",
-        ],
+        &["batteries:read", "batteries:write"],
+        &[],
         &[],
         Duration::from_secs(10),
     );
@@ -1001,7 +977,7 @@ fn batteries_family_routes() {
     // Register via CLI with a local path, then rewrite registry to https URL
     // so inspect/scripts/install/sync/delete exercise the HTTP surface without
     // contacting a remote host.
-    let add = omakure(
+    let add = support::workspace_command::<15>(
         workspace.path(),
         &[
             "--json",
@@ -1013,7 +989,10 @@ fn batteries_family_routes() {
         ],
     );
     assert_success(&add);
-    let sync = omakure(workspace.path(), &["--json", "battery", "sync", "fixture"]);
+    let sync = support::workspace_command::<15>(
+        workspace.path(),
+        &["--json", "battery", "sync", "fixture"],
+    );
     assert_success(&sync);
     rewrite_battery_git_url_to_https(workspace.path(), "fixture");
 
@@ -1027,11 +1006,13 @@ fn batteries_family_routes() {
 
     let scripts = server.get("/v1/batteries/fixture/scripts");
     assert_eq!(scripts.status, 200, "body: {}", scripts.safe_body());
-    assert!(scripts.json()["data"]
-        .as_array()
-        .expect("battery scripts")
-        .iter()
-        .any(|entry| entry["id"] == "local.echo"));
+    assert!(
+        scripts.json()["data"]
+            .as_array()
+            .expect("battery scripts")
+            .iter()
+            .any(|entry| entry["id"] == "local.echo")
+    );
 
     #[cfg(unix)]
     {
@@ -1075,8 +1056,8 @@ fn protected_routes_return_401_without_or_with_invalid_bearer() {
     let workspace = support::TestWorkspace::new("http_auth_401");
     let server = support::HttpServer::start_with_args(
         workspace.path(),
-        API_TOKEN,
-        &["--capability", "config:read"],
+        &["config:read"],
+        &[],
         &[],
         Duration::from_secs(10),
     );
@@ -1135,27 +1116,22 @@ fn node_management_routes_cover_missing_scopes_individually() {
     let workspace = support::TestWorkspace::new("http_node_route_scopes");
     let full = support::HttpServer::start_with_args(
         workspace.path(),
-        API_TOKEN,
         &[
-            "--capability",
             "node:read",
-            "--capability",
             "node:write",
-            "--capability",
             "trust:write",
-            "--capability",
             "enrollment:read",
-            "--capability",
             "enrollment:write",
         ],
+        &[],
         &[],
         Duration::from_secs(10),
     );
 
     let node_write_only = support::HttpServer::start_with_args(
         workspace.path(),
-        API_TOKEN,
-        &["--capability", "node:write"],
+        &["node:write"],
+        &[],
         &[],
         Duration::from_secs(10),
     );
@@ -1172,8 +1148,8 @@ fn node_management_routes_cover_missing_scopes_individually() {
     support::node_init(workspace.path());
     let node_write_only_service = support::HttpServer::start_node_service(
         workspace.path(),
-        API_TOKEN,
-        &["--capability", "node:write"],
+        &["node:write"],
+        &[],
         &[],
         support::NODE_STARTUP_TIMEOUT,
     );
@@ -1185,8 +1161,8 @@ fn node_management_routes_cover_missing_scopes_individually() {
 
     let node_read_only = support::HttpServer::start_with_args(
         workspace.path(),
-        API_TOKEN,
-        &["--capability", "node:read"],
+        &["node:read"],
+        &[],
         &[],
         Duration::from_secs(10),
     );
@@ -1235,8 +1211,8 @@ fn node_management_routes_use_shared_operations_and_exact_scopes() {
 
     let readonly = support::HttpServer::start_with_args(
         workspace.path(),
-        API_TOKEN,
-        &["--capability", "node:read"],
+        &["node:read"],
+        &[],
         &envs,
         Duration::from_secs(10),
     );
@@ -1246,19 +1222,14 @@ fn node_management_routes_use_shared_operations_and_exact_scopes() {
 
     let server = support::HttpServer::start_with_args(
         workspace.path(),
-        API_TOKEN,
         &[
-            "--capability",
             "node:read",
-            "--capability",
             "node:write",
-            "--capability",
             "trust:write",
-            "--capability",
             "enrollment:read",
-            "--capability",
             "enrollment:write",
         ],
+        &[],
         &envs,
         support::NODE_STARTUP_TIMEOUT,
     );
@@ -1317,9 +1288,11 @@ fn node_management_routes_use_shared_operations_and_exact_scopes() {
             .len(),
         64
     );
-    assert!(status.json()["data"]["identity"]
-        .get("private_key")
-        .is_none());
+    assert!(
+        status.json()["data"]["identity"]
+            .get("private_key")
+            .is_none()
+    );
 
     let peer = json!({
         "node_id": "omk1_71319375521da1a36e37088c56b0e957043cc8459de4d0a54642e5e0b2443a92",
@@ -1333,10 +1306,12 @@ fn node_management_routes_use_shared_operations_and_exact_scopes() {
     let not_confirmed = server.post_json("/v1/node/peers", &peer);
     assert_eq!(not_confirmed.status, 403);
     assert_error_code(&not_confirmed.json(), "forbidden");
-    assert!(server.get("/v1/node/peers").json()["data"]
-        .as_array()
-        .unwrap()
-        .is_empty());
+    assert!(
+        server.get("/v1/node/peers").json()["data"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
 
     let mut confirmed_peer = peer.clone();
     confirmed_peer["confirmed"] = json!(true);
@@ -1359,19 +1334,14 @@ fn node_management_routes_use_shared_operations_and_exact_scopes() {
     // Health Plane reads are served by `omakure node serve`, not `omakure api`.
     let health_server = support::HttpServer::start_node_service(
         workspace.path(),
-        API_TOKEN,
         &[
-            "--capability",
             "node:read",
-            "--capability",
             "node:write",
-            "--capability",
             "trust:write",
-            "--capability",
             "enrollment:read",
-            "--capability",
             "enrollment:write",
         ],
+        &[],
         &envs,
         Duration::from_secs(10),
     );
@@ -1383,7 +1353,6 @@ fn node_management_routes_use_shared_operations_and_exact_scopes() {
     let health = health_server.get("/v1/node/health");
     assert_eq!(health.status, 200, "body: {}", health.safe_body());
     let body = health.json();
-    assert_eq!(body["data"]["enabled"], true);
     assert_eq!(body["data"]["presence"]["unknown"], 1);
     assert_eq!(body["data"]["presence"]["online"], 0);
     assert_eq!(body["data"]["nodes"].as_array().unwrap().len(), 1);
@@ -1413,7 +1382,6 @@ fn node_management_routes_use_shared_operations_and_exact_scopes() {
     let signals = health_server.get("/v1/node/signals");
     assert_eq!(signals.status, 200, "body: {}", signals.safe_body());
     let feed = signals.json();
-    assert_eq!(feed["data"]["enabled"], true);
     assert_eq!(feed["data"]["gap"], false);
     assert_eq!(feed["data"]["limit"], 64);
     assert_eq!(feed["data"]["retention_seconds"], 604_800);
@@ -1468,10 +1436,12 @@ fn node_management_routes_use_shared_operations_and_exact_scopes() {
         "body: {}",
         after_revoke.safe_body()
     );
-    assert!(after_revoke.json()["data"]["nodes"]
-        .as_array()
-        .unwrap()
-        .is_empty());
+    assert!(
+        after_revoke.json()["data"]["nodes"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
     assert_eq!(after_revoke.json()["data"]["presence"]["total"], 0);
     assert_eq!(after_revoke.json()["data"]["baselines"]["total"], 0);
 
@@ -1498,7 +1468,7 @@ fn node_management_routes_use_shared_operations_and_exact_scopes() {
 /// `node:read` capability rather than by any new scheme.
 #[test]
 fn no_http_route_can_write_health_plane_state() {
-    let health_routes: Vec<_> = omakure::cli::api::HTTP_ROUTE_INVENTORY
+    let health_routes: Vec<_> = omakure::inventory::HTTP_ROUTE_INVENTORY
         .iter()
         .filter(|(_, route)| route.contains("node/health") || route.contains("node/signals"))
         .collect();
@@ -1526,8 +1496,8 @@ fn node_json_mutation_routes_return_413_envelopes_without_mutation() {
     ];
     let server = support::HttpServer::start_with_args(
         workspace.path(),
-        API_TOKEN,
-        &["--policy", policy.to_str().unwrap(), "--capability", "all"],
+        &["*"],
+        &["--policy", policy.to_str().unwrap()],
         &envs,
         Duration::from_secs(10),
     );
@@ -1576,13 +1546,8 @@ fn signed_bundle_route_has_its_own_body_bound() {
     ];
     let server = support::HttpServer::start_with_args(
         workspace.path(),
-        API_TOKEN,
-        &[
-            "--policy",
-            policy.to_str().unwrap(),
-            "--capability",
-            "enrollment:write",
-        ],
+        &["enrollment:write"],
+        &["--policy", policy.to_str().unwrap()],
         &envs,
         Duration::from_secs(10),
     );
@@ -1614,21 +1579,20 @@ fn node_status_redacts_malformed_config_values_in_http_envelope() {
     ];
     let server = support::HttpServer::start_with_args(
         workspace.path(),
-        API_TOKEN,
-        &["--capability", "node:read", "--capability", "node:write"],
+        &["node:read", "node:write"],
+        &[],
         &envs,
         Duration::from_secs(10),
     );
     let init = server.post_json("/v1/node/init", &json!({}));
     assert_eq!(init.status, 200, "body: {}", init.safe_body());
 
-    let secret = "relay-user-super-secret-value";
+    let secret = "static-peer-secret-value";
     let malformed = fs::read_to_string(&config)
         .expect("read initialized node config")
-        .replace("mode = \"direct\"", "mode = \"nostr\"")
         .replace(
-            "relays = []",
-            &format!("relays = [\"wss://user:{secret}@relay.example.test\"]"),
+            "static_peers = []",
+            &format!("static_peers = [\"{secret}\"]"),
         );
     fs::write(&config, malformed).expect("write malformed node config");
 
@@ -1654,7 +1618,7 @@ fn node_cli_and_http_expose_identical_public_status_and_peers() {
         ("OMAKURE_NODE_STATE_DIR", state_arg.as_str()),
         ("OMAKURE_NODE_CONFIG", config_arg.as_str()),
     ];
-    let cli_init = omakure_with_env(
+    let cli_init = support::workspace_command_with_env::<15>(
         workspace.path(),
         &[
             "--json",
@@ -1671,7 +1635,7 @@ fn node_cli_and_http_expose_identical_public_status_and_peers() {
     let cli_init_json = support::json_envelope(&cli_init.stdout);
     assert_eq!(cli_init_json["data"]["status"]["initialized"], true);
 
-    let cli_trust = omakure_with_env(
+    let cli_trust = support::workspace_command_with_env::<15>(
         workspace.path(),
         &[
             "--json",
@@ -1695,7 +1659,7 @@ fn node_cli_and_http_expose_identical_public_status_and_peers() {
     );
     assert_success(&cli_trust);
 
-    let cli_status = omakure_with_env(
+    let cli_status = support::workspace_command_with_env::<15>(
         workspace.path(),
         &[
             "--json",
@@ -1711,7 +1675,7 @@ fn node_cli_and_http_expose_identical_public_status_and_peers() {
     assert_success(&cli_status);
     let cli_status_json = support::json_envelope(&cli_status.stdout);
 
-    let cli_peers = omakure_with_env(
+    let cli_peers = support::workspace_command_with_env::<15>(
         workspace.path(),
         &[
             "--json",
@@ -1729,15 +1693,8 @@ fn node_cli_and_http_expose_identical_public_status_and_peers() {
 
     let server = support::HttpServer::start_with_args(
         workspace.path(),
-        API_TOKEN,
-        &[
-            "--capability",
-            "node:read",
-            "--capability",
-            "node:write",
-            "--capability",
-            "trust:write",
-        ],
+        &["node:read", "node:write", "trust:write"],
+        &[],
         &envs,
         Duration::from_secs(10),
     );
@@ -1823,7 +1780,7 @@ fi
 /// file-mode branch of `require_scope`. The headline node-service feature — per-token
 /// scopes — otherwise had only in-crate unit tests; this locks it end-to-end so
 /// a regression that makes file-mode scope checks always-allow (or inverts the
-/// `is_file_mode` branch, or lets the legacy env token slip through) fails here.
+/// `is_file_mode` branch) fails here.
 #[test]
 fn tokens_file_mode_enforces_per_token_scopes() {
     let workspace = support::TestWorkspace::new("http_tokens_file_scopes");
@@ -1831,7 +1788,7 @@ fn tokens_file_mode_enforces_per_token_scopes() {
     let tokens_path_str = tokens_path.to_str().expect("tokens path utf8");
 
     // Generate a narrowly-scoped token (config:read only) into a tokens file.
-    let gen = omakure(
+    let generated = support::workspace_command::<15>(
         workspace.path(),
         &[
             "--json",
@@ -1846,8 +1803,8 @@ fn tokens_file_mode_enforces_per_token_scopes() {
             "--confirmed",
         ],
     );
-    assert_success(&gen);
-    let config_token = support::json_envelope(&gen.stdout)["data"]["token"]
+    assert_success(&generated);
+    let config_token = support::json_envelope(&generated.stdout)["data"]["token"]
         .as_str()
         .expect("generated token plaintext")
         .to_string();
@@ -1855,7 +1812,7 @@ fn tokens_file_mode_enforces_per_token_scopes() {
     // A SECOND token with a DISJOINT scope (scripts:read only). Two tokens with
     // non-overlapping scopes prove the enforced scope comes from the *presented*
     // token, not a fixed/first entry in the file.
-    let gen2 = omakure(
+    let gen2 = support::workspace_command::<15>(
         workspace.path(),
         &[
             "--json",
@@ -1876,11 +1833,11 @@ fn tokens_file_mode_enforces_per_token_scopes() {
         .expect("generated token plaintext")
         .to_string();
 
-    // Boot in tokens-file mode. Legacy OMAKURE_API_TOKEN is still set by the
-    // harness but must be ignored once --tokens-file wins.
+    // The harness points OMAKURE_TOKENS_FILE at its own file; --tokens-file
+    // must win over it.
     let server = support::HttpServer::start_with_args(
         workspace.path(),
-        API_TOKEN,
+        &["*"],
         &["--tokens-file", tokens_path_str],
         &[],
         Duration::from_secs(10),
@@ -1918,42 +1875,14 @@ fn tokens_file_mode_enforces_per_token_scopes() {
     assert_eq!(bogus.status, 401, "body: {}", bogus.safe_body());
     assert_error_code(&bogus.json(), "unauthorized");
 
-    // The legacy env token must NOT authenticate in tokens-file mode.
-    let legacy = server.get_with_bearer("/v1/config", API_TOKEN);
+    // The harness credential lives only in the overridden file.
+    let harness = server.get("/v1/config");
     assert_eq!(
-        legacy.status,
+        harness.status,
         401,
-        "legacy env token must not work in file mode; body: {}",
-        legacy.safe_body()
+        "OMAKURE_TOKENS_FILE must not apply once --tokens-file is set; body: {}",
+        harness.safe_body()
     );
-}
-
-fn omakure(workspace: &Path, args: &[&str]) -> Output {
-    omakure_with_env(workspace, args, &[])
-}
-
-fn omakure_with_env(workspace: &Path, args: &[&str], envs: &[(&str, &str)]) -> Output {
-    let mut command = support::omakure_command();
-    command.arg("--scripts-dir").arg(workspace).args(args);
-    for (key, value) in envs {
-        command.env(key, value);
-    }
-    support::command_with_timeout(&mut command, Duration::from_secs(15))
-}
-
-fn assert_success(output: &Output) {
-    assert!(
-        output.status.success(),
-        "expected success, status: {:?}, stdout_len: {}, stderr_len: {}",
-        output.status.code(),
-        output.stdout.len(),
-        output.stderr.len()
-    );
-}
-
-fn assert_no_plaintext(output: &Output, secret: &str) {
-    support::assert_no_secret_leak(&output.stdout, secret.as_bytes());
-    support::assert_no_secret_leak(&output.stderr, secret.as_bytes());
 }
 
 fn assert_error_contains(envelope: &Value, needle: &str) {
@@ -1985,14 +1914,8 @@ fn node_cue_route_requires_node_write_and_a_transport() {
     let workspace = support::TestWorkspace::new("node-cue-route");
     let server = support::HttpServer::start_node_service(
         workspace.path(),
-        API_TOKEN,
-        &[
-            "--workers",
-            "1",
-            "--no-scheduler",
-            "--capability",
-            "node:read",
-        ],
+        &["node:read"],
+        &["--workers", "1", "--no-scheduler"],
         &[],
         support::NODE_STARTUP_TIMEOUT,
     );
@@ -2015,14 +1938,8 @@ fn node_cue_route_requires_node_write_and_a_transport() {
     let writer_workspace = support::TestWorkspace::new("node-cue-route-writer");
     let writer = support::HttpServer::start_node_service(
         writer_workspace.path(),
-        API_TOKEN,
-        &[
-            "--workers",
-            "1",
-            "--no-scheduler",
-            "--capability",
-            "node:write",
-        ],
+        &["node:write"],
+        &["--workers", "1", "--no-scheduler"],
         &[],
         support::NODE_STARTUP_TIMEOUT,
     );
@@ -2066,14 +1983,8 @@ fn node_baseline_route_requires_node_write_and_a_transport() {
     let workspace = support::TestWorkspace::new("node-baseline-route");
     let server = support::HttpServer::start_node_service(
         workspace.path(),
-        API_TOKEN,
-        &[
-            "--workers",
-            "1",
-            "--no-scheduler",
-            "--capability",
-            "node:read",
-        ],
+        &["node:read"],
+        &["--workers", "1", "--no-scheduler"],
         &[],
         support::NODE_STARTUP_TIMEOUT,
     );
@@ -2096,14 +2007,8 @@ fn node_baseline_route_requires_node_write_and_a_transport() {
     let writer_workspace = support::TestWorkspace::new("node-baseline-route-writer");
     let writer = support::HttpServer::start_node_service(
         writer_workspace.path(),
-        API_TOKEN,
-        &[
-            "--workers",
-            "1",
-            "--no-scheduler",
-            "--capability",
-            "node:write",
-        ],
+        &["node:write"],
+        &["--workers", "1", "--no-scheduler"],
         &[],
         support::NODE_STARTUP_TIMEOUT,
     );

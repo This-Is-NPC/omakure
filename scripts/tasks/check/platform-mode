@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+mode=all
+case "${1:-}" in
+    --build-only) mode=build; shift ;;
+    --test-only) mode=test; shift ;;
+esac

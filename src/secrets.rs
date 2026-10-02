@@ -1,13 +1,24 @@
 use crate::adapters::workspace_repository::FsWorkspaceRepository;
-use crate::ports::ScriptRepository;
 use crate::redaction::redact_secret;
 use crate::workspace::Workspace;
 use std::collections::HashSet;
 use std::path::Path;
 
 pub const REDACTED: &str = "<redacted>";
-pub const REDACT_ENV: &str = "OMAKURE_REDACT_SECRETS";
 pub const REDACT_FILE_ENV: &str = "OMAKURE_REDACT_SECRETS_FILE";
+
+/// Scope that lets a run resolve secret values.
+pub const SECRETS_USE_SCOPE: &str = "secrets:use";
+/// Scope that lets Battery credentials resolve secret values.
+pub const CREDENTIALS_USE_SCOPE: &str = "credentials:use";
+/// Scope that lets a caller list secret metadata without resolving values.
+pub const SECRETS_READ_METADATA_SCOPE: &str = "secrets:read-metadata";
+/// Every scope that participates in a secret ACL.
+pub const SECRET_SCOPES: [&str; 3] = [
+    SECRETS_USE_SCOPE,
+    CREDENTIALS_USE_SCOPE,
+    SECRETS_READ_METADATA_SCOPE,
+];
 
 #[derive(Debug, Clone, Default)]
 pub struct ResolvedArgs {
@@ -94,8 +105,7 @@ impl SecretAccess {
     {
         // Drop an `env` provider-wildcard: the whole point of the env gate is
         // that env vars are enumerated per exact key. A `secret://env/*` entry
-        // (also the normalized form of `secret://env:*`) would otherwise match
-        // every env ref through the provider-wildcard branch and re-grant blanket
+        // would otherwise match every env ref through the provider-wildcard branch and re-grant blanket
         // process-env access, defeating the wildcard hardening.
         let allowed_refs = env_refs
             .into_iter()
@@ -120,14 +130,16 @@ impl SecretAccess {
         if self.allow_all && !self.env_gated(secret_ref) {
             return Ok(());
         }
-        let may_use =
-            self.scopes.contains("secrets:use") || self.scopes.contains("credentials:use");
-        if !may_use {
+        if !self.has_use_scope() {
             return Err(SecretResolveError::Denied(
                 "secrets:use or credentials:use scope is required".to_string(),
             ));
         }
         self.ref_allowed(secret_ref)
+    }
+
+    fn has_use_scope(&self) -> bool {
+        self.scopes.contains(SECRETS_USE_SCOPE) || self.scopes.contains(CREDENTIALS_USE_SCOPE)
     }
 
     /// Metadata listing accepts `secrets:read-metadata` (or use scopes) + ref ACL.
@@ -136,10 +148,7 @@ impl SecretAccess {
         if self.allow_all && !self.env_gated(secret_ref) {
             return Ok(());
         }
-        let may_list = self.scopes.contains("secrets:read-metadata")
-            || self.scopes.contains("secrets:use")
-            || self.scopes.contains("credentials:use");
-        if !may_list {
+        if !self.scopes.contains(SECRETS_READ_METADATA_SCOPE) && !self.has_use_scope() {
             return Err(SecretResolveError::Denied(
                 "secrets:read-metadata scope is required".to_string(),
             ));
@@ -161,20 +170,64 @@ impl SecretAccess {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum SecretResolveError {
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum SecretResolveError {
+    #[error("{0}")]
     Denied(String),
+    #[error("secret ref not found")]
     NotFound,
+    #[error("invalid secret ref")]
     InvalidRef,
 }
 
-pub fn resolve_args(
-    workspace: &Workspace,
-    script_path: &Path,
-    args: &[String],
-    extra_env: &[(String, String)],
-) -> Result<ResolvedArgs, (String, String)> {
-    resolve_args_with_direct_secrets(workspace, script_path, args, extra_env, &[])
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SecretArgError {
+    Resolution {
+        field: String,
+        source: SecretResolveError,
+    },
+    MissingRequired {
+        field: String,
+        flag: String,
+    },
+    QueuedPlaintext {
+        field: String,
+    },
+}
+
+impl SecretArgError {
+    pub fn field(&self) -> &str {
+        match self {
+            Self::Resolution { field, .. }
+            | Self::MissingRequired { field, .. }
+            | Self::QueuedPlaintext { field } => field,
+        }
+    }
+
+    pub fn message(&self) -> String {
+        match self {
+            Self::Resolution { source, .. } => source.to_string(),
+            Self::MissingRequired { flag, .. } => {
+                format!("expected `{flag}` on the command line or in the run environment")
+            }
+            Self::QueuedPlaintext { .. } => "queued secret args must use secret:// refs so workers can reconstruct them without persisted plaintext".to_string(),
+        }
+    }
+}
+
+impl std::fmt::Display for SecretArgError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{}: {}", self.field(), self.message())
+    }
+}
+
+impl std::error::Error for SecretArgError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Resolution { source, .. } => Some(source),
+            Self::MissingRequired { .. } | Self::QueuedPlaintext { .. } => None,
+        }
+    }
 }
 
 pub fn resolve_args_with_direct_secrets(
@@ -183,7 +236,7 @@ pub fn resolve_args_with_direct_secrets(
     args: &[String],
     extra_env: &[(String, String)],
     direct_secrets: &[(String, String)],
-) -> Result<ResolvedArgs, (String, String)> {
+) -> Result<ResolvedArgs, SecretArgError> {
     resolve_args_with_access(
         workspace,
         script_path,
@@ -201,7 +254,7 @@ pub fn resolve_args_with_access(
     extra_env: &[(String, String)],
     direct_secrets: &[(String, String)],
     access: &SecretAccess,
-) -> Result<ResolvedArgs, (String, String)> {
+) -> Result<ResolvedArgs, SecretArgError> {
     let repo = FsWorkspaceRepository::new(workspace.root().to_path_buf());
     let schema = match repo.read_schema(script_path) {
         Ok(schema) => schema,
@@ -233,13 +286,17 @@ pub fn resolve_args_with_access(
         ];
         let mut resolved = None;
         for candidate in candidates.into_iter().flatten() {
-            match resolve_secret_ref(workspace, &candidate, access)
-                .map_err(|err| (field.name.clone(), secret_error_message(err)))?
-            {
+            match resolve_secret_ref(workspace, &candidate, access).map_err(|source| {
+                SecretArgError::Resolution {
+                    field: field.name.clone(),
+                    source,
+                }
+            })? {
                 Some(value) => {
                     resolved = Some(ResolvedSecretValue {
                         value,
-                        provider_ref: canonical_secret_ref(&candidate),
+                        provider_ref: SecretRef::parse(&candidate)
+                            .map(|secret_ref| secret_ref.canonical()),
                     });
                     break;
                 }
@@ -249,25 +306,21 @@ pub fn resolve_args_with_access(
 
         let Some(value) = resolved else {
             if field.required.unwrap_or(false) {
-                return Err((
-                    field.name.clone(),
-                    format!(
-                        "expected `{}` on the command line or in the run environment",
-                        flag
-                    ),
-                ));
+                return Err(SecretArgError::MissingRequired {
+                    field: field.name.clone(),
+                    flag,
+                });
             }
             continue;
         };
 
         let persisted_value = value.provider_ref.as_deref().unwrap_or(REDACTED);
-        if let Some(provider_ref) = &value.provider_ref {
-            if !provider_refs
+        if let Some(provider_ref) = value.provider_ref.as_ref().filter(|provider_ref| {
+            !provider_refs
                 .iter()
-                .any(|existing| existing == provider_ref)
-            {
-                provider_refs.push(provider_ref.clone());
-            }
+                .any(|existing| existing == *provider_ref)
+        }) {
+            provider_refs.push(provider_ref.clone());
         }
         // Replace any existing occurrence of the flag (e.g. a literal
         // `secret://` ref passed on the command line) with the resolved value —
@@ -299,7 +352,7 @@ pub fn validate_queued_secret_args_reconstructable(
     workspace: &Workspace,
     script_path: &Path,
     args: &[String],
-) -> Result<(), (String, String)> {
+) -> Result<(), SecretArgError> {
     let repo = FsWorkspaceRepository::new(workspace.root().to_path_buf());
     let schema = match repo.read_schema(script_path) {
         Ok(schema) => schema,
@@ -310,27 +363,34 @@ pub fn validate_queued_secret_args_reconstructable(
             .arg
             .clone()
             .unwrap_or_else(|| format!("--{}", field.name));
-        if let Some(value) = find_arg_value(args, &flag) {
-            if !value.starts_with("secret://") {
-                return Err((
-                    field.name.clone(),
-                    "queued secret args must use secret:// refs so workers can reconstruct them without persisted plaintext".to_string(),
-                ));
-            }
+        if find_arg_value(args, &flag).is_some_and(|value| !value.starts_with("secret://")) {
+            return Err(SecretArgError::QueuedPlaintext {
+                field: field.name.clone(),
+            });
         }
     }
     Ok(())
 }
 
-pub fn parse_direct_secrets(values: &[String]) -> Result<Vec<(String, String)>, String> {
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
+pub enum DirectSecretParseError {
+    #[error("invalid secret argument: expected FIELD=VALUE")]
+    MissingAssignment,
+    #[error("invalid secret: field name cannot be empty")]
+    EmptyField,
+}
+
+pub fn parse_direct_secrets(
+    values: &[String],
+) -> Result<Vec<(String, String)>, DirectSecretParseError> {
     values
         .iter()
         .map(|value| {
             let Some((field, secret)) = value.split_once('=') else {
-                return Err("invalid secret argument: expected FIELD=VALUE".to_string());
+                return Err(DirectSecretParseError::MissingAssignment);
             };
             if field.trim().is_empty() {
-                return Err("invalid secret: field name cannot be empty".to_string());
+                return Err(DirectSecretParseError::EmptyField);
             }
             Ok((field.to_string(), secret.to_string()))
         })
@@ -352,15 +412,9 @@ pub fn secrets_env_value(secrets: &[String]) -> Option<String> {
 }
 
 pub fn secrets_from_env() -> Vec<String> {
-    if let Ok(path) = std::env::var(REDACT_FILE_ENV) {
-        if let Ok(value) = std::fs::read_to_string(path) {
-            if let Ok(secrets) = serde_json::from_str::<Vec<String>>(&value) {
-                return secrets;
-            }
-        }
-    }
-    std::env::var(REDACT_ENV)
+    std::env::var(REDACT_FILE_ENV)
         .ok()
+        .and_then(|path| std::fs::read_to_string(path).ok())
         .and_then(|value| serde_json::from_str::<Vec<String>>(&value).ok())
         .unwrap_or_default()
 }
@@ -374,10 +428,11 @@ fn find_arg_value(args: &[String], flag: &str) -> Option<String> {
                 .filter(|value| value.as_str() != REDACTED)
                 .cloned();
         }
-        if let Some(value) = arg.strip_prefix(&format!("{}=", flag)) {
-            if value != REDACTED {
-                return Some(value.to_string());
-            }
+        if let Some(value) = arg
+            .strip_prefix(&format!("{}=", flag))
+            .filter(|value| *value != REDACTED)
+        {
+            return Some(value.to_string());
         }
     }
     None
@@ -434,13 +489,6 @@ fn resolve_secret_ref(
     value: &str,
     access: &SecretAccess,
 ) -> Result<Option<String>, SecretResolveError> {
-    if let Some(name) = value.strip_prefix("secret://env:") {
-        let secret_ref = SecretRef {
-            provider: "env".to_string(),
-            key: name.to_string(),
-        };
-        return resolve_env_secret(&secret_ref, access);
-    }
     let Some(secret_ref) = SecretRef::parse(value) else {
         if value.starts_with("secret://") {
             return Err(SecretResolveError::InvalidRef);
@@ -455,16 +503,9 @@ fn resolve_secret_ref(
 }
 
 /// Check whether `access` permits resolving `value` without fetching the secret.
-pub fn check_secret_access(value: &str, access: &SecretAccess) -> Result<(), String> {
-    let secret_ref = if let Some(name) = value.strip_prefix("secret://env:") {
-        SecretRef {
-            provider: "env".to_string(),
-            key: name.to_string(),
-        }
-    } else {
-        SecretRef::parse(value).ok_or_else(|| "invalid secret ref".to_string())?
-    };
-    access.can_use(&secret_ref).map_err(secret_error_message)
+pub fn check_secret_access(value: &str, access: &SecretAccess) -> Result<(), SecretResolveError> {
+    let secret_ref = SecretRef::parse(value).ok_or(SecretResolveError::InvalidRef)?;
+    access.can_use(&secret_ref)
 }
 
 /// Resolve a `secret://…` ref to its plaintext value under `access`.
@@ -473,12 +514,8 @@ pub fn resolve_secret_value(
     workspace: &Workspace,
     value: &str,
     access: &SecretAccess,
-) -> Result<String, String> {
-    match resolve_secret_ref(workspace, value, access) {
-        Ok(Some(v)) => Ok(v),
-        Ok(None) => Err("secret ref not found".to_string()),
-        Err(err) => Err(secret_error_message(err)),
-    }
+) -> Result<String, SecretResolveError> {
+    resolve_secret_ref(workspace, value, access)?.ok_or(SecretResolveError::NotFound)
 }
 
 /// Metadata-only inventory of secrets visible under `access` (never values).
@@ -494,15 +531,15 @@ pub fn list_secret_metadata(workspace: &Workspace, access: &SecretAccess) -> Vec
     let mut out = Vec::new();
     // Env provider: only list refs explicitly allowed (never dump process env).
     for allowed in &access.allowed_refs {
-        if let Some(secret_ref) = SecretRef::parse(allowed) {
-            if secret_ref.provider == "env" && access.can_list_metadata(&secret_ref).is_ok() {
-                out.push(SecretMetadata {
-                    id: secret_ref.canonical(),
-                    source: "env".to_string(),
-                    delivery: "process-env".to_string(),
-                    allowed_targets: vec!["run".to_string(), "battery".to_string()],
-                });
-            }
+        if let Some(secret_ref) = SecretRef::parse(allowed).filter(|secret_ref| {
+            secret_ref.provider == "env" && access.can_list_metadata(secret_ref).is_ok()
+        }) {
+            out.push(SecretMetadata {
+                id: secret_ref.canonical(),
+                source: "env".to_string(),
+                delivery: "process-env".to_string(),
+                allowed_targets: vec!["run".to_string(), "battery".to_string()],
+            });
         }
     }
     // File providers: list keys from managed env files when provider wildcard or
@@ -547,36 +584,6 @@ pub fn list_secret_metadata(workspace: &Workspace, access: &SecretAccess) -> Vec
     out
 }
 
-/// Normalize an accepted secret-ref spelling to its canonical
-/// `secret://provider/key` form so persisted `provider_refs` (a run's stored
-/// allow-list) always match what [`SecretAccess::can_use`] compares against.
-/// Returns `None` for plaintext literals (non-refs). Without this, the colon
-/// form `secret://env:NAME` would be persisted verbatim yet compared against
-/// the canonical `secret://env/NAME`, denying the queued run at worker
-/// re-resolution.
-/// Canonicalize an operator-supplied `--secret-ref` so the stored ACL matches
-/// what [`SecretAccess`] compares against at resolution time. The `*` wildcard
-/// passes through; the colon spellings `secret://env:NAME` and `secret://env:*`
-/// normalize to the slash forms `secret://env/NAME` / `secret://env/*`.
-/// Unrecognized values are returned unchanged (fail-closed — a malformed ref
-/// simply matches nothing). Without this, `--secret-ref secret://env:NAME`
-/// would be stored verbatim yet compared against the canonical
-/// `secret://env/NAME`, silently granting nothing.
-pub fn canonicalize_operator_secret_ref(value: &str) -> String {
-    let trimmed = value.trim();
-    canonical_secret_ref(trimmed).unwrap_or_else(|| trimmed.to_string())
-}
-
-fn canonical_secret_ref(value: &str) -> Option<String> {
-    if let Some(name) = value.strip_prefix("secret://env:") {
-        if name.is_empty() {
-            return None;
-        }
-        return Some(format!("secret://env/{name}"));
-    }
-    SecretRef::parse(value).map(|secret_ref| secret_ref.canonical())
-}
-
 fn resolve_env_secret(
     secret_ref: &SecretRef,
     access: &SecretAccess,
@@ -611,24 +618,54 @@ fn valid_provider_name(name: &str) -> bool {
         && Path::new(name).components().count() == 1
 }
 
-fn secret_error_message(err: SecretResolveError) -> String {
-    match err {
-        SecretResolveError::Denied(message) => message,
-        SecretResolveError::NotFound => "secret ref not found".to_string(),
-        SecretResolveError::InvalidRef => "invalid secret ref".to_string(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::workspace_in;
     use crate::workspace::Workspace;
     use std::fs;
+    use std::process::Command;
     use tempfile::TempDir;
 
+    const ISOLATED_ENV_TEST: &str = "OMAKURE_SECRETS_TEST_CHILD";
+    const ISOLATED_ENV_MARKER: &str = "omakure_secrets_isolated_child_ran";
+
+    fn run_with_isolated_env(key: &str, value: &str) -> bool {
+        let current_thread = std::thread::current();
+        let test_name = current_thread.name().expect("named test thread");
+        if let Some(selected) = std::env::var_os(ISOLATED_ENV_TEST) {
+            assert_eq!(selected.to_str(), Some(test_name));
+            assert!(matches!(std::env::var(key), Ok(actual) if actual == value));
+            println!("{ISOLATED_ENV_MARKER}");
+            return true;
+        }
+        let output = Command::new(std::env::current_exe().expect("test executable"))
+            .args(["--exact", test_name, "--nocapture"])
+            .env(ISOLATED_ENV_TEST, test_name)
+            .env(key, value)
+            .output()
+            .expect("run isolated secret test");
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        if !value.is_empty() {
+            assert!(
+                !stdout.contains(value),
+                "isolated secret test leaked stdout"
+            );
+            assert!(
+                !String::from_utf8_lossy(&output.stderr).contains(value),
+                "isolated secret test leaked stderr"
+            );
+        }
+        assert!(
+            stdout.contains(ISOLATED_ENV_MARKER),
+            "isolated secret test did not run"
+        );
+        assert!(output.status.success(), "isolated secret test failed");
+        false
+    }
+
     fn script_with_secret(tmp: &TempDir) -> (Workspace, std::path::PathBuf) {
-        let workspace = Workspace::new(tmp.path().to_path_buf());
-        workspace.ensure_layout().unwrap();
+        let workspace = workspace_in(tmp);
         let script = tmp.path().join("secret.sh");
         fs::write(
             &script,
@@ -643,6 +680,44 @@ mod tests {
     }
 
     #[test]
+    fn secret_argument_errors_keep_field_and_public_message() {
+        let tmp = TempDir::new().unwrap();
+        let (workspace, script) = script_with_secret(&tmp);
+
+        let missing =
+            resolve_args_with_direct_secrets(&workspace, &script, &[], &[], &[]).unwrap_err();
+        assert_eq!(
+            missing,
+            SecretArgError::MissingRequired {
+                field: "TOKEN".into(),
+                flag: "--token".into(),
+            }
+        );
+        assert_eq!(
+            missing.message(),
+            "expected `--token` on the command line or in the run environment"
+        );
+
+        let queued = validate_queued_secret_args_reconstructable(
+            &workspace,
+            &script,
+            &["--token".into(), "SENSITIVE_SECRET_123".into()],
+        )
+        .unwrap_err();
+        assert_eq!(
+            queued,
+            SecretArgError::QueuedPlaintext {
+                field: "TOKEN".into(),
+            }
+        );
+        assert_eq!(
+            queued.message(),
+            "queued secret args must use secret:// refs so workers can reconstruct them without persisted plaintext"
+        );
+        assert!(!queued.to_string().contains("SENSITIVE_SECRET_123"));
+    }
+
+    #[test]
     fn secret_ref_parser_accepts_generic_secret_uri() {
         let parsed = SecretRef::parse("secret://prod/token").unwrap();
 
@@ -654,38 +729,79 @@ mod tests {
     fn parse_direct_secrets_does_not_echo_invalid_secret_value() {
         let err = parse_direct_secrets(&["raw_secret_without_field".into()]).unwrap_err();
 
-        assert_eq!(err, "invalid secret argument: expected FIELD=VALUE");
-        assert!(!err.contains("raw_secret_without_field"));
+        assert_eq!(err, DirectSecretParseError::MissingAssignment);
+        assert_eq!(
+            err.to_string(),
+            "invalid secret argument: expected FIELD=VALUE"
+        );
+        assert!(!err.to_string().contains("raw_secret_without_field"));
     }
 
     #[test]
-    fn canonicalize_operator_secret_ref_normalizes_colon_and_preserves_wildcards() {
-        assert_eq!(canonicalize_operator_secret_ref("*"), "*");
+    fn parse_direct_secrets_rejects_empty_field_without_echoing_value() {
+        let err = parse_direct_secrets(&[" =raw_secret_value".into()]).unwrap_err();
+
+        assert_eq!(err, DirectSecretParseError::EmptyField);
         assert_eq!(
-            canonicalize_operator_secret_ref("secret://env:NAME"),
-            "secret://env/NAME"
+            err.to_string(),
+            "invalid secret: field name cannot be empty"
         );
+        assert!(!err.to_string().contains("raw_secret_value"));
+    }
+
+    #[test]
+    fn check_secret_access_keeps_error_text_and_hides_ref() {
+        let access = SecretAccess::new(["secrets:use"], ["secret://prod/allowed"]);
+        let invalid = check_secret_access("secret://", &access).unwrap_err();
+        assert_eq!(invalid, SecretResolveError::InvalidRef);
+        assert_eq!(invalid.to_string(), "invalid secret ref");
+
+        let denied = check_secret_access("secret://prod/raw_secret_value", &access).unwrap_err();
         assert_eq!(
-            canonicalize_operator_secret_ref("secret://env:*"),
-            "secret://env/*"
+            denied,
+            SecretResolveError::Denied("secret ref is not allowed".into())
         );
+        assert_eq!(denied.to_string(), "secret ref is not allowed");
+        assert!(!denied.to_string().contains("raw_secret_value"));
+    }
+
+    #[test]
+    fn resolve_secret_value_preserves_typed_errors_and_redacted_text() {
+        let temp = TempDir::new().unwrap();
+        let workspace = workspace_in(&temp);
+        let access = SecretAccess::new(["secrets:use"], ["secret://prod/allowed"]);
+
+        let invalid = resolve_secret_value(&workspace, "secret://", &access).unwrap_err();
+        assert_eq!(invalid, SecretResolveError::InvalidRef);
+        assert_eq!(invalid.to_string(), "invalid secret ref");
+
+        let denied = resolve_secret_value(&workspace, "secret://prod/raw_secret_value", &access)
+            .unwrap_err();
         assert_eq!(
-            canonicalize_operator_secret_ref("secret://env/NAME"),
-            "secret://env/NAME"
+            denied,
+            SecretResolveError::Denied("secret ref is not allowed".into())
         );
+        assert_eq!(denied.to_string(), "secret ref is not allowed");
+        assert!(!denied.to_string().contains("raw_secret_value"));
+
+        let missing =
+            resolve_secret_value(&workspace, "secret://prod/allowed", &access).unwrap_err();
+        assert_eq!(missing, SecretResolveError::NotFound);
+        assert_eq!(missing.to_string(), "secret ref not found");
+
         assert_eq!(
-            canonicalize_operator_secret_ref("secret://prod/token"),
-            "secret://prod/token"
+            resolve_secret_value(&workspace, "literal-secret", &access).unwrap(),
+            "literal-secret"
         );
-        // Malformed values pass through unchanged (fail-closed, matches nothing).
-        assert_eq!(canonicalize_operator_secret_ref("garbage"), "garbage");
     }
 
     #[test]
     fn env_provider_resolves_allowed_ref() {
+        if !run_with_isolated_env("OMAKURE_TEST_SECRET_REF", "from_process_env") {
+            return;
+        }
         let tmp = TempDir::new().unwrap();
         let (workspace, script) = script_with_secret(&tmp);
-        std::env::set_var("OMAKURE_TEST_SECRET_REF", "from_process_env");
 
         let resolved = resolve_args_with_access(
             &workspace,
@@ -706,14 +822,15 @@ mod tests {
             vec!["--token", "secret://env/OMAKURE_TEST_SECRET_REF"]
         );
         assert_eq!(resolved.secrets, vec!["from_process_env"]);
-        std::env::remove_var("OMAKURE_TEST_SECRET_REF");
     }
 
     #[test]
     fn empty_env_secret_replaces_literal_ref_in_execution_args() {
+        if !run_with_isolated_env("OMAKURE_TEST_EMPTY_SECRET", "") {
+            return;
+        }
         let tmp = TempDir::new().unwrap();
         let (workspace, script) = script_with_secret(&tmp);
-        std::env::set_var("OMAKURE_TEST_EMPTY_SECRET", "");
 
         let resolved = resolve_args_with_access(
             &workspace,
@@ -745,62 +862,15 @@ mod tests {
         );
         // An empty value must not enter the redaction list.
         assert!(resolved.secrets.is_empty());
-        std::env::remove_var("OMAKURE_TEST_EMPTY_SECRET");
-    }
-
-    #[test]
-    fn colon_form_env_ref_persists_canonical_and_reconstructs_under_stored_acl() {
-        let tmp = TempDir::new().unwrap();
-        let (workspace, script) = script_with_secret(&tmp);
-        std::env::set_var("OMAKURE_TEST_COLON_REF", "colon_value");
-
-        // Enqueue-time resolution (allow-all) collects the provider_ref that is
-        // stored as the run's allow-list.
-        let enqueue = resolve_args_with_access(
-            &workspace,
-            &script,
-            &[
-                "--token".into(),
-                "secret://env:OMAKURE_TEST_COLON_REF".into(),
-            ],
-            &[],
-            &[],
-            &SecretAccess::allow_all(),
-        )
-        .unwrap();
-
-        // Regression: colon form must be normalized to canonical slash form so
-        // the stored allow-list matches what `can_use` compares against.
-        assert_eq!(
-            enqueue.persisted_args,
-            vec!["--token", "secret://env/OMAKURE_TEST_COLON_REF"]
-        );
-        assert_eq!(
-            enqueue.provider_refs,
-            vec!["secret://env/OMAKURE_TEST_COLON_REF"]
-        );
-
-        // Worker re-resolution using ONLY the stored allow-list must succeed
-        // (previously denied: ACL held `env:NAME` but compared `env/NAME`).
-        let access = SecretAccess::new(["secrets:use"], enqueue.provider_refs.clone());
-        let reresolved = resolve_args_with_access(
-            &workspace,
-            &script,
-            &enqueue.persisted_args,
-            &[],
-            &[],
-            &access,
-        )
-        .unwrap();
-        assert_eq!(reresolved.execution_args, vec!["--token", "colon_value"]);
-        std::env::remove_var("OMAKURE_TEST_COLON_REF");
     }
 
     #[test]
     fn env_wildcard_requires_explicit_env_ref_but_rides_provider_refs() {
+        if !run_with_isolated_env("OMAKURE_TEST_F6_ENV", "env_value") {
+            return;
+        }
         let tmp = TempDir::new().unwrap();
         let (workspace, script) = script_with_secret(&tmp);
-        std::env::set_var("OMAKURE_TEST_F6_ENV", "env_value");
         fs::write(workspace.envs_dir().join("prod.conf"), "TOKEN=file_value\n").unwrap();
 
         // Wildcard WITHOUT an explicit env ref: env reads are denied even though
@@ -815,9 +885,9 @@ mod tests {
             &no_env,
         )
         .unwrap_err();
-        assert_eq!(err.0, "TOKEN");
-        assert!(err.1.contains("not allowed"));
-        assert!(!err.1.contains("env_value"));
+        assert_eq!(err.field(), "TOKEN");
+        assert!(err.message().contains("not allowed"));
+        assert!(!err.message().contains("env_value"));
 
         // Same wildcard resolves a NON-env provider ref (file provider).
         let resolved = resolve_args_with_access(
@@ -844,14 +914,15 @@ mod tests {
         )
         .unwrap();
         assert_eq!(resolved_env.execution_args, vec!["--token", "env_value"]);
-        std::env::remove_var("OMAKURE_TEST_F6_ENV");
     }
 
     #[test]
     fn env_provider_wildcard_does_not_regrant_blanket_env_under_wildcard() {
+        if !run_with_isolated_env("OMAKURE_TEST_A4_ENV", "leaked_value") {
+            return;
+        }
         let tmp = TempDir::new().unwrap();
         let (workspace, script) = script_with_secret(&tmp);
-        std::env::set_var("OMAKURE_TEST_A4_ENV", "leaked_value");
 
         // Even with `secret://env/*` in the allow-list, the env gate must not
         // grant blanket env access under the wildcard.
@@ -865,10 +936,9 @@ mod tests {
             &access,
         )
         .unwrap_err();
-        assert_eq!(err.0, "TOKEN");
-        assert!(err.1.contains("not allowed"));
-        assert!(!err.1.contains("leaked_value"));
-        std::env::remove_var("OMAKURE_TEST_A4_ENV");
+        assert_eq!(err.field(), "TOKEN");
+        assert!(err.message().contains("not allowed"));
+        assert!(!err.message().contains("leaked_value"));
     }
 
     #[test]
@@ -923,8 +993,8 @@ mod tests {
         )
         .unwrap_err();
 
-        assert_eq!(err.0, "TOKEN");
-        assert!(err.1.contains("secret ref not found"));
+        assert_eq!(err.field(), "TOKEN");
+        assert!(err.message().contains("secret ref not found"));
     }
 
     #[test]
@@ -947,9 +1017,9 @@ mod tests {
         )
         .unwrap_err();
 
-        assert_eq!(err.0, "TOKEN");
-        assert!(err.1.contains("secrets:use"));
-        assert!(!err.1.contains("from_file_provider"));
+        assert_eq!(err.field(), "TOKEN");
+        assert!(err.message().contains("secrets:use"));
+        assert!(!err.message().contains("from_file_provider"));
     }
 
     #[test]
@@ -972,9 +1042,9 @@ mod tests {
         )
         .unwrap_err();
 
-        assert_eq!(err.0, "TOKEN");
-        assert!(err.1.contains("not allowed"));
-        assert!(!err.1.contains("from_file_provider"));
+        assert_eq!(err.field(), "TOKEN");
+        assert!(err.message().contains("not allowed"));
+        assert!(!err.message().contains("from_file_provider"));
     }
 
     #[test]
@@ -992,9 +1062,9 @@ mod tests {
         )
         .unwrap_err();
 
-        assert_eq!(err.0, "TOKEN");
-        assert!(err.1.contains("secret ref not found"));
-        assert!(!err.1.contains("secret://prod/missing"));
+        assert_eq!(err.field(), "TOKEN");
+        assert!(err.message().contains("secret ref not found"));
+        assert!(!err.message().contains("secret://prod/missing"));
     }
 
     #[test]
@@ -1032,8 +1102,7 @@ mod tests {
     #[test]
     fn list_secret_metadata_never_includes_values() {
         let tmp = TempDir::new().unwrap();
-        let workspace = Workspace::new(tmp.path().to_path_buf());
-        workspace.ensure_layout().unwrap();
+        let workspace = workspace_in(&tmp);
         fs::write(
             workspace.envs_dir().join("prod.conf"),
             "TOKEN=super-secret-token-value\nOTHER=also-secret\n",
@@ -1057,8 +1126,7 @@ mod tests {
     #[test]
     fn list_secret_metadata_respects_ref_acl_without_use_scope() {
         let tmp = TempDir::new().unwrap();
-        let workspace = Workspace::new(tmp.path().to_path_buf());
-        workspace.ensure_layout().unwrap();
+        let workspace = workspace_in(&tmp);
         fs::write(
             workspace.envs_dir().join("prod.conf"),
             "TOKEN=secret-a\nOTHER=secret-b\n",

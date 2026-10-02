@@ -18,19 +18,23 @@
 //! Run with:
 //! `cargo test --test docker_health_plane_exhaustion -- --ignored --nocapture`
 
+#[path = "support/docker_health_node.rs"]
+mod docker_health_node;
+#[path = "support/frame.rs"]
+mod frame;
+
+use docker_health_node::node_material;
 use omakure::direct_service::RETRY_BACKOFF;
 use omakure::direct_transport::{
-    envelope_nonce, sign_ack, unix_seconds, verify_envelope, HandshakeRole, NoiseHandshake,
-    TransportCertificate, ENVELOPE_KIND, MAX_FRAME_LENGTH,
+    ENVELOPE_KIND, HandshakeRole, MAX_FRAME_LENGTH, NoiseHandshake, envelope_nonce, sign_ack,
+    unix_seconds, verify_envelope,
 };
 use omakure::health_plane::bounds::{ACK_TIMEOUT_SECONDS, MAX_RETRIES, RETRY_BACKOFF_SECONDS};
-use omakure::node::{NodeContext, NodePathOverrides, NodePlatform};
-use omakure::node_identity::NodeIdentity;
 use serde_json::Value;
 use std::collections::BTreeSet;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::net::{TcpListener, TcpStream};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 /// How long the harness waits for the Performer's container to dial in.
@@ -69,42 +73,6 @@ fn env(name: &str) -> String {
         .unwrap_or_else(|_| panic!("{name} must be set by scripts/tasks/cert/health"))
 }
 
-fn node_material(state_dir: &Path) -> (NodeIdentity, [u8; 32], TransportCertificate) {
-    // The config must live outside the state directory: the shipped node
-    // context refuses overlapping paths.
-    let config_path = state_dir.parent().unwrap_or(Path::new(".")).join(format!(
-        "{}-harness-node.toml",
-        state_dir
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or("harness")
-    ));
-    if !config_path.exists() {
-        std::fs::write(&config_path, "version = 1\n").expect("write harness node config");
-    }
-    let context = NodeContext::resolve_for(
-        NodePlatform::current(),
-        NodePathOverrides::new(Some(state_dir.to_path_buf()), Some(config_path)),
-        true,
-        None,
-        None,
-        None,
-    )
-    .expect("resolve the harness node context");
-    let identity = NodeIdentity::load_existing(&context).expect("load the harness node identity");
-    // Not `try_into().expect(...)`: the `TryInto<[u8; 32]>` error value *is* the
-    // Vec, so that spelling prints the raw private key into the panic message,
-    // which the runner forwards to stderr and CI captures. Report the length.
-    let raw_private = std::fs::read(context.transport_key_path()).expect("read transport key");
-    let private: [u8; 32] = <[u8; 32]>::try_from(raw_private.as_slice())
-        .unwrap_or_else(|_| panic!("transport key length: {} bytes", raw_private.len()));
-    let certificate = TransportCertificate::from_bytes(
-        &std::fs::read(context.transport_certificate_path()).expect("read transport certificate"),
-    )
-    .expect("parse transport certificate");
-    (identity, private, certificate)
-}
-
 fn read_frame(stream: &mut TcpStream) -> Option<Vec<u8>> {
     read_frame_detailed(stream).ok()
 }
@@ -114,21 +82,9 @@ fn read_frame(stream: &mut TcpStream) -> Option<Vec<u8>> {
 /// and hung up" and "the peer truncated a frame", which is exactly the
 /// distinction needed to tell a stray connection from a real protocol fault.
 fn read_frame_detailed(stream: &mut TcpStream) -> std::io::Result<Vec<u8>> {
-    let mut prefix = [0_u8; 4];
-    stream.read_exact(&mut prefix)?;
-    let length = u32::from_be_bytes(prefix) as usize;
     // The prefix is unauthenticated at this point, so bound the allocation the
     // way the shipped reader does rather than trusting it.
-    if !(4..=MAX_FRAME_LENGTH).contains(&length) {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            format!("frame length {length} is outside the shipped bound"),
-        ));
-    }
-    let mut encoded = vec![0_u8; length + 4];
-    encoded[..4].copy_from_slice(&prefix);
-    stream.read_exact(&mut encoded[4..])?;
-    Ok(encoded)
+    frame::read_frame(stream, Some(4..=MAX_FRAME_LENGTH), None)
 }
 
 #[test]

@@ -1,48 +1,21 @@
-mod support;
+pub mod support;
 
 use rusqlite::Connection;
 use serde_json::Value;
-use snow::{params::NoiseParams, Builder};
+use snow::{Builder, params::NoiseParams};
 use std::io::Write;
 use std::net::{Shutdown, TcpStream};
 use std::path::Path;
-use std::process::{Command, Output};
+use std::process::Output;
 use std::time::{Duration, Instant};
 
 use omakure::direct_transport::{
-    sign_probe, unix_seconds, Frame, HandshakeRole, NoiseHandshake, TransportCertificate,
-    TransportSession, ENVELOPE_KIND, NOISE_NAME, PROLOGUE,
+    ENVELOPE_KIND, Frame, HandshakeRole, NOISE_NAME, NoiseHandshake, PROLOGUE,
+    TransportCertificate, TransportSession, sign_probe, unix_seconds,
 };
-use omakure::node::{NodeContext, NodePathOverrides, NodePlatform};
 use omakure::node_identity::NodeIdentity;
 
-const TOKEN: &str = "direct-transport-e2e-token-with-enough-entropy-00001";
 const HANDSHAKE_IO_TIMEOUT: Duration = Duration::from_secs(10);
-
-fn node_args(workspace: &Path) -> (String, String) {
-    (
-        workspace.join(".node-state").to_string_lossy().into_owned(),
-        workspace.join("node.toml").to_string_lossy().into_owned(),
-    )
-}
-
-fn run_node(workspace: &Path, args: &[String]) -> Output {
-    let (state, config) = node_args(workspace);
-    let mut command = Command::new(support::omakure_bin());
-    command
-        .arg("--scripts-dir")
-        .arg(workspace)
-        .arg("--json")
-        .arg("node")
-        .arg("--node-state-dir")
-        .arg(state)
-        .arg("--node-config")
-        .arg(config)
-        .args(args)
-        .env("OMAKURE_NODE_TEST_MODE", "1")
-        .env("OMAKURE_API_TOKEN", TOKEN);
-    command.output().expect("run node command")
-}
 
 fn json(output: &Output) -> Value {
     support::json_envelope(&output.stdout)
@@ -62,7 +35,7 @@ fn assert_success(output: &Output) {
 }
 
 fn init_node(workspace: &Path) {
-    let output = run_node(workspace, &["init".to_string()]);
+    let output = support::run_node_with_lossy_paths(workspace, &["init".to_string()]);
     assert_success(&output);
 }
 
@@ -74,17 +47,16 @@ fn enable_manual_enrollment(workspace: &Path) {
 }
 
 fn status_node(workspace: &Path) -> Value {
-    let output = run_node(workspace, &["status".to_string()]);
+    let output = support::run_node_with_lossy_paths(workspace, &["status".to_string()]);
     assert_success(&output);
     json(&output)["data"].clone()
 }
 
 fn trust_node(workspace: &Path, peer_workspace: &Path, peer: &Value) {
-    let certificate = std::fs::read(peer_workspace.join(".node-state/transport.cert"))
-        .expect("read peer transport certificate")
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>();
+    let certificate = omakure::hex::encode(
+        &std::fs::read(peer_workspace.join(".node-state/transport.cert"))
+            .expect("read peer transport certificate"),
+    );
     let args = vec![
         "trust".to_string(),
         "--node-id".to_string(),
@@ -101,7 +73,7 @@ fn trust_node(workspace: &Path, peer_workspace: &Path, peer: &Value) {
         "pretrusted transport peer".to_string(),
         "--confirmed".to_string(),
     ];
-    let output = run_node(workspace, &args);
+    let output = support::run_node_with_lossy_paths(workspace, &args);
     assert_success(&output);
     assert_eq!(json(&output)["data"]["state"], "active");
 }
@@ -181,15 +153,13 @@ fn wait_until_direct_accepts(endpoint: &str) {
 fn start_direct_listener(workspace: &Path, direct_port: &str) -> support::HttpServer {
     let server = support::HttpServer::start_node_service(
         workspace,
-        TOKEN,
+        &["node:read"],
         &[
             "--workers",
             "0",
             "--no-scheduler",
             "--direct-bind",
             &format!("127.0.0.1:{direct_port}"),
-            "--capability",
-            "node:read",
         ],
         &[],
         Duration::from_secs(15),
@@ -199,7 +169,7 @@ fn start_direct_listener(workspace: &Path, direct_port: &str) -> support::HttpSe
 }
 
 fn probe(workspace: &Path, endpoint: &str, peer_node_id: &str) -> Output {
-    run_node(
+    support::run_node_with_lossy_paths(
         workspace,
         &[
             "direct-probe".to_string(),
@@ -317,9 +287,9 @@ fn assert_raw_rejection<F>(workspace: &Path, attack: F)
 where
     F: FnOnce(),
 {
+    wait_for_audit(workspace, "rejected", 1);
     let before_rows = registry_snapshot(workspace);
     let before_rejected = protocol_rejection_count(workspace);
-    std::thread::sleep(Duration::from_millis(150));
     attack();
     let deadline = Instant::now() + Duration::from_secs(5);
     while Instant::now() < deadline && protocol_rejection_count(workspace) < before_rejected + 1 {
@@ -358,45 +328,6 @@ fn send_raw(endpoint: &str, bytes: &[u8]) {
     let _ = stream.shutdown(Shutdown::Write);
 }
 
-fn node_material(workspace: &Path) -> (NodeIdentity, [u8; 32], TransportCertificate) {
-    let context = NodeContext::resolve_for(
-        NodePlatform::current(),
-        NodePathOverrides::new(
-            Some(workspace.join(".node-state")),
-            Some(workspace.join("node.toml")),
-        ),
-        true,
-        None,
-        None,
-        None,
-    )
-    .expect("resolve node context");
-    let identity = NodeIdentity::load_existing(&context).expect("load node identity");
-    let private: [u8; 32] = std::fs::read(context.transport_key_path())
-        .expect("read transport key")
-        .try_into()
-        .expect("transport key length");
-    let certificate = TransportCertificate::from_bytes(
-        &std::fs::read(context.transport_certificate_path()).expect("read transport certificate"),
-    )
-    .expect("parse transport certificate");
-    (identity, private, certificate)
-}
-
-fn read_frame(stream: &mut TcpStream) -> Vec<u8> {
-    use std::io::Read;
-
-    let mut prefix = [0_u8; 4];
-    stream.read_exact(&mut prefix).expect("read frame prefix");
-    let length = u32::from_be_bytes(prefix) as usize;
-    let mut encoded = vec![0_u8; length + 4];
-    encoded[..4].copy_from_slice(&prefix);
-    stream
-        .read_exact(&mut encoded[4..])
-        .expect("read frame body");
-    encoded
-}
-
 fn send_handshake_frame(stream: &mut TcpStream, message_number: u8, message: &[u8]) {
     stream
         .write_all(
@@ -430,7 +361,8 @@ fn custom_certificate_handshake(endpoint: &str, private: [u8; 32], certificate: 
         .expect("write Noise message 1");
     send_handshake_frame(&mut stream, 1, &message[..length]);
 
-    let response = Frame::parse(&read_frame(&mut stream)).expect("parse Noise message 2");
+    let response = Frame::parse(&support::direct_client::read_frame(&mut stream))
+        .expect("parse Noise message 2");
     assert_eq!(response.message_number().expect("message 2 number"), 2);
     let mut payload = vec![0_u8; 4096];
     handshake
@@ -463,7 +395,7 @@ fn valid_session(
     stream
         .write_all(&handshake.write_next().expect("write production message 1"))
         .expect("send production message 1");
-    let response = read_frame(&mut stream);
+    let response = support::direct_client::read_frame(&mut stream);
     handshake
         .read_next(&response, unix_seconds())
         .expect("read production message 2");
@@ -617,7 +549,7 @@ fn direct_transport_post_reset_old_identity_rejected() {
         registry_snapshot(initiator.path())
     };
 
-    assert_success(&run_node(
+    assert_success(&support::run_node_with_lossy_paths(
         target.path(),
         &["reset".to_string(), "--confirmed".to_string()],
     ));
@@ -674,22 +606,21 @@ fn direct_transport_production_listener_rejects_adversarial_certificates_envelop
     let target_port = free_port();
     let target_server = support::HttpServer::start_node_service(
         target.path(),
-        TOKEN,
+        &["node:read"],
         &[
             "--workers",
             "0",
             "--no-scheduler",
             "--direct-bind",
             &format!("127.0.0.1:{target_port}"),
-            "--capability",
-            "node:read",
         ],
         &[],
         Duration::from_secs(15),
     );
     let endpoint = format!("127.0.0.1:{target_port}");
     wait_until_direct_accepts(&endpoint);
-    let (initiator_identity, private, valid_certificate) = node_material(initiator.path());
+    let (initiator_identity, private, valid_certificate) =
+        support::direct_client::node_material(initiator.path());
 
     let now = unix_seconds();
     let expired_certificate = TransportCertificate::issue(
@@ -731,15 +662,13 @@ fn direct_transport_production_listener_rejects_adversarial_certificates_envelop
     support::assert_terminated(exit);
     let target_server = support::HttpServer::start_node_service(
         target.path(),
-        TOKEN,
+        &["node:read"],
         &[
             "--workers",
             "0",
             "--no-scheduler",
             "--direct-bind",
             &format!("127.0.0.1:{target_port}"),
-            "--capability",
-            "node:read",
         ],
         &[],
         Duration::from_secs(15),
@@ -775,7 +704,7 @@ fn direct_transport_production_listener_rejects_adversarial_certificates_envelop
         [0x31; 16],
         false,
     );
-    let ack = read_frame(&mut replay_stream);
+    let ack = support::direct_client::read_frame(&mut replay_stream);
     replay_session
         .read(&ack)
         .expect("read production probe ack");
@@ -831,7 +760,7 @@ fn direct_transport_process_probe_authorizes_audits_rejects_and_restarts() {
     let first_port = free_port();
     let first_server = support::HttpServer::start_node_service(
         first.path(),
-        TOKEN,
+        &["*"],
         &[
             "--workers",
             "0",
@@ -845,7 +774,7 @@ fn direct_transport_process_probe_authorizes_audits_rejects_and_restarts() {
     let second_port = free_port();
     let second_server = support::HttpServer::start_node_service(
         second.path(),
-        TOKEN,
+        &["*"],
         &[
             "--workers",
             "0",
@@ -881,7 +810,6 @@ fn direct_transport_process_probe_authorizes_audits_rejects_and_restarts() {
         second_status["identity"]["node_id"].as_str().unwrap(),
     );
     assert!(!untrusted_probe.status.success());
-    wait_for_audit(second.path(), "rejected", 1);
 
     let endpoint = format!("127.0.0.1:{second_port}");
     assert_raw_rejection(second.path(), || {
@@ -898,7 +826,7 @@ fn direct_transport_process_probe_authorizes_audits_rejects_and_restarts() {
 
     let restarted = support::HttpServer::start_node_service(
         second.path(),
-        TOKEN,
+        &["*"],
         &[
             "--workers",
             "0",
@@ -933,15 +861,13 @@ fn direct_transport_manual_enrollment_stages_then_requires_approval() {
     let target_port = free_port();
     let target_server = support::HttpServer::start_node_service(
         target.path(),
-        TOKEN,
+        &["node:read"],
         &[
             "--workers",
             "0",
             "--no-scheduler",
             "--direct-bind",
             &format!("127.0.0.1:{target_port}"),
-            "--capability",
-            "node:read",
         ],
         &[],
         Duration::from_secs(15),
@@ -949,7 +875,7 @@ fn direct_transport_manual_enrollment_stages_then_requires_approval() {
     let candidate_port = free_port();
     let candidate_server = support::HttpServer::start_node_service(
         candidate.path(),
-        TOKEN,
+        &["*"],
         &[
             "--workers",
             "0",
@@ -961,7 +887,7 @@ fn direct_transport_manual_enrollment_stages_then_requires_approval() {
         Duration::from_secs(15),
     );
 
-    let request = run_node(
+    let request = support::run_node_with_lossy_paths(
         candidate.path(),
         &[
             "enroll".into(),
@@ -985,12 +911,11 @@ fn direct_transport_manual_enrollment_stages_then_requires_approval() {
         1
     );
 
-    let certificate = std::fs::read(candidate.path().join(".node-state/transport.cert"))
-        .expect("read candidate transport certificate")
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>();
-    let approve = run_node(
+    let certificate = omakure::hex::encode(
+        &std::fs::read(candidate.path().join(".node-state/transport.cert"))
+            .expect("read candidate transport certificate"),
+    );
+    let approve = support::run_node_with_lossy_paths(
         target.path(),
         &[
             "enroll".into(),
@@ -1063,27 +988,15 @@ fn direct_probe_names_the_standing_session_and_still_reports_a_dead_endpoint() {
 
     let first_server = support::HttpServer::start_node_service(
         first.path(),
-        TOKEN,
-        &[
-            "--workers",
-            "0",
-            "--no-scheduler",
-            "--capability",
-            "node:read",
-        ],
+        &["node:read"],
+        &["--workers", "0", "--no-scheduler"],
         &[],
         Duration::from_secs(15),
     );
     let second_server = support::HttpServer::start_node_service(
         second.path(),
-        TOKEN,
-        &[
-            "--workers",
-            "0",
-            "--no-scheduler",
-            "--capability",
-            "node:read",
-        ],
+        &["node:read"],
+        &["--workers", "0", "--no-scheduler"],
         &[],
         Duration::from_secs(15),
     );
@@ -1155,27 +1068,15 @@ fn node_service_static_peers_connect_reconnect_and_report_redacted_status() {
 
     let first_server = support::HttpServer::start_node_service(
         first.path(),
-        TOKEN,
-        &[
-            "--workers",
-            "0",
-            "--no-scheduler",
-            "--capability",
-            "node:read",
-        ],
+        &["node:read"],
+        &["--workers", "0", "--no-scheduler"],
         &[],
         Duration::from_secs(15),
     );
     let second_server = support::HttpServer::start_node_service(
         second.path(),
-        TOKEN,
-        &[
-            "--workers",
-            "0",
-            "--no-scheduler",
-            "--capability",
-            "node:read",
-        ],
+        &["node:read"],
+        &["--workers", "0", "--no-scheduler"],
         &[],
         Duration::from_secs(15),
     );
@@ -1196,14 +1097,8 @@ fn node_service_static_peers_connect_reconnect_and_report_redacted_status() {
     support::assert_terminated(exit);
     let restarted = support::HttpServer::start_node_service(
         second.path(),
-        TOKEN,
-        &[
-            "--workers",
-            "0",
-            "--no-scheduler",
-            "--capability",
-            "node:read",
-        ],
+        &["node:read"],
+        &["--workers", "0", "--no-scheduler"],
         &[],
         Duration::from_secs(15),
     );
@@ -1216,7 +1111,7 @@ fn node_service_static_peers_connect_reconnect_and_report_redacted_status() {
 }
 
 fn revoke_node(workspace: &Path, peer_node_id: &str) {
-    let output = run_node(
+    let output = support::run_node_with_lossy_paths(
         workspace,
         &[
             "revoke".to_string(),
@@ -1239,12 +1134,11 @@ fn rejected_error_codes(workspace: &Path) -> Vec<i64> {
     let mut statement = connection
         .prepare("SELECT error_code FROM transport_audit WHERE outcome = 'rejected'")
         .expect("prepare rejected audit query");
-    let codes = statement
+    let rows = statement
         .query_map([], |row| row.get::<_, Option<i64>>(0))
-        .expect("query rejected audit rows")
-        .filter_map(|code| code.expect("read error code"))
-        .collect();
-    codes
+        .expect("query rejected audit rows");
+    rows.filter_map(|code| code.expect("read error code"))
+        .collect()
 }
 
 /// Wait until `server` records a transport failure for `peer_node_id`.
@@ -1436,12 +1330,13 @@ fn revoking_a_peer_ends_the_session_this_node_is_already_holding() {
     // And it must stay down. The revoker will not redial a peer it revoked, and
     // the revoked node's own dials are refused with `revoked`, which retires
     // its dialer.
-    std::thread::sleep(Duration::from_secs(3));
-    let transport = first_server.get("/v1/node/status").json()["data"]["transport"].clone();
-    assert_eq!(
-        transport["connected_peer_count"], 0,
-        "a revoked peer reconnected: {transport}"
-    );
+    support::assert_throughout(Duration::from_secs(3), Duration::from_millis(100), || {
+        let transport = first_server.get("/v1/node/status").json()["data"]["transport"].clone();
+        assert_eq!(
+            transport["connected_peer_count"], 0,
+            "a revoked peer reconnected: {transport}"
+        );
+    });
 
     let _ = second_server.terminate();
     let _ = first_server.terminate();
@@ -1466,14 +1361,8 @@ const RECONNECT_BUDGET: Duration = Duration::from_secs(45);
 fn start_peer_service(workspace: &Path) -> support::HttpServer {
     support::HttpServer::start_node_service(
         workspace,
-        TOKEN,
-        &[
-            "--workers",
-            "0",
-            "--no-scheduler",
-            "--capability",
-            "node:read",
-        ],
+        &["node:read"],
+        &["--workers", "0", "--no-scheduler"],
         &[],
         Duration::from_secs(15),
     )

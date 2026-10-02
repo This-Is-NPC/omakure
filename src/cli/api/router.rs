@@ -1,0 +1,370 @@
+use super::SIGNED_BUNDLE_HTTP_BODY_LIMIT_BYTES;
+use super::battery::{
+    add_battery_handler, inspect_battery_handler, install_battery_script_handler,
+    list_batteries_handler, list_battery_scripts_handler, remove_battery_handler,
+    sync_battery_handler,
+};
+use super::bearer::{health_plane_require_bearer, require_bearer};
+#[cfg(test)]
+use super::boot::auth_verification_gate;
+use super::envs::{
+    activate_env_handler, create_env_handler, deactivate_env_handler, delete_env_handler,
+    delete_env_param_handler, list_envs_handler, patch_env_handler, put_env_handler,
+    set_env_param_handler, show_env_handler,
+};
+use super::node::{
+    node_baseline_handler, node_baseline_rollback_handler, node_capabilities_handler,
+    node_cue_handler, node_discovery_handler, node_enrollment_approve_handler,
+    node_enrollment_reject_handler, node_enrollment_stage_handler, node_enrollments_handler,
+    node_health_handler, node_initialize_handler, node_peers_handler, node_revoke_handler,
+    node_signals_handler, node_signed_bundle_apply_handler, node_status_handler,
+    node_trust_handler,
+};
+use super::respond::error_response;
+use super::runs::{
+    cancel_run_handler, dead_letter_run_handler, enqueue_run_handler, list_runs_handler,
+    list_traces_handler, queue_stats_handler, show_run_handler,
+};
+use super::scripts::{
+    list_scripts_handler, script_path_handler, search_handler, tree_path_handler, tree_root_handler,
+};
+use super::secrets::list_secrets_metadata_handler;
+use super::state::ApiState;
+#[cfg(test)]
+use super::state::MAX_CONCURRENT_BLOCKING_OPERATIONS;
+#[cfg(test)]
+use super::state::{ApiPolicy, ReadinessGate};
+use super::status::{
+    admin_status_handler, config_handler, doctor_handler, health, ready_handler, workspace_handler,
+};
+use crate::auth::Authenticator;
+use crate::node_registry::NodeRegistry;
+#[cfg(test)]
+use crate::operations::node as node_ops;
+use crate::policy::DeployPolicy;
+#[cfg(test)]
+use crate::workspace::Workspace;
+use axum::Router;
+use axum::body::Body;
+use axum::http::{Request, StatusCode};
+use axum::middleware::{self, Next};
+use axum::response::IntoResponse;
+use axum::routing::{delete, get, post, put};
+use std::sync::Arc;
+
+#[cfg(test)]
+pub(super) const BODY_LIMIT_BYTES: usize = 1024 * 1024;
+
+/// Auth bundle for Health Plane HTTP routes.
+#[derive(Clone)]
+pub(super) struct HealthPlaneAuthState {
+    pub(super) auth: Authenticator,
+    pub(super) deploy: DeployPolicy,
+    pub(super) auth_verification_gate: Arc<tokio::sync::Semaphore>,
+}
+
+/// Health Plane read routes mounted under `/v1/node` by `serve_http`.
+///
+/// The registry is opened once by `omakure node serve`, not by `omakure api`.
+pub(crate) fn health_plane_router(
+    registry: Arc<NodeRegistry>,
+    auth: Authenticator,
+    deploy: DeployPolicy,
+    auth_verification_gate: Arc<tokio::sync::Semaphore>,
+    body_limit: usize,
+) -> Router {
+    health_plane_router_with_blocking_gate(
+        registry,
+        auth,
+        deploy,
+        auth_verification_gate,
+        Arc::new(tokio::sync::Semaphore::new(
+            super::state::MAX_CONCURRENT_BLOCKING_OPERATIONS,
+        )),
+        body_limit,
+    )
+}
+
+#[derive(Clone)]
+pub(super) struct HealthPlaneState {
+    pub(super) registry: Arc<NodeRegistry>,
+    pub(super) blocking_operation_gate: Arc<tokio::sync::Semaphore>,
+}
+
+pub(super) fn health_plane_router_with_blocking_gate(
+    registry: Arc<NodeRegistry>,
+    auth: Authenticator,
+    deploy: DeployPolicy,
+    auth_verification_gate: Arc<tokio::sync::Semaphore>,
+    blocking_operation_gate: Arc<tokio::sync::Semaphore>,
+    body_limit: usize,
+) -> Router {
+    let auth_state = HealthPlaneAuthState {
+        auth,
+        deploy,
+        auth_verification_gate,
+    };
+    Router::new()
+        .route("/health", get(node_health_handler))
+        .route("/signals", get(node_signals_handler))
+        .layer(axum::extract::DefaultBodyLimit::max(body_limit))
+        .layer(middleware::from_fn(
+            move |request: Request<Body>, next: Next| {
+                let auth_state = auth_state.clone();
+                async move {
+                    let headers = request.headers().clone();
+                    health_plane_require_bearer(auth_state, headers, request, next).await
+                }
+            },
+        ))
+        .with_state(HealthPlaneState {
+            registry,
+            blocking_operation_gate,
+        })
+}
+
+#[cfg(test)]
+pub(super) fn router(workspace: Workspace) -> Router {
+    router_with_blocking_gate(
+        workspace,
+        Arc::new(tokio::sync::Semaphore::new(
+            MAX_CONCURRENT_BLOCKING_OPERATIONS,
+        )),
+    )
+}
+
+#[cfg(test)]
+pub(super) fn router_with_blocking_gate(
+    workspace: Workspace,
+    blocking_operation_gate: Arc<tokio::sync::Semaphore>,
+) -> Router {
+    // Test convenience: wildcard scope plus unrestricted secret refs.
+    // Production scope `*` still requires explicit `--secret-ref`.
+    let deploy = DeployPolicy::default();
+    let auth_gate = auth_verification_gate(&deploy);
+    router_with_state(
+        ApiState {
+            auth: crate::auth::test_credential::authenticator(&["*"]),
+            workspace,
+            policy: ApiPolicy::with_secret_refs(["*"]),
+            deploy,
+            readiness: None,
+            transport: None,
+            discovery: None,
+            cues: None,
+            baselines: None,
+            bootstrap_token_path: None,
+            auth_verification_gate: auth_gate,
+            blocking_operation_gate,
+        },
+        BODY_LIMIT_BYTES,
+    )
+}
+
+#[cfg(test)]
+pub(super) fn router_with_auth(
+    auth: Authenticator,
+    workspace: Workspace,
+    policy: ApiPolicy,
+) -> Router {
+    router_with_policy(
+        auth,
+        workspace,
+        policy,
+        DeployPolicy::default(),
+        None,
+        BODY_LIMIT_BYTES,
+    )
+}
+
+#[cfg(test)]
+pub(super) fn router_with_deploy(
+    auth: Authenticator,
+    workspace: Workspace,
+    policy: ApiPolicy,
+    deploy: DeployPolicy,
+) -> Router {
+    router_with_policy(auth, workspace, policy, deploy, None, BODY_LIMIT_BYTES)
+}
+
+#[cfg(test)]
+pub(super) fn router_with_policy(
+    auth: Authenticator,
+    workspace: Workspace,
+    policy: ApiPolicy,
+    deploy: DeployPolicy,
+    readiness: Option<Arc<ReadinessGate>>,
+    body_limit: usize,
+) -> Router {
+    let auth_gate = auth_verification_gate(&deploy);
+    router_with_state(
+        ApiState {
+            auth,
+            workspace,
+            policy,
+            deploy,
+            readiness,
+            transport: None,
+            discovery: None,
+            cues: None,
+            baselines: None,
+            bootstrap_token_path: None,
+            auth_verification_gate: auth_gate,
+            blocking_operation_gate: Arc::new(tokio::sync::Semaphore::new(
+                MAX_CONCURRENT_BLOCKING_OPERATIONS,
+            )),
+        },
+        body_limit,
+    )
+}
+
+pub(super) fn router_with_state(state: ApiState, body_limit: usize) -> Router {
+    // Route registration must stay aligned with `HTTP_ROUTE_INVENTORY`.
+    Router::new()
+        .route("/v1/health", get(health))
+        .route("/v1/ready", get(ready_handler))
+        .route("/v1/admin/status", get(admin_status_handler))
+        .route("/v1/config", get(config_handler))
+        .route("/v1/doctor", get(doctor_handler))
+        .route("/v1/workspace", get(workspace_handler))
+        .route("/v1/search", get(search_handler))
+        .route("/v1/tree", get(tree_root_handler))
+        .route("/v1/tree/{*path}", get(tree_path_handler))
+        .route("/v1/scripts", get(list_scripts_handler))
+        .route("/v1/scripts/{*script_id}", get(script_path_handler))
+        .route("/v1/envs", get(list_envs_handler).post(create_env_handler))
+        .route("/v1/envs/active", delete(deactivate_env_handler))
+        .route(
+            "/v1/envs/{name}",
+            get(show_env_handler)
+                .put(put_env_handler)
+                .patch(patch_env_handler)
+                .delete(delete_env_handler),
+        )
+        .route("/v1/envs/{name}/activate", post(activate_env_handler))
+        .route(
+            "/v1/envs/{name}/params/{key}",
+            put(set_env_param_handler).delete(delete_env_param_handler),
+        )
+        .route("/v1/runs", get(list_runs_handler).post(enqueue_run_handler))
+        .route("/v1/runs/{run_id}", get(show_run_handler))
+        .route("/v1/runs/{run_id}/traces", get(list_traces_handler))
+        .route("/v1/runs/{run_id}/cancel", post(cancel_run_handler))
+        .route(
+            "/v1/runs/{run_id}/dead-letter",
+            post(dead_letter_run_handler),
+        )
+        .route("/v1/queue/stats", get(queue_stats_handler))
+        .route(
+            "/v1/batteries",
+            get(list_batteries_handler).post(add_battery_handler),
+        )
+        .route(
+            "/v1/batteries/{battery_id}",
+            get(inspect_battery_handler).delete(remove_battery_handler),
+        )
+        .route(
+            "/v1/batteries/{battery_id}/scripts",
+            get(list_battery_scripts_handler),
+        )
+        .route(
+            "/v1/batteries/{battery_id}/scripts/{script_id}/install",
+            post(install_battery_script_handler),
+        )
+        .route(
+            "/v1/batteries/{battery_id}/sync",
+            post(sync_battery_handler),
+        )
+        .route("/v1/secrets", get(list_secrets_metadata_handler))
+        .route("/v1/node/status", get(node_status_handler))
+        .route("/v1/node/discovery", get(node_discovery_handler))
+        .route("/v1/node/init", post(node_initialize_handler))
+        .route("/v1/node/cues", post(node_cue_handler))
+        .route("/v1/node/baselines", post(node_baseline_handler))
+        .route(
+            "/v1/node/baseline/rollback",
+            post(node_baseline_rollback_handler),
+        )
+        .route(
+            "/v1/node/peers",
+            get(node_peers_handler).post(node_trust_handler),
+        )
+        .route(
+            "/v1/node/enrollments",
+            get(node_enrollments_handler).post(node_enrollment_stage_handler),
+        )
+        .route(
+            "/v1/node/enrollments/{node_id}/approve",
+            post(node_enrollment_approve_handler),
+        )
+        .route(
+            "/v1/node/enrollments/{node_id}/reject",
+            post(node_enrollment_reject_handler),
+        )
+        .route(
+            "/v1/node/enrollment/bundle",
+            post(node_signed_bundle_apply_handler).layer(axum::extract::DefaultBodyLimit::max(
+                SIGNED_BUNDLE_HTTP_BODY_LIMIT_BYTES,
+            )),
+        )
+        .route(
+            "/v1/node/peers/{node_id}/capabilities",
+            axum::routing::patch(node_capabilities_handler),
+        )
+        .route("/v1/node/peers/{node_id}/revoke", post(node_revoke_handler))
+        .fallback(protected_not_found)
+        .layer(axum::extract::DefaultBodyLimit::max(body_limit))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            require_bearer,
+        ))
+        .with_state(state)
+}
+
+async fn protected_not_found() -> impl IntoResponse {
+    error_response(StatusCode::NOT_FOUND, "not_found", "endpoint not found")
+}
+
+#[cfg(test)]
+pub(super) fn shared_test_health_registry() -> Arc<NodeRegistry> {
+    use crate::domain::NodeConfig;
+
+    use std::sync::OnceLock;
+
+    static REGISTRY: OnceLock<Arc<NodeRegistry>> = OnceLock::new();
+    REGISTRY
+        .get_or_init(|| {
+            let temp = Box::leak(Box::new(tempfile::TempDir::new().expect("tempdir")));
+            let context = crate::test_support::node_context(temp.path());
+            node_ops::initialize_node_nonblocking(&context, &NodeConfig::default())
+                .expect("initialize node");
+            Arc::new(
+                crate::operations::node::open_observational_registry(&context)
+                    .expect("open observational registry"),
+            )
+        })
+        .clone()
+}
+
+#[cfg(test)]
+pub(super) fn router_with_health_plane(
+    auth: Authenticator,
+    workspace: Workspace,
+    policy: ApiPolicy,
+    deploy: DeployPolicy,
+    readiness: Option<Arc<ReadinessGate>>,
+    registry: Arc<NodeRegistry>,
+    body_limit: usize,
+) -> Router {
+    let api = router_with_policy(
+        auth.clone(),
+        workspace,
+        policy.clone(),
+        deploy.clone(),
+        readiness,
+        body_limit,
+    );
+    let auth_gate = auth_verification_gate(&deploy);
+    let health = health_plane_router(registry, auth, deploy, auth_gate, body_limit);
+    api.nest("/v1/node", health)
+}

@@ -4,6 +4,11 @@
 //! (including fixed uid/gid volume ownership) runs in the Linux CI Docker job.
 //! CI does not require a Docker daemon for this test.
 
+#[path = "support/text.rs"]
+mod text;
+
+use text::normalize_line_endings;
+
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -14,10 +19,6 @@ use std::os::unix::fs::PermissionsExt;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn normalize_line_endings(text: &str) -> String {
-    text.replace("\r\n", "\n").replace('\r', "\n")
 }
 
 fn read(rel: &str) -> String {
@@ -59,11 +60,12 @@ fn strip_verbatim_prefix(mut path: String) -> String {
 
 #[cfg(windows)]
 fn bash_safe_drive_path(path: &str) -> String {
-    if let Some((drive, rest)) = path.split_once(':') {
-        if drive.len() == 1 && drive.chars().all(|c| c.is_ascii_alphabetic()) {
-            let rest = rest.strip_prefix('/').unwrap_or(rest);
-            return format!("/{}/{}", drive.to_ascii_lowercase(), rest);
-        }
+    if let Some((drive, rest)) = path.split_once(':')
+        && drive.len() == 1
+        && drive.chars().all(|c| c.is_ascii_alphabetic())
+    {
+        let rest = rest.strip_prefix('/').unwrap_or(rest);
+        return format!("/{}/{}", drive.to_ascii_lowercase(), rest);
     }
     path.to_string()
 }
@@ -173,17 +175,14 @@ fn well_known_git_bash_paths() -> Vec<PathBuf> {
 
 #[cfg(windows)]
 fn resolve_packaging_bash_on_windows() -> Option<PathBuf> {
-    if let Ok(path_var) = std::env::var("PATH") {
-        if let Some(path) = resolve_packaging_bash_in_path(&path_var) {
-            return Some(path);
-        }
+    if let Ok(path_var) = std::env::var("PATH")
+        && let Some(path) = resolve_packaging_bash_in_path(&path_var)
+    {
+        return Some(path);
     }
-    for candidate in well_known_git_bash_paths() {
-        if is_windows_packaging_bash(&candidate) {
-            return Some(candidate);
-        }
-    }
-    None
+    well_known_git_bash_paths()
+        .into_iter()
+        .find(|candidate| is_windows_packaging_bash(candidate))
 }
 
 fn decode_command_output(bytes: &[u8]) -> String {
@@ -299,15 +298,8 @@ fn compose_example_is_host_loopback_with_workspace_and_tokens_file() {
         "compose should publish only on host loopback 127.0.0.1:7878"
     );
     assert!(
-        compose.contains("OMAKURE_API_TOKEN"),
-        "compose must document legacy OMAKURE_API_TOKEN"
-    );
-    assert!(
-        !compose.lines().any(|line| {
-            let line = line.trim_start();
-            !line.starts_with('#') && line.starts_with("OMAKURE_API_TOKEN:")
-        }),
-        "compose must not require legacy OMAKURE_API_TOKEN"
+        !compose.contains("OMAKURE_API_TOKEN"),
+        "compose must not configure OMAKURE_API_TOKEN server auth"
     );
     assert!(
         compose.lines().any(|line| {
@@ -565,9 +557,8 @@ fn unix_install_artifact_skips_github_version_lookup() {
 #[test]
 fn hosted_lifecycle_and_docker_certification_are_declared_without_false_results() {
     let ci = read(".github/workflows/ci.yml");
-    assert!(ci.contains(
-        "run: ./scripts/tasks/check/platform/${{ matrix.platform }} \"${{ matrix.target }}\""
-    ));
+    assert!(ci.contains(&platform_invocation("--test-only")));
+    assert!(ci.contains(&platform_invocation("--build-only")));
     let native = read("scripts/tasks/suite/native-tests");
     assert!(
         native.contains("scripts/tasks/atomic/test-lib")
@@ -637,13 +628,11 @@ fn deployment_doc_covers_required_topics_and_multi_token() {
         "volume",
         "SQLite",
         "/v1/health",
-        "OMAKURE_API_TOKEN",
         "tokens-file",
         "token generate",
         "Argon2id",
         "policy.toml",
         "OMAKURE_POLICY_FILE",
-        "legacy_env_token",
         "routes.writes",
     ] {
         assert!(
@@ -655,10 +644,6 @@ fn deployment_doc_covers_required_topics_and_multi_token() {
     assert!(
         lower.contains("multi-token") || lower.contains("tokens-file"),
         "deployment.md must document multi-token / tokens-file auth"
-    );
-    assert!(
-        lower.contains("legacy"),
-        "deployment.md must still document legacy token mode"
     );
     assert!(
         lower.contains("load order"),
@@ -725,9 +710,9 @@ fn docs_index_preserves_canonical_manual_ownership() {
         );
     }
     let reference = index
-        .split_once("## Referência")
+        .split_once("## Reference")
         .map(|(_, body)| body)
-        .expect("docs/README.md must have Referência section");
+        .expect("docs/README.md must have Reference section");
     for target in [
         "cli-reference.md",
         "usage/omakure.md",
@@ -739,20 +724,19 @@ fn docs_index_preserves_canonical_manual_ownership() {
     ] {
         assert!(
             reference.contains(&format!("({target})")),
-            "Referência section must link {target}"
+            "Reference section must link {target}"
         );
     }
 }
 // These wrappers are Bash scripts with shebangs, so execute them only on Unix,
 // where `Command` can launch them directly. The cross-platform Rust freshness
-// contracts remain in `cli_reference_contract`: the Clap-rendered reference
+// contracts remain in `cli_contract_suite::reference`: the Clap-rendered reference
 // and CLI/HTTP parity checks run on every target.
 #[cfg(unix)]
 #[test]
 fn generated_documentation_checks_are_read_only_and_fresh() {
     let root = repo_root();
     let artifacts = [
-        "docs/cli-reference.md",
         "docs/usage/omakure.md",
         "docs/usage/omakure.1",
         "docs/usage/omakure.kdl",
@@ -772,20 +756,31 @@ fn generated_documentation_checks_are_read_only_and_fresh() {
             )
         })
         .collect::<Vec<_>>();
-    for script in [
-        "scripts/tasks/cli-reference",
-        "scripts/tasks/atomic/usage-kdl",
-        "scripts/tasks/atomic/usage-docs",
-        "scripts/tasks/atomic/operation-catalog",
+    for (label, script, args) in [
+        (
+            "usage-kdl",
+            "scripts/tasks/atomic/run-bounded",
+            &["5m", "scripts/tasks/usage-kdl", "--check"][..],
+        ),
+        (
+            "usage-docs",
+            "scripts/tasks/atomic/run-bounded",
+            &["5m", "scripts/tasks/usage-docs", "--check"][..],
+        ),
+        (
+            "operation-catalog",
+            "scripts/tasks/atomic/operation-catalog",
+            &["--check"][..],
+        ),
     ] {
         let output = Command::new(root.join(script))
-            .arg("--check")
+            .args(args)
             .current_dir(&root)
             .output()
-            .unwrap_or_else(|error| panic!("run {script} --check: {error}"));
+            .unwrap_or_else(|error| panic!("run {label} --check: {error}"));
         assert!(
             output.status.success(),
-            "{script} --check failed: {}",
+            "{label} --check failed: {}",
             String::from_utf8_lossy(&output.stderr)
         );
     }
@@ -799,7 +794,7 @@ fn generated_documentation_checks_are_read_only_and_fresh() {
 }
 
 #[test]
-fn current_headless_docs_and_tooling_exist_without_obsolete_ui_docs() {
+fn headless_docs_and_tooling_match_package_contract() {
     let root = repo_root();
     for doc in [
         "docs/README.md",
@@ -825,10 +820,10 @@ fn current_headless_docs_and_tooling_exist_without_obsolete_ui_docs() {
             "headless documentation is missing {doc}"
         );
     }
-    for obsolete in ["docs/tui-screens-and-widgets.md", "docs/lua-widgets.md"] {
+    for unsupported_doc in ["docs/tui-screens-and-widgets.md", "docs/lua-widgets.md"] {
         assert!(
-            !root.join(obsolete).exists(),
-            "obsolete current surface remains {obsolete}"
+            !root.join(unsupported_doc).exists(),
+            "headless documentation contains unsupported page {unsupported_doc}"
         );
     }
     assert!(!read("mise.toml").contains("[tasks.tui]"));
@@ -849,7 +844,7 @@ raw = true"
     );
     let node = read("scripts/tasks/atomic/node-serve");
     assert!(
-        node.contains("scripts/tasks/dev/smoke") || node.contains("node serve"),
+        node.contains("node serve"),
         "canonical node route must remain a node-service entry point"
     );
     // The archive contract is as-is and keeps its own document.
@@ -858,9 +853,9 @@ raw = true"
 }
 
 #[test]
-fn headless_source_tree_has_no_tui_theme_or_widget_assets() {
+fn headless_source_tree_excludes_nonproduct_assets() {
     let root = repo_root();
-    for removed in [
+    for unsupported_asset in [
         "src/adapters/tui/app.rs",
         "src/adapters/tui/mod.rs",
         "src/adapters/tui/widgets/mod.rs",
@@ -870,21 +865,18 @@ fn headless_source_tree_has_no_tui_theme_or_widget_assets() {
         "themes/default.toml",
     ] {
         assert!(
-            !root.join(removed).exists(),
-            "headless package must not retain removed asset {removed}"
+            !root.join(unsupported_asset).exists(),
+            "headless package contains unsupported asset {unsupported_asset}"
         );
     }
 
     let cargo = read("Cargo.toml").to_lowercase();
     assert!(cargo.contains("name = \"omakure-installer\""));
     assert!(root.join("src/installer.rs").is_file());
-    // `mlua` does not belong to this list. This test guards the removal of the
-    // TUI *widget* runtime, which is distinct from the script runtime. The
-    // widget stays gone; the script runtime is asserted present separately.
-    for removed_dependency in ["crossterm", "ratatui", "rattles"] {
+    for unsupported_dependency in ["crossterm", "ratatui", "rattles"] {
         assert!(
-            !cargo.contains(removed_dependency),
-            "headless package must not declare {removed_dependency}"
+            !cargo.contains(unsupported_dependency),
+            "headless package must not declare {unsupported_dependency}"
         );
     }
 
@@ -905,7 +897,6 @@ fn automation_scripts_are_canonical_executable_routes() {
         "scripts/tasks/suite",
         "scripts/tasks/check/platform",
         "scripts/tasks/cert",
-        "scripts/tasks/dev",
         ".githooks",
         "scripts/install",
         "scripts/release",
@@ -978,15 +969,15 @@ fn hooks_and_mise_use_one_canonical_script_without_dependencies() {
     let root = repo_root();
     assert!(
         !root.join("scripts/mise").exists(),
-        "removed scripts/mise directory must stay absent"
+        "noncanonical scripts/mise directory must stay absent"
     );
     assert!(
         !root.join("scripts/tasks/check/shared").exists(),
-        "removed check/shared route must stay absent"
+        "noncanonical check/shared route must stay absent"
     );
     assert!(
         !mise.contains("scripts/mise/") && !mise.contains("check/shared"),
-        "removed script routes must stay absent from Mise"
+        "noncanonical script routes must stay absent from Mise"
     );
     let routes = mise
         .lines()
@@ -1004,12 +995,23 @@ fn hooks_and_mise_use_one_canonical_script_without_dependencies() {
             suffix.trim().is_empty(),
             "mise run must not append inline commands: {line}"
         );
-        assert_eq!(
-            value.split_whitespace().count(),
-            1,
-            "mise run must contain one script path: {value}"
-        );
-        let path = repo_root().join(value);
+        let words = value.split_whitespace().collect::<Vec<_>>();
+        let script = match words.as_slice() {
+            [script] => script,
+            ["scripts/tasks/atomic/run-bounded", "5m", script]
+                if ["scripts/tasks/usage-kdl", "scripts/tasks/usage-docs"].contains(script) =>
+            {
+                assert!(
+                    repo_root()
+                        .join("scripts/tasks/atomic/run-bounded")
+                        .is_file(),
+                    "bounded mise route must point to an existing wrapper"
+                );
+                script
+            }
+            _ => panic!("mise run must name one supported script route: {value}"),
+        };
+        let path = repo_root().join(script);
         assert!(path.is_file(), "mise route points to no script: {value}");
         #[cfg(unix)]
         assert_ne!(
@@ -1065,11 +1067,30 @@ fn native_integration_manifest_matches_every_rust_test_target_once() {
         actual, tests,
         "native-integration must list every tests/*.rs basename exactly once"
     );
-    assert_eq!(
-        tests.len(),
-        33,
-        "the native integration manifest covers 33 tests"
-    );
+
+    for target in actual {
+        let directory = repo_root().join("tests").join(&target);
+        if !directory.is_dir() {
+            continue;
+        }
+        let wrapper = read(&format!("tests/{target}.rs"));
+        let declared = wrapper
+            .lines()
+            .filter_map(|line| line.strip_prefix("#[path = \""))
+            .filter_map(|line| line.strip_suffix("\"]"))
+            .map(str::to_owned)
+            .collect::<BTreeSet<_>>();
+        let sources = fs::read_dir(&directory)
+            .expect("read grouped test directory")
+            .map(|entry| entry.expect("grouped test entry").path())
+            .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("rs"))
+            .map(|path| format!("{target}/{}", path.file_name().unwrap().to_string_lossy()))
+            .collect::<BTreeSet<_>>();
+        assert_eq!(
+            declared, sources,
+            "grouped test target must include every source exactly once: {target}"
+        );
+    }
 }
 
 #[test]
@@ -1182,13 +1203,28 @@ fn bounded_and_packaging_atomics_own_shared_interfaces() {
 
 #[test]
 fn ci_and_release_platform_steps_delegate_to_matrix_platform_scripts() {
-    for workflow_path in [".github/workflows/ci.yml", ".github/workflows/release.yml"] {
-        let workflow = read(workflow_path);
-        let step = workflow_step(&workflow, "Run platform checks");
-        assert!(
-            step.contains("run: ./scripts/tasks/check/platform/${{ matrix.platform }} \"${{ matrix.target }}\""),
-            "{workflow_path} platform step must invoke the matrix-selected platform script"
-        );
+    let ci = read(".github/workflows/ci.yml");
+    let native_tests = workflow_step(&ci, "Run native platform tests");
+    assert!(native_tests.contains("if: matrix.musl == false"));
+    assert!(native_tests.contains(&platform_invocation("--test-only")));
+    let ci_build = workflow_step(&ci, "Build and smoke platform release");
+    assert!(ci_build.contains(&platform_invocation("--build-only")));
+    assert!(!ci_build.contains("if: matrix.musl == false"));
+    assert!(ci.contains("RUSTFLAGS: ${{ matrix.rustflags }}"));
+    assert!(
+        ci.find("- name: Run native platform tests")
+            < ci.find("- name: Build and smoke platform release")
+    );
+
+    let release = read(".github/workflows/release.yml");
+    let release_build = workflow_step(&release, "Run platform checks");
+    assert!(release_build.contains(&platform_invocation("--build-only")));
+
+    for (workflow_path, step) in [
+        (".github/workflows/ci.yml", native_tests),
+        (".github/workflows/ci.yml", ci_build),
+        (".github/workflows/release.yml", release_build),
+    ] {
         for line in step.lines() {
             let command = line.trim_start();
             for forbidden in [
@@ -1205,6 +1241,56 @@ fn ci_and_release_platform_steps_delegate_to_matrix_platform_scripts() {
             }
         }
     }
+}
+
+#[test]
+fn native_platform_modes_separate_tests_from_build_and_smoke() {
+    let modes = read("scripts/tasks/check/platform-mode");
+    assert!(modes.contains("--build-only) mode=build; shift ;;"));
+    assert!(modes.contains("--test-only) mode=test; shift ;;"));
+    for platform in ["linux-gnu", "macos", "windows"] {
+        let script = read(&format!("scripts/tasks/check/platform/{platform}"));
+        assert!(script.contains("source \"$root/scripts/tasks/check/platform-mode\""));
+        assert!(script.contains("if [[ \"$mode\" != build ]]; then"));
+        assert!(script.contains("if [[ \"$mode\" != test ]]; then"));
+        assert!(script.contains("scripts/tasks/suite/native-tests"));
+        assert!(script.contains("scripts/tasks/atomic/build-release"));
+        assert!(script.contains("scripts/tasks/atomic/binary-smoke"));
+    }
+    let linux_gnu = read("scripts/tasks/check/platform/linux-gnu");
+    assert!(linux_gnu.contains("scripts/tasks/atomic/overlay-fs-lib"));
+    let windows = read("scripts/tasks/check/platform/windows");
+    assert!(windows.contains("scripts/tasks/atomic/check-all-targets"));
+}
+
+#[test]
+fn musl_platform_builds_and_smokes_without_repeating_native_tests() {
+    let musl = read("scripts/tasks/check/platform/linux-musl");
+    assert!(musl.contains("if [[ \"${1:-}\" == --build-only ]]; then"));
+    assert!(!musl.contains("scripts/tasks/suite/native-tests"));
+    for command in [
+        "\"$root/scripts/tasks/atomic/build-release\" --target-triple \"$target\"",
+        "\"$root/scripts/tasks/atomic/musl-static\" \"$target\"",
+        "\"$root/scripts/tasks/atomic/binary-smoke\" \"$target\"",
+    ] {
+        assert!(
+            musl.contains(command),
+            "musl platform must invoke {command}"
+        );
+    }
+    let linux_gnu = read("scripts/tasks/check/platform/linux-gnu");
+    assert!(
+        linux_gnu
+            .contains("CARGO_BUILD_TARGET=\"$target\" \"$root/scripts/tasks/suite/native-tests\""),
+        "native Linux GNU cells must retain their target-specific test suite"
+    );
+}
+
+fn platform_invocation(mode: &str) -> String {
+    format!(
+        "{} {mode} {}",
+        "run: ./scripts/tasks/check/platform/${{ matrix.platform }}", "\"${{ matrix.target }}\""
+    )
 }
 
 fn workflow_step(workflow: &str, name: &str) -> String {
@@ -1636,16 +1722,7 @@ fn packaging_bash_skips_wsl_launcher_when_git_bash_exists() {
     assert!(!is_packaging_wsl_launcher(&resolved));
 }
 
-/// The embedded Lua runtime must stay declared and vendored.
-///
-/// Deliberately separate from the TUI-removal test above. That one guards the
-/// `lua_widget` runtime, which is still gone; this one guards the script kind,
-/// which is shipped. Conflating them would let this check pass by breaking the
-/// other contract.
-///
-/// `vendored` is the load-bearing half: without it the binary would link
-/// against a system Lua and the whole point — a node that needs no Lua
-/// installed — would quietly disappear.
+/// The `.lua` script kind uses an embedded, vendored Lua runtime.
 #[test]
 fn headless_package_declares_the_vendored_lua_script_runtime() {
     let cargo = read("Cargo.toml").to_lowercase();
@@ -1656,9 +1733,5 @@ fn headless_package_declares_the_vendored_lua_script_runtime() {
     assert!(
         cargo.contains("vendored"),
         "mlua must be vendored, or the binary depends on a system Lua"
-    );
-    assert!(
-        !std::path::Path::new("src/lua_widget.rs").exists(),
-        "the TUI Lua widget runtime must stay removed"
     );
 }

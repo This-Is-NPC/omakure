@@ -216,7 +216,6 @@ pub const MAX_CONCURRENT_AUTH_VERIFICATIONS: usize = 8;
 #[serde(default, deny_unknown_fields)]
 pub struct AuthPolicy {
     pub tokens_file: Option<PathBuf>,
-    pub legacy_env_token: bool,
     /// Concurrency bound on in-flight Argon2id bearer verifications. Each
     /// verify is memory-hard (~64 MiB); this trades authentication
     /// availability against memory/CPU exhaustion. A tighter bound is easier
@@ -231,8 +230,6 @@ impl Default for AuthPolicy {
     fn default() -> Self {
         Self {
             tokens_file: None,
-            // Default true preserves pre-policy legacy OMAKURE_API_TOKEN behavior.
-            legacy_env_token: true,
             max_concurrent_verifications: DEFAULT_MAX_CONCURRENT_AUTH_VERIFICATIONS,
         }
     }
@@ -362,79 +359,55 @@ impl RoutesPolicy {
         let method = method.to_ascii_uppercase();
         let is_write = matches!(method.as_str(), "POST" | "PUT" | "PATCH" | "DELETE");
         let is_battery = path == "/v1/batteries" || path.starts_with("/v1/batteries/");
-        let is_node = path == "/v1/node" || path.starts_with("/v1/node/");
-        let is_trust = is_node && path.contains("/peers");
-        let is_enrollment = is_node && path.contains("/enrollment");
+        self.allows_node_route(path, is_write)
+            && self.allows_battery_route(&method, path, is_battery)
+            && (!is_write || self.writes)
+            && self.allows_run_route(&method, path)
+            && self.allows_other_route(path)
+            && self.allows_read_route(path, is_write, is_battery)
+    }
 
-        if is_node && !self.node {
-            return false;
+    fn allows_node_route(&self, path: &str, is_write: bool) -> bool {
+        let is_node = path == "/v1/node" || path.starts_with("/v1/node/");
+        !is_node
+            || (self.node
+                && (!is_write || !path.contains("/peers") || self.trust)
+                && (!is_write || !path.contains("/enrollment") || self.enrollment))
+    }
+
+    fn allows_battery_route(&self, method: &str, path: &str, is_battery: bool) -> bool {
+        !is_battery
+            || (self.battery
+                && (method != "POST"
+                    || !path.contains("/scripts/")
+                    || !path.ends_with("/install")
+                    || self.battery_install))
+    }
+
+    fn allows_run_route(&self, method: &str, path: &str) -> bool {
+        let is_run_action = path.starts_with("/v1/runs/");
+        method != "POST"
+            || ((path != "/v1/runs" || self.run_enqueue)
+                && (!is_run_action || !path.ends_with("/cancel") || self.run_cancel)
+                && (!is_run_action || !path.ends_with("/dead-letter") || self.run_dead_letter))
+    }
+
+    fn allows_other_route(&self, path: &str) -> bool {
+        match path {
+            "/v1/config" | "/v1/workspace" | "/v1/search" | "/v1/tree" => self.config,
+            "/v1/doctor" => self.doctor,
+            "/v1/envs" => self.envs,
+            path if path.starts_with("/v1/tree/") => self.config,
+            path if path.starts_with("/v1/envs/") => self.envs,
+            _ => true,
         }
-        if is_trust && is_write && !self.trust {
-            return false;
-        }
-        if is_enrollment && is_write && !self.enrollment {
-            return false;
-        }
-        if is_battery && !self.battery {
-            return false;
-        }
-        if is_write && !self.writes {
-            return false;
-        }
-        if is_battery
-            && method == "POST"
-            && path.contains("/scripts/")
-            && path.ends_with("/install")
-            && !self.battery_install
-        {
-            return false;
-        }
-        if method == "POST" && path == "/v1/runs" && !self.run_enqueue {
-            return false;
-        }
-        if method == "POST"
-            && path.ends_with("/cancel")
-            && path.starts_with("/v1/runs/")
-            && !self.run_cancel
-        {
-            return false;
-        }
-        if method == "POST"
-            && path.ends_with("/dead-letter")
-            && path.starts_with("/v1/runs/")
-            && !self.run_dead_letter
-        {
-            return false;
-        }
-        if !self.config
-            && (matches!(
-                path,
-                "/v1/config" | "/v1/workspace" | "/v1/search" | "/v1/tree"
-            ) || path.starts_with("/v1/tree/"))
-        {
-            return false;
-        }
-        if !self.doctor && path == "/v1/doctor" {
-            return false;
-        }
-        if !self.envs && (path == "/v1/envs" || path.starts_with("/v1/envs/")) {
-            return false;
-        }
-        if !is_write
-            && !self.read
-            && path != "/v1/health"
-            && path != "/v1/ready"
-            && path != "/v1/admin/status"
-        {
-            // Health, readiness, and admin status are observability endpoints and
-            // must survive a read-group lockdown (they still require the
-            // `admin:status` token scope). Battery already handled; the rest are
-            // the "read" group.
-            if !is_battery {
-                return false;
-            }
-        }
-        true
+    }
+
+    fn allows_read_route(&self, path: &str, is_write: bool, is_battery: bool) -> bool {
+        is_write
+            || self.read
+            || is_battery
+            || matches!(path, "/v1/health" | "/v1/ready" | "/v1/admin/status")
     }
 }
 
@@ -459,7 +432,6 @@ mod tests {
         let p = DeployPolicy::default();
         assert!(p.routes.writes);
         assert!(p.routes.battery);
-        assert!(p.auth.legacy_env_token);
         assert!(p.routes.allows("POST", "/v1/runs"));
         assert!(p.routes.allows("GET", "/v1/batteries"));
     }
@@ -547,9 +519,10 @@ mod tests {
         p.routes.trust = false;
         assert!(p.routes.allows("GET", "/v1/node/peers"));
         assert!(!p.routes.allows("POST", "/v1/node/peers"));
-        assert!(!p
-            .routes
-            .allows("PATCH", "/v1/node/peers/omk1_test/capabilities"));
+        assert!(
+            !p.routes
+                .allows("PATCH", "/v1/node/peers/omk1_test/capabilities")
+        );
         assert!(!p.routes.allows("POST", "/v1/node/peers/omk1_test/revoke"));
     }
 
@@ -561,14 +534,64 @@ mod tests {
         p.routes.enrollment = false;
         assert!(p.routes.allows("GET", "/v1/node/enrollments"));
         assert!(!p.routes.allows("POST", "/v1/node/enrollments"));
-        assert!(!p
-            .routes
-            .allows("POST", "/v1/node/enrollments/omk1_test/approve"));
+        assert!(
+            !p.routes
+                .allows("POST", "/v1/node/enrollments/omk1_test/approve")
+        );
         p.routes.enrollment = true;
         p.routes.trust = false;
-        assert!(p
-            .routes
-            .allows("POST", "/v1/node/enrollments/omk1_test/approve"));
+        assert!(
+            p.routes
+                .allows("POST", "/v1/node/enrollments/omk1_test/approve")
+        );
+    }
+
+    #[test]
+    fn specialized_route_gates_preserve_method_and_path_boundaries() {
+        let mut routes = RoutesPolicy {
+            battery_install: false,
+            run_enqueue: false,
+            run_cancel: false,
+            run_dead_letter: false,
+            config: false,
+            doctor: false,
+            envs: false,
+            ..RoutesPolicy::default()
+        };
+
+        for (method, path) in [
+            ("POST", "/v1/batteries/example/scripts/deploy/install"),
+            ("POST", "/v1/runs"),
+            ("POST", "/v1/runs/123/cancel"),
+            ("POST", "/v1/runs/123/dead-letter"),
+            ("GET", "/v1/config"),
+            ("GET", "/v1/workspace"),
+            ("GET", "/v1/search"),
+            ("GET", "/v1/tree"),
+            ("GET", "/v1/tree/child"),
+            ("GET", "/v1/doctor"),
+            ("GET", "/v1/envs"),
+            ("GET", "/v1/envs/dev"),
+        ] {
+            assert!(!routes.allows(method, path), "{method} {path}");
+        }
+
+        for (method, path) in [
+            ("GET", "/v1/batteries/example/scripts/deploy/install"),
+            ("POST", "/v1/batteries/example/scripts/deploy"),
+            ("GET", "/v1/runs"),
+            ("PATCH", "/v1/runs/123/cancel"),
+            ("GET", "/v1/runs/123/dead-letter"),
+            ("GET", "/v1/treehouse"),
+            ("GET", "/v1/envs-other"),
+        ] {
+            assert!(routes.allows(method, path), "{method} {path}");
+        }
+
+        routes.read = false;
+        assert!(routes.allows("GET", "/v1/batteries"));
+        assert!(routes.allows("GET", "/v1/health"));
+        assert!(!routes.allows("GET", "/v1/scripts"));
     }
 
     #[test]
@@ -624,14 +647,12 @@ metadata_endpoint = false
 
 [auth]
 tokens_file = "/run/secrets/omakure_tokens.toml"
-legacy_env_token = false
 max_concurrent_verifications = 4
 "#;
         let p = parse_policy_toml(text).unwrap();
         assert_eq!(p.version, 1);
         assert!(!p.routes.writes);
         assert!(!p.routes.battery);
-        assert!(!p.auth.legacy_env_token);
         assert_eq!(p.node.workers, Some(2));
         assert_eq!(p.node.scheduler, Some(true));
         assert_eq!(
@@ -679,9 +700,10 @@ max_concurrent_verifications = 4
         let err = parse_policy_toml(&text).unwrap_err();
 
         assert!(matches!(err, PolicyError::Invalid(_)));
-        assert!(err
-            .to_string()
-            .contains(&format!("must be <= {MAX_CONCURRENT_AUTH_VERIFICATIONS}")));
+        assert!(
+            err.to_string()
+                .contains(&format!("must be <= {MAX_CONCURRENT_AUTH_VERIFICATIONS}"))
+        );
     }
 
     #[test]

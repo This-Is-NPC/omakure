@@ -178,15 +178,22 @@ trust() {
 
 wait_service() {
     local service=$1
+    local output='' last_error=''
     local deadline=$((SECONDS + 45))
     while (( SECONDS < deadline )); do
-        if "${compose[@]}" exec -T "$service" /usr/local/bin/omakure --json node status \
-            >/dev/null 2>&1; then
-            return
+        if output=$(status_http "$service" 2>&1); then
+            if jq -e '.ok == true and .data.identity.node_id != null' \
+                <<<"$output" >/dev/null 2>&1; then
+                return
+            fi
+            last_error='HTTP status did not report an initialized node'
+        else
+            last_error=$output
         fi
         sleep 1
     done
-    fail "$service did not reach bounded status readiness"
+    "${compose[@]}" ps -a "$service" >&2 || true
+    fail "$service did not reach bounded status readiness; last error=${last_error:-<none>}"
 }
 
 wait_connected() {
@@ -464,11 +471,8 @@ display_name = "$display_name"
 bind = "127.0.0.1:7878"
 
 [network]
-mode = "direct"
-relays = []
 static_peers = [$peers]
 direct_bind = "0.0.0.0:7879"
-max_message_bytes = 1048576
 
 [trust]
 enrollment = "manual"
@@ -570,7 +574,7 @@ write_config cert-a "$static_a"
 "${compose[@]}" stop cert-a cert-b >/dev/null
 # Start the listener before the dialer so reconnect readiness never depends on
 # a fixed delay or a race between two independently restarting services.
-"${compose[@]}" up -d --no-deps --no-recreate cert-b >/dev/null
+"${compose[@]}" start cert-b >/dev/null
 wait_service cert-b
 "${compose[@]}" up -d --no-deps --no-recreate cert-a >/dev/null
 wait_service cert-a

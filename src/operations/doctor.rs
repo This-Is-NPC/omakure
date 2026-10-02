@@ -3,7 +3,6 @@ use crate::adapters::system_checks::{
     ensure_python_installed,
 };
 use crate::adapters::workspace_repository::FsWorkspaceRepository;
-use crate::ports::ScriptRepository;
 use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -86,7 +85,7 @@ pub fn check_schemas(root: &Path) -> SchemaCheckReport {
                 total: 0,
                 parsed: 0,
                 failures: Vec::new(),
-            }
+            };
         }
     };
     let total = scripts.len();
@@ -147,6 +146,7 @@ fn workspace_path(label: &str, path: &Path) -> WorkspacePathCheck {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::workspace_in;
     use std::fs;
     use tempfile::TempDir;
 
@@ -184,15 +184,16 @@ mod tests {
     #[test]
     fn doctor_report_contains_workspace_and_schema_sections() {
         let tmp = TempDir::new().unwrap();
-        let workspace = Workspace::new(tmp.path().to_path_buf());
-        workspace.ensure_layout().unwrap();
+        let workspace = workspace_in(&tmp);
 
         let report = doctor_report(&workspace).unwrap();
 
-        assert!(report
-            .workspace_paths
-            .iter()
-            .any(|path| path.label == "workspace_root"));
+        assert!(
+            report
+                .workspace_paths
+                .iter()
+                .any(|path| path.label == "workspace_root")
+        );
         assert_eq!(report.schemas.total, 0);
     }
 }

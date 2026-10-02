@@ -5,27 +5,26 @@
 //! or reinterpret the signed record.
 
 use crate::direct_transport::validate_x25519_public;
+use crate::domain::{MAX_CAPABILITIES, MAX_CAPABILITY_BYTES};
+use crate::domain::{NODE_ID_BYTES, is_node_id};
 use crate::node_identity::NodeIdentity;
+use crate::util::bytes::ByteReader;
+use crate::util::digest::sha256_domain;
+use crate::util::entropy;
+use crate::util::hex;
 use k256::schnorr::{
-    signature::hazmat::{PrehashSigner, PrehashVerifier},
     Signature, SigningKey, VerifyingKey,
+    signature::hazmat::{PrehashSigner, PrehashVerifier},
 };
-use rand::rngs::OsRng;
-use rand::RngCore;
-use sha2::{Digest, Sha256};
 use std::fmt;
-use std::time::{SystemTime, UNIX_EPOCH};
 use subtle::ConstantTimeEq;
 use thiserror::Error;
 
 pub const VERSION: u8 = 2;
 pub const MAX_REQUEST_BYTES: usize = 2_048;
-pub const MAX_CAPABILITIES: usize = 32;
-pub const MAX_CAPABILITY_BYTES: usize = 64;
 pub const FUTURE_SKEW_SECONDS: u64 = 300;
 pub const MAX_LIFETIME_SECONDS: u64 = 30 * 24 * 60 * 60;
 pub const REPLAY_RETENTION_SECONDS: u64 = 24 * 60 * 60;
-pub const NODE_ID_BYTES: usize = 69;
 pub const IDENTITY_KEY_BYTES: usize = 32;
 pub const TRANSPORT_KEY_BYTES: usize = 32;
 pub const REQUEST_ID_BYTES: usize = 16;
@@ -44,15 +43,6 @@ pub const BUNDLE_FUTURE_SKEW_SECONDS: u64 = 300;
 pub const BUNDLE_MAX_LIFETIME_SECONDS: u64 = 30 * 24 * 60 * 60;
 
 const MAGIC: &[u8; 4] = b"OMMA";
-const SUPPORTED_CAPABILITIES: &[&str] = &[
-    "backup-orchestration",
-    "baseline-push",
-    "inventory-health",
-    "lost-device-revocation",
-    "notifications",
-    "remote-run",
-    "ssh-credential-rotation",
-];
 
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum EnrollmentError {
@@ -83,6 +73,20 @@ pub struct BundleAuthority {
     pub revoked: bool,
 }
 
+pub struct BundleMaterial {
+    pub bundle_id: [u8; REQUEST_ID_BYTES],
+    pub organization: String,
+    pub audience_node_id: String,
+    pub subject_node_id: String,
+    pub subject_xonly: [u8; IDENTITY_KEY_BYTES],
+    pub subject_transport_x25519: [u8; TRANSPORT_KEY_BYTES],
+    pub subject_certificate: [u8; crate::direct_transport::MAX_CERTIFICATE_BYTES],
+    pub role: EnrollmentRole,
+    pub capabilities: Vec<String>,
+    pub issued_at: u64,
+    pub expires_at: u64,
+}
+
 #[derive(Clone, PartialEq, Eq)]
 pub struct SignedEnrollmentBundle {
     pub bundle_id: [u8; REQUEST_ID_BYTES],
@@ -104,8 +108,8 @@ impl fmt::Debug for SignedEnrollmentBundle {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("SignedEnrollmentBundle")
-            .field("bundle_id", &hex(&self.bundle_id))
-            .field("authority_key_id", &hex(&self.authority_key_id))
+            .field("bundle_id", &hex::encode(&self.bundle_id))
+            .field("authority_key_id", &hex::encode(&self.authority_key_id))
             .field("organization", &self.organization)
             .field("audience_node_id", &self.audience_node_id)
             .field("subject_node_id", &self.subject_node_id)
@@ -116,46 +120,35 @@ impl fmt::Debug for SignedEnrollmentBundle {
             .field("capabilities", &self.capabilities)
             .field("issued_at", &self.issued_at)
             .field("expires_at", &self.expires_at)
-            .field("authority_signature", &"<redacted>")
+            .field("authority_signature", &crate::secrets::REDACTED)
             .finish()
     }
 }
 
 impl SignedEnrollmentBundle {
-    #[allow(clippy::too_many_arguments)]
     pub fn sign_with_material(
         authority_private_key: &[u8],
-        bundle_id: [u8; REQUEST_ID_BYTES],
         authority_key_id: [u8; BUNDLE_AUTHORITY_ID_BYTES],
-        organization: String,
-        audience_node_id: String,
-        subject_node_id: String,
-        subject_xonly: [u8; IDENTITY_KEY_BYTES],
-        subject_transport_x25519: [u8; TRANSPORT_KEY_BYTES],
-        subject_certificate: [u8; crate::direct_transport::MAX_CERTIFICATE_BYTES],
-        role: EnrollmentRole,
-        capabilities: Vec<String>,
-        issued_at: u64,
-        expires_at: u64,
+        material: BundleMaterial,
     ) -> Result<Self, EnrollmentError> {
         let signing_key = SigningKey::from_slice(authority_private_key)
             .map_err(|_| EnrollmentError::IdentityMismatch)?;
         let mut bundle = Self {
-            bundle_id,
+            bundle_id: material.bundle_id,
             authority_key_id,
-            organization,
-            audience_node_id,
-            subject_node_id,
-            subject_xonly,
-            subject_transport_x25519,
-            subject_certificate,
-            role,
-            capabilities,
-            issued_at,
-            expires_at,
+            organization: material.organization,
+            audience_node_id: material.audience_node_id,
+            subject_node_id: material.subject_node_id,
+            subject_xonly: material.subject_xonly,
+            subject_transport_x25519: material.subject_transport_x25519,
+            subject_certificate: material.subject_certificate,
+            role: material.role,
+            capabilities: material.capabilities,
+            issued_at: material.issued_at,
+            expires_at: material.expires_at,
             authority_signature: [0; SIGNATURE_BYTES],
         };
-        let digest = hash_domain(&bundle.unsigned_bytes()?, BUNDLE_DOMAIN);
+        let digest = sha256_domain(BUNDLE_DOMAIN, &bundle.unsigned_bytes()?);
         bundle.authority_signature = signing_key
             .sign_prehash(&digest)
             .map_err(|_| EnrollmentError::IdentityMismatch)?
@@ -168,7 +161,7 @@ impl SignedEnrollmentBundle {
         if bytes.len() > MAX_BUNDLE_BYTES {
             return Err(EnrollmentError::TooLarge);
         }
-        let mut cursor = Cursor::new(bytes);
+        let mut cursor = ByteReader::new(bytes, EnrollmentError::Invalid);
         if cursor.take(4)? != b"OMEB"
             || cursor.byte()? != BUNDLE_VERSION
             || cursor.take(2)? != [0, 0]
@@ -178,9 +171,9 @@ impl SignedEnrollmentBundle {
         let bundle_id = cursor.array::<REQUEST_ID_BYTES>()?;
         let authority_key_id = cursor.array::<BUNDLE_AUTHORITY_ID_BYTES>()?;
         let organization_length = usize::from(cursor.u16()?);
-        let organization = cursor.text(organization_length)?;
-        let audience_node_id = cursor.text(NODE_ID_BYTES)?;
-        let subject_node_id = cursor.text(NODE_ID_BYTES)?;
+        let organization = cursor.printable_text(organization_length)?;
+        let audience_node_id = cursor.printable_text(NODE_ID_BYTES)?;
+        let subject_node_id = cursor.printable_text(NODE_ID_BYTES)?;
         let subject_xonly = cursor.array::<IDENTITY_KEY_BYTES>()?;
         let subject_transport_x25519 = cursor.array::<TRANSPORT_KEY_BYTES>()?;
         let subject_certificate =
@@ -193,7 +186,7 @@ impl SignedEnrollmentBundle {
         let mut capabilities = Vec::with_capacity(capability_count);
         for _ in 0..capability_count {
             let length = usize::from(cursor.u16()?);
-            capabilities.push(cursor.text(length)?);
+            capabilities.push(cursor.printable_text(length)?);
         }
         let issued_at = cursor.u64()?;
         let expires_at = cursor.u64()?;
@@ -256,7 +249,7 @@ impl SignedEnrollmentBundle {
             .map_err(|_| EnrollmentError::AuthorityUnknown)?;
         let signature = Signature::from_slice(&self.authority_signature)
             .map_err(|_| EnrollmentError::Invalid)?;
-        let digest = hash_domain(&self.unsigned_bytes()?, BUNDLE_DOMAIN);
+        let digest = sha256_domain(BUNDLE_DOMAIN, &self.unsigned_bytes()?);
         key.verify_prehash(&digest, &signature)
             .map_err(|_| EnrollmentError::IdentityMismatch)
     }
@@ -315,12 +308,7 @@ impl SignedEnrollmentBundle {
             return Err(EnrollmentError::Invalid);
         }
         for node_id in [&self.audience_node_id, &self.subject_node_id] {
-            if node_id.len() != NODE_ID_BYTES
-                || !node_id.starts_with("omk1_")
-                || !node_id[5..]
-                    .bytes()
-                    .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
-            {
+            if !is_node_id(node_id) {
                 return Err(EnrollmentError::IdentityMismatch);
             }
         }
@@ -350,11 +338,11 @@ impl SignedEnrollmentBundle {
 }
 
 pub fn hash_bootstrap_token(token: &[u8]) -> [u8; 32] {
-    hash_domain(token, b"omakure/bootstrap-token/v1\0")
+    sha256_domain(b"omakure/bootstrap-token/v1\0", token)
 }
 
 pub fn hash_bootstrap_nonce(nonce: &[u8]) -> [u8; 32] {
-    hash_domain(nonce, b"omakure/bootstrap-nonce/v1\0")
+    sha256_domain(b"omakure/bootstrap-nonce/v1\0", nonce)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -365,6 +353,15 @@ pub enum EnrollmentRole {
 }
 
 impl EnrollmentRole {
+    /// Parse the operator-facing role name.
+    pub fn from_wire(value: &str) -> Option<Self> {
+        match value {
+            "conductor" => Some(Self::Conductor),
+            "performer" => Some(Self::Performer),
+            _ => None,
+        }
+    }
+
     pub fn from_u8(value: u8) -> Result<Self, EnrollmentError> {
         match value {
             1 => Ok(Self::Conductor),
@@ -393,8 +390,8 @@ impl fmt::Debug for ManualEnrollmentRequest {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("ManualEnrollmentRequest")
-            .field("request_id", &hex(&self.request_id))
-            .field("pairing_id", &hex(&self.pairing_id))
+            .field("request_id", &hex::encode(&self.request_id))
+            .field("pairing_id", &hex::encode(&self.pairing_id))
             .field("proposer_node_id", &self.proposer_node_id)
             .field("proposer_xonly", &"<redacted-public-key>")
             .field("proposer_transport_x25519", &"<redacted-public-key>")
@@ -402,8 +399,8 @@ impl fmt::Debug for ManualEnrollmentRequest {
             .field("capabilities", &self.capabilities)
             .field("created_at", &self.created_at)
             .field("expires_at", &self.expires_at)
-            .field("code_hash", &"<redacted>")
-            .field("signature", &"<redacted>")
+            .field("code_hash", &crate::secrets::REDACTED)
+            .field("signature", &crate::secrets::REDACTED)
             .finish()
     }
 }
@@ -414,23 +411,42 @@ pub struct ManualEnrollmentOffer {
     pub code: [u8; CODE_BYTES],
 }
 
+pub struct ManualRequestMaterial {
+    pub pairing_id: [u8; PAIRING_ID_BYTES],
+    pub request_id: [u8; REQUEST_ID_BYTES],
+    pub code: [u8; CODE_BYTES],
+}
+
+fn validate_request_inputs(
+    proposer_transport_x25519: &[u8; TRANSPORT_KEY_BYTES],
+    capabilities: &[String],
+    lifetime_seconds: u64,
+) -> Result<(), EnrollmentError> {
+    validate_capabilities(capabilities)?;
+    validate_x25519_public(proposer_transport_x25519).map_err(|_| EnrollmentError::Invalid)?;
+    if lifetime_seconds == 0 || lifetime_seconds > MAX_LIFETIME_SECONDS {
+        return Err(EnrollmentError::Invalid);
+    }
+    Ok(())
+}
+
 impl ManualEnrollmentOffer {
     pub fn request_hex(&self) -> String {
-        hex(&self.request.encode())
+        hex::encode(&self.request.encode())
     }
 
     pub fn code_hex(&self) -> String {
-        hex(&self.code)
+        hex::encode(&self.code)
     }
 }
 
 impl ManualEnrollmentRequest {
     pub fn pairing_id_hex(&self) -> String {
-        hex(&self.pairing_id)
+        hex::encode(&self.pairing_id)
     }
 
     pub fn request_id_hex(&self) -> String {
-        hex(&self.request_id)
+        hex::encode(&self.request_id)
     }
 
     pub fn create(
@@ -442,7 +458,7 @@ impl ManualEnrollmentRequest {
         lifetime_seconds: u64,
     ) -> Result<ManualEnrollmentOffer, EnrollmentError> {
         let mut pairing_id = [0u8; PAIRING_ID_BYTES];
-        OsRng.fill_bytes(&mut pairing_id);
+        entropy::fill_bytes(&mut pairing_id);
         Self::create_with_pairing_id(
             identity,
             proposer_transport_x25519,
@@ -463,30 +479,27 @@ impl ManualEnrollmentRequest {
         lifetime_seconds: u64,
         pairing_id: [u8; PAIRING_ID_BYTES],
     ) -> Result<ManualEnrollmentOffer, EnrollmentError> {
-        validate_capabilities(&capabilities)?;
-        validate_x25519_public(&proposer_transport_x25519).map_err(|_| EnrollmentError::Invalid)?;
-        if lifetime_seconds == 0 || lifetime_seconds > MAX_LIFETIME_SECONDS {
-            return Err(EnrollmentError::Invalid);
-        }
+        validate_request_inputs(&proposer_transport_x25519, &capabilities, lifetime_seconds)?;
         let mut request_id = [0u8; REQUEST_ID_BYTES];
         let mut code = [0u8; CODE_BYTES];
-        OsRng.fill_bytes(&mut request_id);
-        OsRng.fill_bytes(&mut code);
-        Self::create_with_material(
+        entropy::fill_bytes(&mut request_id);
+        entropy::fill_bytes(&mut code);
+        Self::create_validated_with_material(
             identity,
             proposer_transport_x25519,
             role,
             capabilities,
             now,
             lifetime_seconds,
-            pairing_id,
-            request_id,
-            code,
+            ManualRequestMaterial {
+                pairing_id,
+                request_id,
+                code,
+            },
         )
     }
 
     /// Construct a deterministic request for protocol vectors and fixtures.
-    #[allow(clippy::too_many_arguments)] // Fixed protocol-vector material must remain explicit.
     pub fn create_with_material(
         identity: &NodeIdentity,
         proposer_transport_x25519: [u8; TRANSPORT_KEY_BYTES],
@@ -494,21 +507,35 @@ impl ManualEnrollmentRequest {
         capabilities: Vec<String>,
         now: u64,
         lifetime_seconds: u64,
-        pairing_id: [u8; PAIRING_ID_BYTES],
-        request_id: [u8; REQUEST_ID_BYTES],
-        code: [u8; CODE_BYTES],
+        material: ManualRequestMaterial,
     ) -> Result<ManualEnrollmentOffer, EnrollmentError> {
-        validate_capabilities(&capabilities)?;
-        validate_x25519_public(&proposer_transport_x25519).map_err(|_| EnrollmentError::Invalid)?;
-        if lifetime_seconds == 0 || lifetime_seconds > MAX_LIFETIME_SECONDS {
-            return Err(EnrollmentError::Invalid);
-        }
-        let code_hash = hash_code(&code);
+        validate_request_inputs(&proposer_transport_x25519, &capabilities, lifetime_seconds)?;
+        Self::create_validated_with_material(
+            identity,
+            proposer_transport_x25519,
+            role,
+            capabilities,
+            now,
+            lifetime_seconds,
+            material,
+        )
+    }
+
+    fn create_validated_with_material(
+        identity: &NodeIdentity,
+        proposer_transport_x25519: [u8; TRANSPORT_KEY_BYTES],
+        role: EnrollmentRole,
+        capabilities: Vec<String>,
+        now: u64,
+        lifetime_seconds: u64,
+        material: ManualRequestMaterial,
+    ) -> Result<ManualEnrollmentOffer, EnrollmentError> {
+        let code_hash = hash_code(&material.code);
         let mut request = Self {
-            pairing_id,
-            request_id,
+            pairing_id: material.pairing_id,
+            request_id: material.request_id,
             proposer_node_id: identity.public_status().node_id.clone(),
-            proposer_xonly: decode_hex::<IDENTITY_KEY_BYTES>(
+            proposer_xonly: parse_hex_array::<IDENTITY_KEY_BYTES>(
                 &identity.public_status().public_key_hex,
             )
             .map_err(|_| EnrollmentError::IdentityMismatch)?,
@@ -528,20 +555,23 @@ impl ManualEnrollmentRequest {
             .map_err(|_| EnrollmentError::IdentityMismatch)?;
         request.signature = signature.to_bytes();
         request.verify(now)?;
-        Ok(ManualEnrollmentOffer { request, code })
+        Ok(ManualEnrollmentOffer {
+            request,
+            code: material.code,
+        })
     }
 
     pub fn decode(bytes: &[u8]) -> Result<Self, EnrollmentError> {
         if bytes.len() > MAX_REQUEST_BYTES {
             return Err(EnrollmentError::TooLarge);
         }
-        let mut cursor = Cursor::new(bytes);
+        let mut cursor = ByteReader::new(bytes, EnrollmentError::Invalid);
         if cursor.take(4)? != MAGIC || cursor.byte()? != VERSION {
             return Err(EnrollmentError::Invalid);
         }
         let pairing_id = cursor.array::<PAIRING_ID_BYTES>()?;
         let request_id = cursor.array::<REQUEST_ID_BYTES>()?;
-        let proposer_node_id = cursor.text(NODE_ID_BYTES)?;
+        let proposer_node_id = cursor.printable_text(NODE_ID_BYTES)?;
         let proposer_xonly = cursor.array::<IDENTITY_KEY_BYTES>()?;
         let proposer_transport_x25519 = cursor.array::<TRANSPORT_KEY_BYTES>()?;
         validate_x25519_public(&proposer_transport_x25519).map_err(|_| EnrollmentError::Invalid)?;
@@ -556,7 +586,7 @@ impl ManualEnrollmentRequest {
             if length == 0 || length > MAX_CAPABILITY_BYTES {
                 return Err(EnrollmentError::Invalid);
             }
-            capabilities.push(cursor.text(length)?);
+            capabilities.push(cursor.printable_text(length)?);
         }
         let created_at = cursor.u64()?;
         let expires_at = cursor.u64()?;
@@ -597,7 +627,7 @@ impl ManualEnrollmentRequest {
         }
         let key = VerifyingKey::from_slice(&self.proposer_xonly)
             .map_err(|_| EnrollmentError::IdentityMismatch)?;
-        let digest = hash_domain(&self.unsigned_bytes()?, DOMAIN);
+        let digest = sha256_domain(DOMAIN, &self.unsigned_bytes()?);
         let signature =
             Signature::from_slice(&self.signature).map_err(|_| EnrollmentError::Invalid)?;
         key.verify_prehash(&digest, &signature)
@@ -616,7 +646,7 @@ impl ManualEnrollmentRequest {
     }
 
     pub fn public_key_hex(&self) -> String {
-        hex(&self.proposer_xonly)
+        hex::encode(&self.proposer_xonly)
     }
 
     fn unsigned_bytes(&self) -> Result<Vec<u8>, EnrollmentError> {
@@ -649,11 +679,7 @@ impl ManualEnrollmentRequest {
         if self.pairing_id == [0; PAIRING_ID_BYTES] {
             return Err(EnrollmentError::Invalid);
         }
-        if self.proposer_node_id.len() != NODE_ID_BYTES
-            || !self.proposer_node_id.starts_with("omk1_")
-            || !self.proposer_node_id[5..]
-                .bytes()
-                .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+        if !is_node_id(&self.proposer_node_id)
             || crate::node_identity::node_id_for_x_only_public_key(&self.proposer_xonly)
                 != self.proposer_node_id
         {
@@ -674,162 +700,38 @@ impl ManualEnrollmentRequest {
     }
 }
 
-pub fn now_seconds() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_secs())
-        .unwrap_or(0)
-}
-
 pub fn parse_hex(value: &str, expected_bytes: usize) -> Result<Vec<u8>, EnrollmentError> {
-    if value.len() != expected_bytes * 2
-        || value
-            .bytes()
-            .any(|byte| !byte.is_ascii_hexdigit() || byte.is_ascii_uppercase())
-    {
+    if value.len() != expected_bytes * 2 || !hex::is_lower(value) {
         return Err(EnrollmentError::Invalid);
     }
-    (0..value.len())
-        .step_by(2)
-        .map(|index| {
-            u8::from_str_radix(&value[index..index + 2], 16).map_err(|_| EnrollmentError::Invalid)
-        })
-        .collect()
-}
-
-pub fn hex_bytes(bytes: &[u8]) -> String {
-    hex(bytes)
+    hex::decode(value).ok_or(EnrollmentError::Invalid)
 }
 
 pub fn validate_capabilities(capabilities: &[String]) -> Result<(), EnrollmentError> {
-    if capabilities.len() > MAX_CAPABILITIES {
-        return Err(EnrollmentError::Invalid);
-    }
-    let mut previous = None;
-    for capability in capabilities {
-        if capability.is_empty()
-            || capability.len() > MAX_CAPABILITY_BYTES
-            || capability.bytes().any(|byte| {
-                !(byte.is_ascii_lowercase() || byte.is_ascii_digit() || b"._-".contains(&byte))
-            })
-            || !SUPPORTED_CAPABILITIES.contains(&capability.as_str())
-            || previous.is_some_and(|previous: &str| previous >= capability.as_str())
-        {
-            return Err(EnrollmentError::Invalid);
-        }
-        previous = Some(capability.as_str());
-    }
-    Ok(())
+    crate::domain::check_capability_list(capabilities).map_err(|_| EnrollmentError::Invalid)
 }
 
 pub fn hash_code(code: &[u8]) -> [u8; 32] {
-    hash_domain(code, DOMAIN)
+    sha256_domain(DOMAIN, code)
 }
 
-fn hash_domain(bytes: &[u8], domain: &[u8]) -> [u8; 32] {
-    let mut digest = Sha256::new();
-    digest.update(domain);
-    digest.update(bytes);
-    digest.finalize().into()
-}
-
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-}
-
-fn decode_hex<const N: usize>(value: &str) -> Result<[u8; N], EnrollmentError> {
+fn parse_hex_array<const N: usize>(value: &str) -> Result<[u8; N], EnrollmentError> {
     parse_hex(value, N)?
         .try_into()
         .map_err(|_| EnrollmentError::Invalid)
 }
 
-struct Cursor<'a> {
-    bytes: &'a [u8],
-    offset: usize,
-}
-
-impl<'a> Cursor<'a> {
-    fn new(bytes: &'a [u8]) -> Self {
-        Self { bytes, offset: 0 }
-    }
-
-    fn take(&mut self, length: usize) -> Result<&'a [u8], EnrollmentError> {
-        let end = self
-            .offset
-            .checked_add(length)
-            .ok_or(EnrollmentError::Invalid)?;
-        let value = self
-            .bytes
-            .get(self.offset..end)
-            .ok_or(EnrollmentError::Invalid)?;
-        self.offset = end;
-        Ok(value)
-    }
-
-    fn byte(&mut self) -> Result<u8, EnrollmentError> {
-        Ok(*self.take(1)?.first().ok_or(EnrollmentError::Invalid)?)
-    }
-
-    fn u16(&mut self) -> Result<u16, EnrollmentError> {
-        Ok(u16::from_be_bytes(
-            self.take(2)?
-                .try_into()
-                .map_err(|_| EnrollmentError::Invalid)?,
-        ))
-    }
-
-    fn u64(&mut self) -> Result<u64, EnrollmentError> {
-        Ok(u64::from_be_bytes(
-            self.take(8)?
-                .try_into()
-                .map_err(|_| EnrollmentError::Invalid)?,
-        ))
-    }
-
-    fn array<const N: usize>(&mut self) -> Result<[u8; N], EnrollmentError> {
-        self.take(N)?
-            .try_into()
-            .map_err(|_| EnrollmentError::Invalid)
-    }
-
-    fn text(&mut self, length: usize) -> Result<String, EnrollmentError> {
-        let value =
-            std::str::from_utf8(self.take(length)?).map_err(|_| EnrollmentError::Invalid)?;
-        if value
-            .chars()
-            .any(|character| character == '\0' || character.is_control())
-        {
-            return Err(EnrollmentError::Invalid);
-        }
-        Ok(value.to_string())
-    }
-
-    fn remaining(&self) -> usize {
-        self.bytes.len().saturating_sub(self.offset)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::node::{NodeContext, NodePathOverrides, NodePlatform};
+    use crate::test_support::node_context;
+
     use crate::node_identity::NodeIdentity;
     use tempfile::TempDir;
 
     fn identity() -> (TempDir, NodeIdentity) {
         let temp = TempDir::new().unwrap();
-        let context = NodeContext::resolve_for(
-            NodePlatform::current(),
-            NodePathOverrides::new(
-                Some(temp.path().join("state")),
-                Some(temp.path().join("node.toml")),
-            ),
-            true,
-            None,
-            None,
-            None,
-        )
-        .unwrap();
+        let context = node_context(temp.path());
         let identity = NodeIdentity::load_or_initialize(&context).unwrap();
         (temp, identity)
     }
@@ -838,7 +740,7 @@ mod tests {
     fn code_hash_matches_public_vector() {
         let code: Vec<u8> = (0..16).collect();
         assert_eq!(
-            hex(&hash_code(&code)),
+            hex::encode(&hash_code(&code)),
             "e9380fb38041d9a4cb70fbca9631da6d796fea839738fbd6e7015d829ccd54f7"
         );
     }
@@ -889,52 +791,32 @@ mod tests {
     #[test]
     fn signed_bundle_is_canonical_and_binds_authority_audience_and_certificate() {
         let manager_temp = TempDir::new().unwrap();
-        let manager_context = NodeContext::resolve_for(
-            NodePlatform::current(),
-            NodePathOverrides::new(
-                Some(manager_temp.path().join("state")),
-                Some(manager_temp.path().join("node.toml")),
-            ),
-            true,
-            None,
-            None,
-            None,
-        )
-        .unwrap();
+        let manager_context = node_context(manager_temp.path());
         let manager = NodeIdentity::load_or_initialize(&manager_context).unwrap();
         let manager_transport =
             crate::node_transport::LocalTransport::provision_new(&manager_context, &manager)
                 .unwrap();
         let target_temp = TempDir::new().unwrap();
-        let target_context = NodeContext::resolve_for(
-            NodePlatform::current(),
-            NodePathOverrides::new(
-                Some(target_temp.path().join("state")),
-                Some(target_temp.path().join("node.toml")),
-            ),
-            true,
-            None,
-            None,
-            None,
-        )
-        .unwrap();
+        let target_context = node_context(target_temp.path());
         let target = NodeIdentity::load_or_initialize(&target_context).unwrap();
         let authority_private = [2_u8; 32];
         let authority_key = SigningKey::from_slice(&authority_private).unwrap();
         let bundle = SignedEnrollmentBundle::sign_with_material(
             &authority_private,
-            [7; REQUEST_ID_BYTES],
             [8; BUNDLE_AUTHORITY_ID_BYTES],
-            "omakure".to_string(),
-            target.public_status().node_id.clone(),
-            manager.public_status().node_id.clone(),
-            decode_hex(&manager.public_status().public_key_hex).unwrap(),
-            *manager_transport.certificate().transport_public(),
-            *manager_transport.certificate().as_bytes(),
-            EnrollmentRole::Conductor,
-            vec!["baseline-push".to_string(), "remote-run".to_string()],
-            1_700_000_000,
-            1_700_000_600,
+            crate::enrollment::BundleMaterial {
+                bundle_id: [7; REQUEST_ID_BYTES],
+                organization: "omakure".to_string(),
+                audience_node_id: target.public_status().node_id.clone(),
+                subject_node_id: manager.public_status().node_id.clone(),
+                subject_xonly: parse_hex_array(&manager.public_status().public_key_hex).unwrap(),
+                subject_transport_x25519: *manager_transport.certificate().transport_public(),
+                subject_certificate: *manager_transport.certificate().as_bytes(),
+                role: EnrollmentRole::Conductor,
+                capabilities: vec!["baseline-push".to_string(), "remote-run".to_string()],
+                issued_at: 1_700_000_000,
+                expires_at: 1_700_000_600,
+            },
         )
         .unwrap();
         assert_eq!(bundle.encode().len(), 604);

@@ -9,116 +9,14 @@
 //!
 //! Two real `node serve` processes, real transport, no mocks.
 
-mod support;
+pub mod support;
 
 use serde_json::Value;
 use std::path::Path;
-use std::process::{Command, Output};
 use std::time::{Duration, Instant};
 
-const TOKEN: &str = "baseline-push-e2e-token-with-enough-entropy-01";
 const ORGANIZATION: &str = "baseline-e2e-fleet";
-
-fn run_node(workspace: &Path, args: &[String]) -> Output {
-    let output = Command::new(support::omakure_bin())
-        .arg("--scripts-dir")
-        .arg(workspace)
-        .arg("--json")
-        .arg("node")
-        .arg("--node-state-dir")
-        .arg(workspace.join(".node-state"))
-        .arg("--node-config")
-        .arg(workspace.join("node.toml"))
-        .args(args)
-        .env("OMAKURE_NODE_TEST_MODE", "1")
-        .env("OMAKURE_API_TOKEN", TOKEN)
-        .output()
-        .expect("run node command");
-    assert!(
-        output.status.code().is_some(),
-        "node {args:?} was killed by a signal"
-    );
-    output
-}
-
-fn assert_success_named(label: &str, output: &Output) -> Value {
-    assert!(
-        output.status.success(),
-        "node {label} failed: stdout={:?} stderr={:?}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let envelope = support::json_envelope(&output.stdout);
-    assert_eq!(envelope["ok"], true, "node {label} envelope: {envelope}");
-    envelope["data"].clone()
-}
-
-fn init_node(workspace: &Path) -> Value {
-    assert_success_named("init", &run_node(workspace, &["init".to_string()]));
-    assert_success_named("status", &run_node(workspace, &["status".to_string()]))
-}
-
-fn serve(workspace: &Path) -> support::HttpServer {
-    support::HttpServer::start_node_service(
-        workspace,
-        TOKEN,
-        &[
-            "--workers",
-            "1",
-            "--no-scheduler",
-            "--capability",
-            "node:read",
-            "--capability",
-            "node:write",
-        ],
-        &[],
-        Duration::from_secs(20),
-    )
-}
-
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-}
-
-fn trust_peer(
-    workspace: &Path,
-    peer_workspace: &Path,
-    peer_status: &Value,
-    role: &str,
-    capabilities: &[&str],
-) {
-    let certificate = hex(
-        &std::fs::read(peer_workspace.join(".node-state/transport.cert"))
-            .expect("read peer transport certificate"),
-    );
-    let mut args = vec![
-        "trust".to_string(),
-        "--node-id".to_string(),
-        peer_status["identity"]["node_id"].as_str().unwrap().into(),
-        "--public-key".to_string(),
-        peer_status["identity"]["public_key"]
-            .as_str()
-            .unwrap()
-            .into(),
-        "--transport-certificate".to_string(),
-        certificate,
-        "--role".to_string(),
-        role.to_string(),
-        "--actor".to_string(),
-        "baseline-push-e2e".to_string(),
-        "--reason".to_string(),
-        "baseline delivery certification".to_string(),
-        "--confirmed".to_string(),
-    ];
-    for capability in capabilities {
-        args.push("--capability".to_string());
-        args.push((*capability).to_string());
-    }
-    assert_eq!(
-        assert_success_named("trust", &run_node(workspace, &args))["state"],
-        "active"
-    );
-}
+const TRUST_AUDIT: (&str, &str) = ("baseline-push-e2e", "baseline delivery certification");
 
 /// A baseline member. Real content, so the manifest hashes something specific.
 fn write_baseline_script(workspace: &Path, name: &str, marker: &str) {
@@ -191,25 +89,6 @@ fn configure(
     std::fs::write(path, config).expect("write node config");
 }
 
-fn wait_for_standing_session(service: &support::HttpServer) -> bool {
-    let deadline = Instant::now() + Duration::from_secs(30);
-    while Instant::now() < deadline {
-        let status = service.get("/v1/node/status");
-        if status.status == 200 {
-            let transport = status.json()["data"]["transport"].clone();
-            let expected = transport["expected_peer_count"].as_u64();
-            if expected.is_some_and(|expected| {
-                expected > 0
-                    && transport["expected_connected_peer_count"].as_u64() == Some(expected)
-            }) {
-                return true;
-            }
-        }
-        std::thread::sleep(Duration::from_millis(250));
-    }
-    false
-}
-
 /// Two real nodes, trusted both ways, with a published baseline the Conductor
 /// holds the bodies for.
 ///
@@ -236,7 +115,7 @@ fn stand_up_fleet() -> Fleet {
     let conductor = conductor_dir.path();
     let performer = performer_dir.path();
 
-    init_node(publisher);
+    support::init_node_checked_signal(publisher);
     configure(
         publisher,
         support::unique_loopback_port(),
@@ -244,9 +123,9 @@ fn stand_up_fleet() -> Fleet {
         false,
         None,
     );
-    let key = assert_success_named(
+    let key = support::assert_node_success_named(
         "baseline create-key",
-        &run_node(
+        &support::run_node_checked_signal(
             publisher,
             &["baseline".to_string(), "create-key".to_string()],
         ),
@@ -257,9 +136,9 @@ fn stand_up_fleet() -> Fleet {
     write_baseline_script(publisher, "base-a.sh", "base-a v1");
     write_baseline_script(publisher, "base-b.sh", "base-b v1");
     let manifest_path = publisher.join("base-v1.omb");
-    let published = assert_success_named(
+    let published = support::assert_node_success_named(
         "baseline publish",
-        &run_node(
+        &support::run_node_checked_signal(
             publisher,
             &[
                 "baseline".to_string(),
@@ -280,8 +159,8 @@ fn stand_up_fleet() -> Fleet {
         .expect("baseline id")
         .to_string();
 
-    let conductor_status = init_node(conductor);
-    let performer_status = init_node(performer);
+    let conductor_status = support::init_node_checked_signal(conductor);
+    let performer_status = support::init_node_checked_signal(performer);
     let conductor_id = conductor_status["identity"]["node_id"]
         .as_str()
         .unwrap()
@@ -308,19 +187,21 @@ fn stand_up_fleet() -> Fleet {
         Some((key_id.as_str(), public_key.as_str())),
     );
 
-    trust_peer(
+    support::trust_fleet_peer(
         conductor,
         performer,
         &performer_status,
         "performer",
         &["inventory-health", "notifications"],
+        TRUST_AUDIT,
     );
-    trust_peer(
+    support::trust_fleet_peer(
         performer,
         conductor,
         &conductor_status,
         "conductor",
         &["baseline-push", "inventory-health", "notifications"],
+        TRUST_AUDIT,
     );
 
     // The Conductor sends the bodies, so it must hold the same bytes the
@@ -365,16 +246,16 @@ fn installed_baseline(fleet: &Fleet) -> Value {
 #[ignore = "spawns two real node services; run explicitly"]
 fn a_pushed_baseline_is_acknowledged_to_the_conductor() {
     let fleet = stand_up_fleet();
-    let performer_service = serve(fleet.performer.path());
-    let conductor_service = serve(fleet.conductor.path());
+    let performer_service = support::serve_fleet_node(fleet.performer.path());
+    let conductor_service = support::serve_fleet_node(fleet.conductor.path());
     assert!(
-        wait_for_standing_session(&conductor_service),
+        support::wait_for_standing_session(&conductor_service),
         "the Conductor never established its standing session with the Performer"
     );
 
-    let pushed = assert_success_named(
+    let pushed = support::assert_node_success_named(
         "baseline push",
-        &run_node(
+        &support::run_node_checked_signal(
             fleet.conductor.path(),
             &[
                 "baseline".to_string(),
@@ -430,10 +311,9 @@ fn baseline_audit_rows(workspace: &Path) -> Vec<(String, String, Option<i64>)> {
         .expect("prepare baseline audit query");
     let rows = statement
         .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
-        .expect("query baseline audit rows")
-        .collect::<Result<Vec<_>, _>>()
-        .expect("read baseline audit rows");
-    rows
+        .expect("query baseline audit rows");
+    rows.collect::<Result<Vec<_>, _>>()
+        .expect("read baseline audit rows")
 }
 
 /// An ack that misses the caller's budget must be recorded as what it was.
@@ -454,10 +334,10 @@ fn baseline_audit_rows(workspace: &Path) -> Vec<(String, String, Option<i64>)> {
 #[ignore = "spawns two real node services; run explicitly"]
 fn a_baseline_ack_that_misses_the_budget_is_recorded_as_what_it_was() {
     let fleet = stand_up_fleet();
-    let performer_service = serve(fleet.performer.path());
-    let conductor_service = serve(fleet.conductor.path());
+    let performer_service = support::serve_fleet_node(fleet.performer.path());
+    let conductor_service = support::serve_fleet_node(fleet.conductor.path());
     assert!(
-        wait_for_standing_session(&conductor_service),
+        support::wait_for_standing_session(&conductor_service),
         "the Conductor never established its standing session with the Performer"
     );
 
@@ -465,14 +345,16 @@ fn a_baseline_ack_that_misses_the_budget_is_recorded_as_what_it_was() {
         .scripts
         .iter()
         .map(|name| {
-            hex(&std::fs::read(fleet.conductor.path().join(name)).expect("read baseline script"))
+            omakure::hex::encode(
+                &std::fs::read(fleet.conductor.path().join(name)).expect("read baseline script"),
+            )
         })
         .collect::<Vec<_>>();
     let response = conductor_service.post_json(
         "/v1/node/baselines",
         &serde_json::json!({
             "peer_node_id": fleet.performer_id,
-            "manifest": hex(&std::fs::read(&fleet.manifest).expect("read manifest")),
+            "manifest": omakure::hex::encode(&std::fs::read(&fleet.manifest).expect("read manifest")),
             "scripts": scripts,
             "wait_seconds": 0,
         }),

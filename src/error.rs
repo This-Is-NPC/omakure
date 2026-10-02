@@ -1,7 +1,7 @@
 use std::io;
 use thiserror::Error;
 
-/// Application error type covering all error categories.
+/// Shared adapter error for script and schema operations.
 #[derive(Debug, Error)]
 pub enum AppError {
     #[error("IO error: {0}")]
@@ -12,12 +12,6 @@ pub enum AppError {
 
     #[error("Script error: {0}")]
     Script(#[from] ScriptError),
-
-    #[error("Environment error: {0}")]
-    Environment(#[from] EnvironmentError),
-
-    #[error("{0}")]
-    General(String),
 }
 
 /// Errors related to schema parsing.
@@ -69,39 +63,8 @@ pub enum ScriptError {
     HostBinaryUnavailable { reason: String },
 }
 
-/// Errors related to environment configuration.
-#[derive(Debug, Error)]
-pub enum EnvironmentError {
-    #[error("Environment not found: {name}")]
-    NotFound { name: String },
-
-    #[error("Invalid environment name: {name}")]
-    InvalidName { name: String },
-
-    #[error("Unsafe environment path: {path}")]
-    UnsafePath { path: String },
-
-    #[error("Failed to read environment: {0}")]
-    ReadFailed(String),
-
-    #[error("Failed to write environment: {0}")]
-    WriteFailed(String),
-}
-
 /// Result type alias using AppError.
 pub type AppResult<T> = Result<T, AppError>;
-
-impl From<String> for AppError {
-    fn from(msg: String) -> Self {
-        AppError::General(msg)
-    }
-}
-
-impl From<&str> for AppError {
-    fn from(msg: &str) -> Self {
-        AppError::General(msg.to_string())
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -126,25 +89,11 @@ mod tests {
     }
 
     #[test]
-    fn test_app_error_from_string() {
-        let err: AppError = "something went wrong".into();
-        assert_eq!(format!("{}", err), "something went wrong");
-    }
-
-    #[test]
     fn test_app_error_from_io() {
         let io_err = io::Error::new(io::ErrorKind::NotFound, "file not found");
         let err = AppError::from(io_err);
         assert!(matches!(err, AppError::Io(_)));
         assert!(format!("{}", err).contains("file not found"));
-    }
-
-    #[test]
-    fn test_app_error_from_owned_string() {
-        let owned: String = String::from("oops");
-        let err: AppError = owned.into();
-        assert!(matches!(err, AppError::General(_)));
-        assert_eq!(format!("{}", err), "oops");
     }
 
     #[test]

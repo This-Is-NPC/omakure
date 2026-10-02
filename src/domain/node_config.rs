@@ -1,3 +1,5 @@
+use super::node_id::is_node_id;
+use crate::util::hex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::net::SocketAddr;
@@ -5,14 +7,10 @@ use std::str::FromStr;
 use thiserror::Error;
 
 pub const NODE_CONFIG_VERSION: u8 = 1;
-pub const MAX_MESSAGE_BYTES: u64 = 16 * 1024 * 1024;
-pub const MAX_NODE_CONFIG_RELAYS: usize = 32;
 pub const MAX_NODE_CONFIG_STATIC_PEERS: usize = 256;
-pub const MAX_NODE_CONFIG_RELAY_BYTES: usize = 512;
 pub const MAX_NODE_CONFIG_STATIC_PEER_BYTES: usize = 256;
 pub const MAX_NODE_CONFIG_SECRET_REF_BYTES: usize = 256;
 const MAX_BIND_BYTES: usize = 128;
-const MAX_NETWORK_MODE_BYTES: usize = 64;
 const MAX_ENROLLMENT_BYTES: usize = 64;
 const MAX_DISPLAY_NAME_BYTES: usize = 128;
 const MAX_ORGANIZATION_ID_BYTES: usize = 128;
@@ -56,12 +54,9 @@ pub struct ApiSettings {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct NetworkSettings {
-    pub mode: String,
-    pub relays: Vec<String>,
     pub static_peers: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub direct_bind: Option<String>,
-    pub max_message_bytes: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -179,11 +174,8 @@ impl Default for NodeConfig {
                 bind: "127.0.0.1:7878".to_string(),
             },
             network: NetworkSettings {
-                mode: "direct".to_string(),
-                relays: Vec::new(),
                 static_peers: Vec::new(),
                 direct_bind: None,
-                max_message_bytes: 1_048_576,
             },
             trust: TrustSettings {
                 enrollment: "disabled".to_string(),
@@ -217,7 +209,16 @@ impl NodeConfig {
         if self.version != NODE_CONFIG_VERSION {
             return Err(NodeConfigError::UnsupportedVersion(self.version));
         }
+        self.validate_basic_fields()?;
+        self.validate_network_settings()?;
+        self.validate_enrollment_settings()?;
+        self.validate_discovery_settings()?;
+        self.validate_authorities()?;
+        self.validate_baseline_publishers()?;
+        self.validate_bootstrap_hashes()
+    }
 
+    fn validate_basic_fields(&self) -> Result<(), NodeConfigError> {
         validate_text(
             "node.display_name",
             &self.node.display_name,
@@ -233,43 +234,14 @@ impl NodeConfig {
         validate_text("api.bind", &self.api.bind, MAX_BIND_BYTES, false)?;
         validate_bind(&self.api.bind)?;
 
-        validate_text(
-            "network.mode",
-            &self.network.mode,
-            MAX_NETWORK_MODE_BYTES,
-            false,
-        )?;
+        Ok(())
+    }
 
-        match self.network.mode.as_str() {
-            "direct" | "direct-with-nostr-fallback" | "nostr" => {}
-            value => {
-                return Err(NodeConfigError::Invalid(format!(
-                    "network.mode `{value}` is invalid"
-                )))
-            }
-        }
-        if self.network.mode == "direct" && !self.network.relays.is_empty() {
-            return Err(NodeConfigError::Invalid(
-                "network.relays must be empty in direct mode".to_string(),
-            ));
-        }
-        if self.network.relays.len() > MAX_NODE_CONFIG_RELAYS {
-            return Err(NodeConfigError::Invalid(
-                "network.relays has too many entries".to_string(),
-            ));
-        }
+    fn validate_network_settings(&self) -> Result<(), NodeConfigError> {
         if self.network.static_peers.len() > MAX_NODE_CONFIG_STATIC_PEERS {
             return Err(NodeConfigError::Invalid(
                 "network.static_peers has too many entries".to_string(),
             ));
-        }
-        if !(1..=MAX_MESSAGE_BYTES).contains(&self.network.max_message_bytes) {
-            return Err(NodeConfigError::Invalid(format!(
-                "network.max_message_bytes must be between 1 and {MAX_MESSAGE_BYTES}"
-            )));
-        }
-        for relay in &self.network.relays {
-            validate_relay(relay)?;
         }
         for peer in &self.network.static_peers {
             validate_static_peer(peer)?;
@@ -294,6 +266,10 @@ impl NodeConfig {
             validate_direct_bind(bind)?;
         }
 
+        Ok(())
+    }
+
+    fn validate_enrollment_settings(&self) -> Result<(), NodeConfigError> {
         validate_text(
             "trust.enrollment",
             &self.trust.enrollment,
@@ -305,7 +281,7 @@ impl NodeConfig {
             value => {
                 return Err(NodeConfigError::Invalid(format!(
                     "trust.enrollment `{value}` is invalid"
-                )))
+                )));
             }
         }
         if self.trust.enrollment == "disabled"
@@ -315,6 +291,10 @@ impl NodeConfig {
                 "remote capabilities require enrollment to be enabled".to_string(),
             ));
         }
+        Ok(())
+    }
+
+    fn validate_discovery_settings(&self) -> Result<(), NodeConfigError> {
         validate_secret_ref(&self.organization.discovery_secret_ref)?;
         if self.discovery.port != crate::discovery::DISCOVERY_PORT {
             return Err(NodeConfigError::Invalid(
@@ -333,6 +313,10 @@ impl NodeConfig {
                 "discovery.multicast_addr must use the frozen discovery group".to_string(),
             ));
         }
+        Ok(())
+    }
+
+    fn validate_authorities(&self) -> Result<(), NodeConfigError> {
         if self.trust.authorities.len() > MAX_AUTHORITY_KEYS {
             return Err(NodeConfigError::Invalid(
                 "trust.authorities has too many entries".to_string(),
@@ -348,6 +332,10 @@ impl NodeConfig {
                 ));
             }
         }
+        Ok(())
+    }
+
+    fn validate_baseline_publishers(&self) -> Result<(), NodeConfigError> {
         if self.trust.baseline_publishers.len() > MAX_AUTHORITY_KEYS {
             return Err(NodeConfigError::Invalid(
                 "trust.baseline_publishers has too many entries".to_string(),
@@ -370,6 +358,10 @@ impl NodeConfig {
                 ));
             }
         }
+        Ok(())
+    }
+
+    fn validate_bootstrap_hashes(&self) -> Result<(), NodeConfigError> {
         if self.trust.enrollment == "signed-bundle" {
             if self.trust.authorities.is_empty() {
                 return Err(NodeConfigError::Invalid(
@@ -424,11 +416,7 @@ fn validate_text(
 }
 
 fn validate_lower_hex(field: &str, value: &str, bytes: usize) -> Result<(), NodeConfigError> {
-    if value.len() != bytes * 2
-        || value
-            .bytes()
-            .any(|byte| !byte.is_ascii_hexdigit() || byte.is_ascii_uppercase())
-    {
+    if value.len() != bytes * 2 || !hex::is_lower(value) {
         return Err(NodeConfigError::Invalid(format!("{field} is invalid")));
     }
     Ok(())
@@ -457,40 +445,6 @@ fn validate_direct_bind(value: &str) -> Result<(), NodeConfigError> {
     Ok(())
 }
 
-fn validate_relay(value: &str) -> Result<(), NodeConfigError> {
-    if value.len() > MAX_NODE_CONFIG_RELAY_BYTES {
-        return Err(NodeConfigError::Invalid(
-            "network relay is too long".to_string(),
-        ));
-    }
-    let Some(rest) = value.strip_prefix("wss://") else {
-        return Err(NodeConfigError::Invalid(format!(
-            "network relay `{value}` must use wss://"
-        )));
-    };
-    if rest.is_empty() || rest.bytes().any(|byte| byte.is_ascii_whitespace()) {
-        return Err(NodeConfigError::Invalid(format!(
-            "network relay `{value}` is invalid"
-        )));
-    }
-    let authority_end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
-    let authority = &rest[..authority_end];
-    if authority.is_empty() || authority.contains('@') || authority.contains('#') {
-        return Err(NodeConfigError::Invalid(format!(
-            "network relay `{value}` is invalid"
-        )));
-    }
-    validate_relay_authority(authority).map_err(|reason| {
-        NodeConfigError::Invalid(format!("network relay `{value}` is invalid: {reason}"))
-    })?;
-    if rest[authority_end..].contains('#') {
-        return Err(NodeConfigError::Invalid(format!(
-            "network relay `{value}` has a fragment"
-        )));
-    }
-    Ok(())
-}
-
 fn validate_static_peer(value: &str) -> Result<(), NodeConfigError> {
     if value.len() > MAX_NODE_CONFIG_STATIC_PEER_BYTES {
         return Err(NodeConfigError::Invalid(
@@ -507,46 +461,13 @@ fn validate_static_peer(value: &str) -> Result<(), NodeConfigError> {
             "static peer `{value}` has an invalid node id"
         )));
     }
-    validate_host_port(endpoint, true).map_err(|reason| {
+    validate_host_port(endpoint).map_err(|reason| {
         NodeConfigError::Invalid(format!("static peer `{value}` is invalid: {reason}"))
     })
 }
 
-fn validate_relay_authority(value: &str) -> Result<(), &'static str> {
-    if value.starts_with('[') {
-        let close = value.find(']').ok_or("missing IPv6 bracket")?;
-        let host = &value[1..close];
-        if host.is_empty() || host.contains(['[', ']']) {
-            return Err("invalid host");
-        }
-        let suffix = &value[close + 1..];
-        if !suffix.is_empty() {
-            let port = suffix.strip_prefix(':').ok_or("invalid port")?;
-            if port.parse::<u16>().ok().filter(|port| *port != 0).is_none() {
-                return Err("invalid port");
-            }
-        }
-        return Ok(());
-    }
-    if value.contains(':') {
-        return validate_host_port(value, false);
-    }
-    validate_host(value)
-}
-
-fn validate_host(value: &str) -> Result<(), &'static str> {
-    if value.is_empty()
-        || value
-            .bytes()
-            .any(|byte| byte.is_ascii_whitespace() || byte == b'/' || byte == b'@')
-    {
-        return Err("invalid host");
-    }
-    Ok(())
-}
-
-fn validate_host_port(value: &str, allow_bracketed_ipv6: bool) -> Result<(), &'static str> {
-    let (host, port) = if allow_bracketed_ipv6 && value.starts_with('[') {
+fn validate_host_port(value: &str) -> Result<(), &'static str> {
+    let (host, port) = if value.starts_with('[') {
         let close = value.find(']').ok_or("missing IPv6 bracket")?;
         let host = &value[1..close];
         let port = value
@@ -577,14 +498,6 @@ fn validate_host_port(value: &str, allow_bracketed_ipv6: bool) -> Result<(), &'s
         return Err("invalid host");
     }
     Ok(())
-}
-
-fn is_node_id(value: &str) -> bool {
-    value.len() == 69
-        && value.starts_with("omk1_")
-        && value[5..]
-            .bytes()
-            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
 
 fn validate_secret_ref(value: &str) -> Result<(), NodeConfigError> {
@@ -644,6 +557,7 @@ mod tests {
         let base = valid_toml();
         for input in [
             base.replace("[node]", "extra = true\n\n[node]"),
+            base.replace("[network]", "[network]\nunsupported = true"),
             base.replace("display_name = \"\"", "# display_name omitted"),
             format!("{base}\nversion = 1\n"),
             base.replace("version = 1", "version = 2"),
@@ -744,10 +658,8 @@ mod tests {
     }
 
     #[test]
-    fn validation_accepts_canonical_peer_relay_and_secret_ref() {
+    fn validation_accepts_canonical_peer_and_secret_ref() {
         let mut config = NodeConfig::default();
-        config.network.mode = "nostr".into();
-        config.network.relays = vec!["wss://relay.example.test/path".into()];
         config.network.static_peers = vec![format!("omk1_{}@127.0.0.1:7879", "a".repeat(64))];
         config.organization.discovery_secret_ref = "secret://prod/discovery_key".into();
         config.trust.enrollment = "manual".into();
@@ -763,21 +675,98 @@ mod tests {
             format!("omk1_{first_id}@127.0.0.1:7879"),
             format!("omk1_{first_id}@127.0.0.1:7880"),
         ];
-        assert!(config
-            .validate()
-            .unwrap_err()
-            .to_string()
-            .contains("node ids"));
+        assert!(
+            config
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("node ids")
+        );
 
         config.network.static_peers = vec![
             format!("omk1_{first_id}@127.0.0.1:7879"),
             format!("omk1_{second_id}@127.0.0.1:7879"),
         ];
-        assert!(config
-            .validate()
-            .unwrap_err()
-            .to_string()
-            .contains("endpoints"));
+        assert!(
+            config
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("endpoints")
+        );
+    }
+
+    #[test]
+    fn validation_checks_all_peer_syntax_before_duplicates_and_direct_bind() {
+        let first_id = "a".repeat(64);
+        let mut config = NodeConfig::default();
+        config.network.static_peers = vec![
+            format!("omk1_{first_id}@127.0.0.1:7879"),
+            format!("omk1_{first_id}@127.0.0.1:7880"),
+            "invalid-id@127.0.0.1:7881".to_string(),
+        ];
+        config.network.direct_bind = Some("invalid-bind".to_string());
+        assert_eq!(
+            config.validate().unwrap_err(),
+            NodeConfigError::Invalid(
+                "static peer `invalid-id@127.0.0.1:7881` has an invalid node id".to_string()
+            )
+        );
+
+        config.network.static_peers.pop();
+        assert_eq!(
+            config.validate().unwrap_err(),
+            NodeConfigError::Invalid(
+                "network.static_peers contains duplicate node ids".to_string()
+            )
+        );
+
+        config.network.static_peers.pop();
+        assert_eq!(
+            config.validate().unwrap_err(),
+            NodeConfigError::Invalid("network.direct_bind must be a socket address".to_string())
+        );
+    }
+
+    #[test]
+    fn validation_checks_discovery_and_keys_before_signed_bundle_hashes() {
+        let mut config = NodeConfig::default();
+        config.trust.enrollment = "signed-bundle".to_string();
+        config.discovery.port = 0;
+        config.trust.authorities = vec![EnrollmentAuthority {
+            key_id: "invalid".to_string(),
+            public_key: "b".repeat(64),
+            revoked: false,
+        }];
+        config.trust.baseline_publishers = vec![TrustedBaselinePublisher {
+            key_id: "invalid".to_string(),
+            public_key: "b".repeat(64),
+            revoked: false,
+        }];
+        assert_eq!(
+            config.validate().unwrap_err(),
+            NodeConfigError::Invalid(
+                "discovery.port must use the frozen discovery port".to_string()
+            )
+        );
+
+        config.discovery.port = crate::discovery::DISCOVERY_PORT;
+        assert_eq!(
+            config.validate().unwrap_err(),
+            NodeConfigError::Invalid("trust.authorities.key_id is invalid".to_string())
+        );
+
+        config.trust.authorities[0].key_id = "a".repeat(32);
+        assert_eq!(
+            config.validate().unwrap_err(),
+            NodeConfigError::Invalid("trust.baseline_publishers.key_id is invalid".to_string())
+        );
+
+        config.trust.baseline_publishers[0].key_id = "c".repeat(32);
+        assert_eq!(
+            config.validate().unwrap_err(),
+            NodeConfigError::Invalid("trust.bootstrap_token_hash is invalid".to_string())
+        );
     }
 
     #[test]
@@ -791,11 +780,6 @@ mod tests {
         assert!(config.validate().is_err());
 
         config = NodeConfig::default();
-        config.network.mode = "nostr".into();
-        config.network.relays = vec!["wss://relay.example.test".into(); MAX_NODE_CONFIG_RELAYS + 1];
-        assert!(config.validate().is_err());
-
-        config.network.relays.clear();
         config.network.static_peers = vec![
             format!("omk1_{}@127.0.0.1:7879", "a".repeat(64));
             MAX_NODE_CONFIG_STATIC_PEERS + 1
@@ -803,10 +787,6 @@ mod tests {
         assert!(config.validate().is_err());
 
         config.network.static_peers.clear();
-        config.network.relays = vec![format!("wss://{}", "r".repeat(MAX_NODE_CONFIG_RELAY_BYTES))];
-        assert!(config.validate().is_err());
-
-        config.network.relays.clear();
         config.organization.discovery_secret_ref =
             "secret://".to_string() + &"provider".repeat(MAX_NODE_CONFIG_SECRET_REF_BYTES);
         assert!(config.validate().is_err());

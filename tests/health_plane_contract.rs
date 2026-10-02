@@ -7,15 +7,24 @@
 //! that must reject every contracted adversarial case with its stable error
 //! code.
 //!
-//! No production Health Plane surface exists yet. Messages are constructed here
-//! with the frozen direct-envelope construction (RFC-8785 canonical JSON plus a
-//! BIP-340 signature over the frozen domain) and verified with the shipped
-//! `verify_envelope`, which proves the Health Plane is carriable without any
-//! change to the frozen identity construction.
+//! Messages are constructed with the frozen direct-envelope construction
+//! (RFC-8785 canonical JSON plus a BIP-340 signature over the frozen domain)
+//! and verified with the shipped `verify_envelope`.
 
-use k256::schnorr::{signature::hazmat::PrehashSigner, SigningKey};
-use omakure::direct_transport::{envelope_nonce, verify_envelope, TransportError};
-use serde_json::{json, Map, Value};
+#[path = "support/message_id.rs"]
+mod fixture_ids;
+
+use fixture_ids::repeated_hex_16 as message_id;
+use fixture_ids::repeated_hex_16 as nonce_hex;
+
+#[path = "support/canonical_json.rs"]
+mod canonical_json;
+
+use canonical_json::canonical;
+
+use k256::schnorr::{SigningKey, signature::hazmat::PrehashSigner};
+use omakure::direct_transport::{TransportError, envelope_nonce, verify_envelope};
+use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -287,23 +296,9 @@ impl Kind {
 // Frozen construction helpers
 // ---------------------------------------------------------------------------
 
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-}
-
-fn unhex(value: &str) -> Vec<u8> {
-    assert!(value.len().is_multiple_of(2), "hex length must be even");
-    (0..value.len() / 2)
-        .map(|index| u8::from_str_radix(&value[index * 2..index * 2 + 2], 16).expect("hex digit"))
-        .collect()
-}
-
-fn canonical(value: &Value) -> Vec<u8> {
-    serde_jcs::to_vec(value).expect("canonical JSON")
-}
-
 fn signing_key(scalar_hex: &str) -> SigningKey {
-    SigningKey::from_slice(&unhex(scalar_hex)).expect("test scalar")
+    SigningKey::from_slice(&omakure::hex::decode(scalar_hex).expect("valid hexadecimal fixture"))
+        .expect("test scalar")
 }
 
 fn x_only_public_key(scalar_hex: &str) -> [u8; 32] {
@@ -318,12 +313,15 @@ fn x_only_public_key(scalar_hex: &str) -> [u8; 32] {
 fn node_id(scalar_hex: &str) -> String {
     let mut input = b"omakure/node-id/v1\0".to_vec();
     input.extend_from_slice(&x_only_public_key(scalar_hex));
-    format!("omk1_{}", hex(Sha256::digest(input).as_slice()))
+    format!(
+        "omk1_{}",
+        omakure::hex::encode(Sha256::digest(input).as_slice())
+    )
 }
 
 /// Build the frozen seven-field direct envelope and sign it with the frozen
 /// BIP-340 construction. This mirrors the private `sign_envelope` in
-/// `src/direct_transport.rs` byte for byte and adds no production surface.
+/// `src/direct_transport/envelope.rs` byte for byte and adds no production surface.
 fn sign_envelope(
     scalar_hex: &str,
     kind: &str,
@@ -360,14 +358,6 @@ fn encode(canonical_bytes: &[u8], signature: &[u8]) -> Vec<u8> {
 // ---------------------------------------------------------------------------
 // Reference message builders
 // ---------------------------------------------------------------------------
-
-fn nonce_hex(seed: u8) -> String {
-    hex(&[seed; 16])
-}
-
-fn message_id(seed: u8) -> String {
-    hex(&[seed; 16])
-}
 
 fn performer_id() -> String {
     node_id(PERFORMER_SCALAR_HEX)
@@ -748,7 +738,8 @@ impl Receiver {
 
         // Step 1 completion: production signature and session binding.
         let nonce = envelope_nonce(encoded).map_err(HealthCode::from_transport)?;
-        let session_id: [u8; 32] = unhex(&self.session_id_hex)
+        let session_id: [u8; 32] = omakure::hex::decode(&self.session_id_hex)
+            .expect("valid hexadecimal fixture")
             .try_into()
             .expect("session id length");
         let identity_key = peer
@@ -772,7 +763,7 @@ impl Receiver {
         match payload.get("health_version").and_then(Value::as_u64) {
             None => return Err(HealthCode::UnknownField),
             Some(version) if version != HEALTH_VERSION => {
-                return Err(HealthCode::UnsupportedVersion)
+                return Err(HealthCode::UnsupportedVersion);
             }
             Some(_) => {}
         }
@@ -804,10 +795,10 @@ impl Receiver {
         }
 
         // Step 9: capability.
-        if let Some(required) = kind.required_capability() {
-            if !peer.capabilities.iter().any(|value| value == required) {
-                return Err(HealthCode::MissingCapability);
-            }
+        if let Some(required) = kind.required_capability()
+            && !peer.capabilities.iter().any(|value| value == required)
+        {
+            return Err(HealthCode::MissingCapability);
         }
 
         // Step 10: freshness.
@@ -830,16 +821,16 @@ impl Receiver {
         }
         match kind {
             Kind::Profile if state.hour_profiles >= MAX_PROFILES_PER_PEER_PER_HOUR => {
-                return Err(HealthCode::RateLimited)
+                return Err(HealthCode::RateLimited);
             }
             Kind::Signal if state.minute_signals >= MAX_SIGNALS_PER_PEER_PER_MINUTE => {
-                return Err(HealthCode::RateLimited)
+                return Err(HealthCode::RateLimited);
             }
             Kind::Pulse
                 if state.last_pulse_at > 0
                     && now.saturating_sub(state.last_pulse_at) < MIN_PULSE_INTERVAL_SECONDS =>
             {
-                return Err(HealthCode::RateLimited)
+                return Err(HealthCode::RateLimited);
             }
             _ => {}
         }
@@ -1418,7 +1409,7 @@ fn fixture_pins_every_frozen_bound() {
     assert_eq!(integer(&fixture, "envelope_version"), 1);
     assert_eq!(
         text(&fixture, "envelope_signature_domain_hex"),
-        hex(ENVELOPE_DOMAIN)
+        omakure::hex::encode(ENVELOPE_DOMAIN)
     );
     assert_eq!(
         integer(&fixture, "registry_schema_version"),
@@ -1672,13 +1663,13 @@ fn reference_vectors_are_canonical_and_verify_through_the_production_path() {
         let signature = &encoded[encoded.len() - SIGNATURE_BYTES..];
 
         assert_eq!(
-            hex(canonical_bytes),
+            omakure::hex::encode(canonical_bytes),
             vector["canonical_hex"].as_str().expect("canonical hex"),
             "{} canonical bytes drifted",
             kind.wire()
         );
         assert_eq!(
-            hex(signature),
+            omakure::hex::encode(signature),
             vector["signature_hex"].as_str().expect("signature hex"),
             "{} signature drifted",
             kind.wire()
@@ -1694,7 +1685,10 @@ fn reference_vectors_are_canonical_and_verify_through_the_production_path() {
 
         // The production verifier accepts it without any Health Plane code.
         let nonce = envelope_nonce(&encoded).expect("nonce");
-        let session_id: [u8; 32] = unhex(SESSION_ID_HEX).try_into().unwrap();
+        let session_id: [u8; 32] = omakure::hex::decode(SESSION_ID_HEX)
+            .expect("valid hexadecimal fixture")
+            .try_into()
+            .unwrap();
         verify_envelope(
             &encoded,
             &node_id(reference_scalar(kind)),
@@ -1784,7 +1778,7 @@ fn full_reporting_sequence_advances_state_exactly_once() {
         receiver.now = BASE_NOW + sequence * NOMINAL_PULSE_INTERVAL_SECONDS;
         let created = receiver.now;
         let mut payload = pulse_payload(&conductor, sequence, created);
-        payload["message_id"] = Value::from(hex(&[0x60 + sequence as u8; 16]));
+        payload["message_id"] = Value::from(omakure::hex::encode(&[0x60 + sequence as u8; 16]));
         let (canonical_bytes, signature) = sign_envelope(
             PERFORMER_SCALAR_HEX,
             Kind::Pulse.wire(),
@@ -1802,7 +1796,7 @@ fn full_reporting_sequence_advances_state_exactly_once() {
 
     for sequence in 1..=4_u64 {
         let mut payload = signal_payload(&conductor, sequence, 0xb0 + sequence as u8);
-        payload["message_id"] = Value::from(hex(&[0x70 + sequence as u8; 16]));
+        payload["message_id"] = Value::from(omakure::hex::encode(&[0x70 + sequence as u8; 16]));
         let (canonical_bytes, signature) = sign_envelope(
             PERFORMER_SCALAR_HEX,
             Kind::Signal.wire(),
@@ -1826,459 +1820,492 @@ fn full_reporting_sequence_advances_state_exactly_once() {
     assert_eq!(receiver.global_signals, 4);
 }
 
-#[test]
-fn every_contracted_adversarial_case_is_rejected_with_its_stable_code() {
+struct AdversarialCase(&'static str, HealthCode, fn() -> Result<u64, HealthCode>);
+
+// 1101 unsupported version.
+fn adversarial_unknown_version() -> Result<u64, HealthCode> {
+    let conductor = conductor_id();
+    let mut receiver = Receiver::conductor();
+    let mut payload = pulse_payload(&conductor, 1, BASE_NOW);
+    payload["health_version"] = Value::from(2);
+    let (canonical_bytes, signature) = sign_envelope(
+        PERFORMER_SCALAR_HEX,
+        Kind::Pulse.wire(),
+        SESSION_ID_HEX,
+        &nonce_hex(0x01),
+        payload,
+        BASE_NOW,
+    );
+    receiver.accept(&encode(&canonical_bytes, &signature))
+}
+
+// 1102 malformed: non-canonical byte order.
+fn adversarial_non_canonical_json() -> Result<u64, HealthCode> {
+    let mut receiver = Receiver::conductor();
+    let encoded = reference_message(Kind::Pulse);
+    let canonical_bytes = &encoded[..encoded.len() - SIGNATURE_BYTES];
+    let text = String::from_utf8(canonical_bytes.to_vec()).unwrap();
+    let mangled = text.replacen("{\"created_at\"", "{ \"created_at\"", 1);
+    let mut broken = mangled.into_bytes();
+    broken.extend_from_slice(&encoded[encoded.len() - SIGNATURE_BYTES..]);
+    receiver.accept(&broken)
+}
+
+// 1102 malformed: mutated signature.
+fn adversarial_mutated_signature() -> Result<u64, HealthCode> {
+    let mut receiver = Receiver::conductor();
+    let mut encoded = reference_message(Kind::Pulse);
+    *encoded.last_mut().unwrap() ^= 1;
+    receiver.accept(&encoded)
+}
+
+// 1102 malformed: field combination.
+fn adversarial_signal_run_and_subject() -> Result<u64, HealthCode> {
     let conductor = conductor_id();
     let performer = performer_id();
+    let mut receiver = Receiver::conductor();
+    let mut payload = signal_payload(&conductor, 1, 0xb1);
+    payload["signal"]["subject"] = Value::from(performer.clone());
+    let (canonical_bytes, signature) = sign_envelope(
+        PERFORMER_SCALAR_HEX,
+        Kind::Signal.wire(),
+        SESSION_ID_HEX,
+        &nonce_hex(0x01),
+        payload,
+        BASE_NOW,
+    );
+    receiver.accept(&encode(&canonical_bytes, &signature))
+}
 
-    let mut observed: Vec<(&'static str, HealthCode)> = Vec::new();
-    let mut record = |name: &'static str, expected: HealthCode, actual: Result<u64, HealthCode>| {
-        let actual = actual.unwrap_err();
-        assert_eq!(actual, expected, "{name} produced the wrong stable code");
-        observed.push((name, actual));
-    };
+// 1102 privacy: a secret reference anywhere.
+fn adversarial_secret_reference() -> Result<u64, HealthCode> {
+    let conductor = conductor_id();
+    let mut receiver = Receiver::conductor();
+    let mut payload = profile_payload(&conductor, 1);
+    payload["profile"]["display_name"] = Value::from("secret://vault/api-token");
+    let (canonical_bytes, signature) = sign_envelope(
+        PERFORMER_SCALAR_HEX,
+        Kind::Profile.wire(),
+        SESSION_ID_HEX,
+        &nonce_hex(0x01),
+        payload,
+        BASE_NOW,
+    );
+    receiver.accept(&encode(&canonical_bytes, &signature))
+}
 
-    // 1101 unsupported version.
-    {
-        let mut receiver = Receiver::conductor();
-        let mut payload = pulse_payload(&conductor, 1, BASE_NOW);
-        payload["health_version"] = Value::from(2);
-        let (canonical_bytes, signature) = sign_envelope(
-            PERFORMER_SCALAR_HEX,
-            Kind::Pulse.wire(),
-            SESSION_ID_HEX,
-            &nonce_hex(0x01),
-            payload,
-            BASE_NOW,
-        );
-        record(
+// 1102 privacy: a filesystem path in a bounded field.
+fn adversarial_workspace_path() -> Result<u64, HealthCode> {
+    let conductor = conductor_id();
+    let mut receiver = Receiver::conductor();
+    let mut payload = pulse_payload(&conductor, 1, BASE_NOW);
+    payload["pulse"]["last_run"]["script"] = Value::from("/home/operator/scripts/deploy.sh");
+    let (canonical_bytes, signature) = sign_envelope(
+        PERFORMER_SCALAR_HEX,
+        Kind::Pulse.wire(),
+        SESSION_ID_HEX,
+        &nonce_hex(0x01),
+        payload,
+        BASE_NOW,
+    );
+    receiver.accept(&encode(&canonical_bytes, &signature))
+}
+
+// 1103 oversized: a Profile-sized body carried under a Signal's smaller cap.
+fn adversarial_oversized_for_kind() -> Result<u64, HealthCode> {
+    let mut receiver = Receiver::conductor();
+    let (canonical_bytes, signature) = sign_envelope(
+        PERFORMER_SCALAR_HEX,
+        Kind::Signal.wire(),
+        SESSION_ID_HEX,
+        &nonce_hex(0x01),
+        worst_case_payload(Kind::Profile),
+        BASE_NOW,
+    );
+    assert!(canonical_bytes.len() > MAX_CANONICAL_SIGNAL);
+    receiver.accept(&encode(&canonical_bytes, &signature))
+}
+
+// 1104 wrong target.
+fn adversarial_wrong_target() -> Result<u64, HealthCode> {
+    let performer = performer_id();
+    let mut receiver = Receiver::conductor();
+    let (canonical_bytes, signature) = sign_envelope(
+        PERFORMER_SCALAR_HEX,
+        Kind::Pulse.wire(),
+        SESSION_ID_HEX,
+        &nonce_hex(0x01),
+        pulse_payload(&performer, 1, BASE_NOW),
+        BASE_NOW,
+    );
+    receiver.accept(&encode(&canonical_bytes, &signature))
+}
+
+// 1105 wrong role: a conductor-role peer reporting health.
+fn adversarial_wrong_role() -> Result<u64, HealthCode> {
+    let performer = performer_id();
+    let mut receiver = Receiver::conductor();
+    receiver.peer_mut(&performer).role = ROLE_CONDUCTOR;
+    receiver.accept(&reference_message(Kind::Pulse))
+}
+
+// 1105 wrong role: a performer acknowledging.
+fn adversarial_wrong_direction_ack() -> Result<u64, HealthCode> {
+    let conductor = conductor_id();
+    let mut receiver = Receiver::performer();
+    receiver.peer_mut(&conductor).role = ROLE_PERFORMER;
+    receiver.accept(&reference_message(Kind::Ack))
+}
+
+// 1106 missing capability.
+fn adversarial_missing_capability() -> Result<u64, HealthCode> {
+    let performer = performer_id();
+    let mut receiver = Receiver::conductor();
+    receiver.peer_mut(&performer).capabilities = vec![CAPABILITY_PROFILE_PULSE.to_string()];
+    receiver.accept(&reference_message(Kind::Signal))
+}
+
+// 1107 revoked trust.
+fn adversarial_revoked_trust() -> Result<u64, HealthCode> {
+    let performer = performer_id();
+    let mut receiver = Receiver::conductor();
+    receiver.peer_mut(&performer).trust_active = false;
+    receiver.accept(&reference_message(Kind::Pulse))
+}
+
+// 1107 revoked identity.
+fn adversarial_revoked_identity() -> Result<u64, HealthCode> {
+    let performer = performer_id();
+    let mut receiver = Receiver::conductor();
+    receiver.peer_mut(&performer).identity_active = false;
+    receiver.accept(&reference_message(Kind::Pulse))
+}
+
+// 1107 unknown peer.
+fn adversarial_unknown_peer() -> Result<u64, HealthCode> {
+    let mut receiver = Receiver::conductor();
+    receiver.peers.clear();
+    receiver.accept(&reference_message(Kind::Pulse))
+}
+
+// 1108 stale: one second past the inclusive boundary.
+fn adversarial_stale() -> Result<u64, HealthCode> {
+    let mut receiver = Receiver::conductor();
+    receiver.now = BASE_NOW + MAX_AGE_SECONDS + 1;
+    receiver.accept(&reference_message(Kind::Pulse))
+}
+
+// 1109 future: one second past the inclusive boundary.
+fn adversarial_future() -> Result<u64, HealthCode> {
+    let mut receiver = Receiver::conductor();
+    receiver.now = BASE_NOW - MAX_FUTURE_SKEW_SECONDS - 1;
+    receiver.accept(&reference_message(Kind::Pulse))
+}
+
+// 1110 replay: the same message twice. The clock is advanced past the
+// minimum Pulse interval so the rate check at step 11 cannot mask the
+// replay check at step 12.
+fn adversarial_replayed_message_id() -> Result<u64, HealthCode> {
+    let mut receiver = Receiver::conductor();
+    assert_eq!(receiver.accept(&reference_message(Kind::Pulse)), Ok(0));
+    receiver.now = BASE_NOW + MIN_PULSE_INTERVAL_SECONDS;
+    receiver.accept(&reference_message(Kind::Pulse))
+}
+
+// 1110 replay: a cross-session envelope.
+fn adversarial_cross_session() -> Result<u64, HealthCode> {
+    let conductor = conductor_id();
+    let mut receiver = Receiver::conductor();
+    let (canonical_bytes, signature) = sign_envelope(
+        PERFORMER_SCALAR_HEX,
+        Kind::Pulse.wire(),
+        OTHER_SESSION_ID_HEX,
+        &nonce_hex(0x01),
+        pulse_payload(&conductor, 1, BASE_NOW),
+        BASE_NOW,
+    );
+    receiver.accept(&encode(&canonical_bytes, &signature))
+}
+
+// 1110 replay: a duplicated signal_id under a fresh message_id.
+fn adversarial_replayed_signal_id() -> Result<u64, HealthCode> {
+    let conductor = conductor_id();
+    let mut receiver = Receiver::conductor();
+    assert_eq!(receiver.accept(&reference_message(Kind::Signal)), Ok(1));
+    let mut payload = signal_payload(&conductor, 2, 0xb1);
+    payload["message_id"] = Value::from(omakure::hex::encode(&[0x99; 16]));
+    let (canonical_bytes, signature) = sign_envelope(
+        PERFORMER_SCALAR_HEX,
+        Kind::Signal.wire(),
+        SESSION_ID_HEX,
+        &nonce_hex(0x01),
+        payload,
+        BASE_NOW,
+    );
+    receiver.accept(&encode(&canonical_bytes, &signature))
+}
+
+// 1110 replay: a non-advancing pulse sequence under a fresh message id.
+fn adversarial_stalled_pulse_sequence() -> Result<u64, HealthCode> {
+    let conductor = conductor_id();
+    let mut receiver = Receiver::conductor();
+    assert_eq!(receiver.accept(&reference_message(Kind::Pulse)), Ok(0));
+    receiver.now = BASE_NOW + MIN_PULSE_INTERVAL_SECONDS;
+    let mut payload = pulse_payload(&conductor, 1, BASE_NOW);
+    payload["message_id"] = Value::from(omakure::hex::encode(&[0x98; 16]));
+    let (canonical_bytes, signature) = sign_envelope(
+        PERFORMER_SCALAR_HEX,
+        Kind::Pulse.wire(),
+        SESSION_ID_HEX,
+        &nonce_hex(0x01),
+        payload,
+        BASE_NOW,
+    );
+    receiver.accept(&encode(&canonical_bytes, &signature))
+}
+
+// 1111 reordered: a gap the cursor may not skip.
+fn adversarial_reordered_gap() -> Result<u64, HealthCode> {
+    let conductor = conductor_id();
+    let mut receiver = Receiver::conductor();
+    let mut payload = signal_payload(&conductor, 2, 0xb2);
+    payload["message_id"] = Value::from(omakure::hex::encode(&[0x97; 16]));
+    let (canonical_bytes, signature) = sign_envelope(
+        PERFORMER_SCALAR_HEX,
+        Kind::Signal.wire(),
+        SESSION_ID_HEX,
+        &nonce_hex(0x01),
+        payload,
+        BASE_NOW,
+    );
+    receiver.accept(&encode(&canonical_bytes, &signature))
+}
+
+// 1111 reordered: beyond the reorder window.
+fn adversarial_reordered_far_future() -> Result<u64, HealthCode> {
+    let conductor = conductor_id();
+    let mut receiver = Receiver::conductor();
+    let mut payload = signal_payload(&conductor, REORDER_BUFFER_ENTRIES + 2, 0xb3);
+    payload["message_id"] = Value::from(omakure::hex::encode(&[0x96; 16]));
+    let (canonical_bytes, signature) = sign_envelope(
+        PERFORMER_SCALAR_HEX,
+        Kind::Signal.wire(),
+        SESSION_ID_HEX,
+        &nonce_hex(0x01),
+        payload,
+        BASE_NOW,
+    );
+    receiver.accept(&encode(&canonical_bytes, &signature))
+}
+
+// 1112 rate limited.
+fn adversarial_rate_limited() -> Result<u64, HealthCode> {
+    let performer = performer_id();
+    let mut receiver = Receiver::conductor();
+    receiver.health.insert(
+        performer.clone(),
+        PeerHealth {
+            minute_messages: MAX_MESSAGES_PER_PEER_PER_MINUTE + RATE_BURST_ALLOWANCE,
+            ..PeerHealth::default()
+        },
+    );
+    receiver.accept(&reference_message(Kind::Pulse))
+}
+
+// 1113 queue full.
+fn adversarial_inbox_full() -> Result<u64, HealthCode> {
+    let performer = performer_id();
+    let mut receiver = Receiver::conductor();
+    receiver.health.insert(
+        performer.clone(),
+        PeerHealth {
+            stored_signals: SIGNAL_INBOX_CAPACITY,
+            ..PeerHealth::default()
+        },
+    );
+    receiver.accept(&reference_message(Kind::Signal))
+}
+
+// 1114 unknown field.
+fn adversarial_unknown_field() -> Result<u64, HealthCode> {
+    let conductor = conductor_id();
+    let mut receiver = Receiver::conductor();
+    let mut payload = pulse_payload(&conductor, 1, BASE_NOW);
+    payload["pulse"]["cpu_percent"] = Value::from(42);
+    let (canonical_bytes, signature) = sign_envelope(
+        PERFORMER_SCALAR_HEX,
+        Kind::Pulse.wire(),
+        SESSION_ID_HEX,
+        &nonce_hex(0x01),
+        payload,
+        BASE_NOW,
+    );
+    receiver.accept(&encode(&canonical_bytes, &signature))
+}
+
+// 1114 missing field.
+fn adversarial_missing_field() -> Result<u64, HealthCode> {
+    let conductor = conductor_id();
+    let mut receiver = Receiver::conductor();
+    let mut payload = pulse_payload(&conductor, 1, BASE_NOW);
+    payload["pulse"]
+        .as_object_mut()
+        .unwrap()
+        .remove("uptime_seconds");
+    let (canonical_bytes, signature) = sign_envelope(
+        PERFORMER_SCALAR_HEX,
+        Kind::Pulse.wire(),
+        SESSION_ID_HEX,
+        &nonce_hex(0x01),
+        payload,
+        BASE_NOW,
+    );
+    receiver.accept(&encode(&canonical_bytes, &signature))
+}
+
+// 1114 unknown health kind.
+fn adversarial_unknown_kind() -> Result<u64, HealthCode> {
+    let conductor = conductor_id();
+    let mut receiver = Receiver::conductor();
+    let (canonical_bytes, signature) = sign_envelope(
+        PERFORMER_SCALAR_HEX,
+        "health_inventory",
+        SESSION_ID_HEX,
+        &nonce_hex(0x01),
+        pulse_payload(&conductor, 1, BASE_NOW),
+        BASE_NOW,
+    );
+    receiver.accept(&encode(&canonical_bytes, &signature))
+}
+
+#[test]
+fn every_contracted_adversarial_case_is_rejected_with_its_stable_code() {
+    let cases = [
+        AdversarialCase(
             "unknown-version",
             HealthCode::UnsupportedVersion,
-            receiver.accept(&encode(&canonical_bytes, &signature)),
-        );
-    }
-
-    // 1102 malformed: non-canonical byte order.
-    {
-        let mut receiver = Receiver::conductor();
-        let encoded = reference_message(Kind::Pulse);
-        let canonical_bytes = &encoded[..encoded.len() - SIGNATURE_BYTES];
-        let text = String::from_utf8(canonical_bytes.to_vec()).unwrap();
-        let mangled = text.replacen("{\"created_at\"", "{ \"created_at\"", 1);
-        let mut broken = mangled.into_bytes();
-        broken.extend_from_slice(&encoded[encoded.len() - SIGNATURE_BYTES..]);
-        record(
+            adversarial_unknown_version,
+        ),
+        AdversarialCase(
             "non-canonical-json",
             HealthCode::InvalidMessage,
-            receiver.accept(&broken),
-        );
-    }
-
-    // 1102 malformed: mutated signature.
-    {
-        let mut receiver = Receiver::conductor();
-        let mut encoded = reference_message(Kind::Pulse);
-        *encoded.last_mut().unwrap() ^= 1;
-        record(
+            adversarial_non_canonical_json,
+        ),
+        AdversarialCase(
             "mutated-signature",
             HealthCode::InvalidMessage,
-            receiver.accept(&encoded),
-        );
-    }
-
-    // 1102 malformed: field combination.
-    {
-        let mut receiver = Receiver::conductor();
-        let mut payload = signal_payload(&conductor, 1, 0xb1);
-        payload["signal"]["subject"] = Value::from(performer.clone());
-        let (canonical_bytes, signature) = sign_envelope(
-            PERFORMER_SCALAR_HEX,
-            Kind::Signal.wire(),
-            SESSION_ID_HEX,
-            &nonce_hex(0x01),
-            payload,
-            BASE_NOW,
-        );
-        record(
+            adversarial_mutated_signature,
+        ),
+        AdversarialCase(
             "signal-run-and-subject",
             HealthCode::InvalidMessage,
-            receiver.accept(&encode(&canonical_bytes, &signature)),
-        );
-    }
-
-    // 1102 privacy: a secret reference anywhere.
-    {
-        let mut receiver = Receiver::conductor();
-        let mut payload = profile_payload(&conductor, 1);
-        payload["profile"]["display_name"] = Value::from("secret://vault/api-token");
-        let (canonical_bytes, signature) = sign_envelope(
-            PERFORMER_SCALAR_HEX,
-            Kind::Profile.wire(),
-            SESSION_ID_HEX,
-            &nonce_hex(0x01),
-            payload,
-            BASE_NOW,
-        );
-        record(
+            adversarial_signal_run_and_subject,
+        ),
+        AdversarialCase(
             "secret-reference",
             HealthCode::InvalidMessage,
-            receiver.accept(&encode(&canonical_bytes, &signature)),
-        );
-    }
-
-    // 1102 privacy: a filesystem path in a bounded field.
-    {
-        let mut receiver = Receiver::conductor();
-        let mut payload = pulse_payload(&conductor, 1, BASE_NOW);
-        payload["pulse"]["last_run"]["script"] = Value::from("/home/operator/scripts/deploy.sh");
-        let (canonical_bytes, signature) = sign_envelope(
-            PERFORMER_SCALAR_HEX,
-            Kind::Pulse.wire(),
-            SESSION_ID_HEX,
-            &nonce_hex(0x01),
-            payload,
-            BASE_NOW,
-        );
-        record(
+            adversarial_secret_reference,
+        ),
+        AdversarialCase(
             "workspace-path",
             HealthCode::InvalidMessage,
-            receiver.accept(&encode(&canonical_bytes, &signature)),
-        );
-    }
-
-    // 1103 oversized: a Profile-sized body carried under a Signal's smaller cap.
-    {
-        let mut receiver = Receiver::conductor();
-        let (canonical_bytes, signature) = sign_envelope(
-            PERFORMER_SCALAR_HEX,
-            Kind::Signal.wire(),
-            SESSION_ID_HEX,
-            &nonce_hex(0x01),
-            worst_case_payload(Kind::Profile),
-            BASE_NOW,
-        );
-        assert!(canonical_bytes.len() > MAX_CANONICAL_SIGNAL);
-        record(
+            adversarial_workspace_path,
+        ),
+        AdversarialCase(
             "oversized-for-kind",
             HealthCode::MessageTooLarge,
-            receiver.accept(&encode(&canonical_bytes, &signature)),
-        );
-    }
-
-    // 1104 wrong target.
-    {
-        let mut receiver = Receiver::conductor();
-        let (canonical_bytes, signature) = sign_envelope(
-            PERFORMER_SCALAR_HEX,
-            Kind::Pulse.wire(),
-            SESSION_ID_HEX,
-            &nonce_hex(0x01),
-            pulse_payload(&performer, 1, BASE_NOW),
-            BASE_NOW,
-        );
-        record(
+            adversarial_oversized_for_kind,
+        ),
+        AdversarialCase(
             "wrong-target",
             HealthCode::WrongTarget,
-            receiver.accept(&encode(&canonical_bytes, &signature)),
-        );
-    }
-
-    // 1105 wrong role: a conductor-role peer reporting health.
-    {
-        let mut receiver = Receiver::conductor();
-        receiver.peer_mut(&performer).role = ROLE_CONDUCTOR;
-        record(
-            "wrong-role",
-            HealthCode::WrongRole,
-            receiver.accept(&reference_message(Kind::Pulse)),
-        );
-    }
-
-    // 1105 wrong role: a performer acknowledging.
-    {
-        let mut receiver = Receiver::performer();
-        receiver.peer_mut(&conductor).role = ROLE_PERFORMER;
-        record(
+            adversarial_wrong_target,
+        ),
+        AdversarialCase("wrong-role", HealthCode::WrongRole, adversarial_wrong_role),
+        AdversarialCase(
             "wrong-direction-ack",
             HealthCode::WrongRole,
-            receiver.accept(&reference_message(Kind::Ack)),
-        );
-    }
-
-    // 1106 missing capability.
-    {
-        let mut receiver = Receiver::conductor();
-        receiver.peer_mut(&performer).capabilities = vec![CAPABILITY_PROFILE_PULSE.to_string()];
-        record(
+            adversarial_wrong_direction_ack,
+        ),
+        AdversarialCase(
             "missing-capability",
             HealthCode::MissingCapability,
-            receiver.accept(&reference_message(Kind::Signal)),
-        );
-    }
-
-    // 1107 revoked trust.
-    {
-        let mut receiver = Receiver::conductor();
-        receiver.peer_mut(&performer).trust_active = false;
-        record(
+            adversarial_missing_capability,
+        ),
+        AdversarialCase(
             "revoked-trust",
             HealthCode::Revoked,
-            receiver.accept(&reference_message(Kind::Pulse)),
-        );
-    }
-
-    // 1107 revoked identity.
-    {
-        let mut receiver = Receiver::conductor();
-        receiver.peer_mut(&performer).identity_active = false;
-        record(
+            adversarial_revoked_trust,
+        ),
+        AdversarialCase(
             "revoked-identity",
             HealthCode::Revoked,
-            receiver.accept(&reference_message(Kind::Pulse)),
-        );
-    }
-
-    // 1107 unknown peer.
-    {
-        let mut receiver = Receiver::conductor();
-        receiver.peers.clear();
-        record(
+            adversarial_revoked_identity,
+        ),
+        AdversarialCase(
             "unknown-peer",
             HealthCode::Revoked,
-            receiver.accept(&reference_message(Kind::Pulse)),
-        );
-    }
-
-    // 1108 stale: one second past the inclusive boundary.
-    {
-        let mut receiver = Receiver::conductor();
-        receiver.now = BASE_NOW + MAX_AGE_SECONDS + 1;
-        record(
-            "stale",
-            HealthCode::Stale,
-            receiver.accept(&reference_message(Kind::Pulse)),
-        );
-    }
-
-    // 1109 future: one second past the inclusive boundary.
-    {
-        let mut receiver = Receiver::conductor();
-        receiver.now = BASE_NOW - MAX_FUTURE_SKEW_SECONDS - 1;
-        record(
-            "future",
-            HealthCode::Future,
-            receiver.accept(&reference_message(Kind::Pulse)),
-        );
-    }
-
-    // 1110 replay: the same message twice. The clock is advanced past the
-    // minimum Pulse interval so the rate check at step 11 cannot mask the
-    // replay check at step 12.
-    {
-        let mut receiver = Receiver::conductor();
-        assert_eq!(receiver.accept(&reference_message(Kind::Pulse)), Ok(0));
-        receiver.now = BASE_NOW + MIN_PULSE_INTERVAL_SECONDS;
-        record(
+            adversarial_unknown_peer,
+        ),
+        AdversarialCase("stale", HealthCode::Stale, adversarial_stale),
+        AdversarialCase("future", HealthCode::Future, adversarial_future),
+        AdversarialCase(
             "replayed-message-id",
             HealthCode::Replay,
-            receiver.accept(&reference_message(Kind::Pulse)),
-        );
-    }
-
-    // 1110 replay: a cross-session envelope.
-    {
-        let mut receiver = Receiver::conductor();
-        let (canonical_bytes, signature) = sign_envelope(
-            PERFORMER_SCALAR_HEX,
-            Kind::Pulse.wire(),
-            OTHER_SESSION_ID_HEX,
-            &nonce_hex(0x01),
-            pulse_payload(&conductor, 1, BASE_NOW),
-            BASE_NOW,
-        );
-        record(
+            adversarial_replayed_message_id,
+        ),
+        AdversarialCase(
             "cross-session",
             HealthCode::Replay,
-            receiver.accept(&encode(&canonical_bytes, &signature)),
-        );
-    }
-
-    // 1110 replay: a duplicated signal_id under a fresh message_id.
-    {
-        let mut receiver = Receiver::conductor();
-        assert_eq!(receiver.accept(&reference_message(Kind::Signal)), Ok(1));
-        let mut payload = signal_payload(&conductor, 2, 0xb1);
-        payload["message_id"] = Value::from(hex(&[0x99; 16]));
-        let (canonical_bytes, signature) = sign_envelope(
-            PERFORMER_SCALAR_HEX,
-            Kind::Signal.wire(),
-            SESSION_ID_HEX,
-            &nonce_hex(0x01),
-            payload,
-            BASE_NOW,
-        );
-        record(
+            adversarial_cross_session,
+        ),
+        AdversarialCase(
             "replayed-signal-id",
             HealthCode::Replay,
-            receiver.accept(&encode(&canonical_bytes, &signature)),
-        );
-    }
-
-    // 1110 replay: a non-advancing pulse sequence under a fresh message id.
-    {
-        let mut receiver = Receiver::conductor();
-        assert_eq!(receiver.accept(&reference_message(Kind::Pulse)), Ok(0));
-        receiver.now = BASE_NOW + MIN_PULSE_INTERVAL_SECONDS;
-        let mut payload = pulse_payload(&conductor, 1, BASE_NOW);
-        payload["message_id"] = Value::from(hex(&[0x98; 16]));
-        let (canonical_bytes, signature) = sign_envelope(
-            PERFORMER_SCALAR_HEX,
-            Kind::Pulse.wire(),
-            SESSION_ID_HEX,
-            &nonce_hex(0x01),
-            payload,
-            BASE_NOW,
-        );
-        record(
+            adversarial_replayed_signal_id,
+        ),
+        AdversarialCase(
             "stalled-pulse-sequence",
             HealthCode::Replay,
-            receiver.accept(&encode(&canonical_bytes, &signature)),
-        );
-    }
-
-    // 1111 reordered: a gap the cursor may not skip.
-    {
-        let mut receiver = Receiver::conductor();
-        let mut payload = signal_payload(&conductor, 2, 0xb2);
-        payload["message_id"] = Value::from(hex(&[0x97; 16]));
-        let (canonical_bytes, signature) = sign_envelope(
-            PERFORMER_SCALAR_HEX,
-            Kind::Signal.wire(),
-            SESSION_ID_HEX,
-            &nonce_hex(0x01),
-            payload,
-            BASE_NOW,
-        );
-        record(
+            adversarial_stalled_pulse_sequence,
+        ),
+        AdversarialCase(
             "reordered-gap",
             HealthCode::Reordered,
-            receiver.accept(&encode(&canonical_bytes, &signature)),
-        );
-    }
-
-    // 1111 reordered: beyond the reorder window.
-    {
-        let mut receiver = Receiver::conductor();
-        let mut payload = signal_payload(&conductor, REORDER_BUFFER_ENTRIES + 2, 0xb3);
-        payload["message_id"] = Value::from(hex(&[0x96; 16]));
-        let (canonical_bytes, signature) = sign_envelope(
-            PERFORMER_SCALAR_HEX,
-            Kind::Signal.wire(),
-            SESSION_ID_HEX,
-            &nonce_hex(0x01),
-            payload,
-            BASE_NOW,
-        );
-        record(
+            adversarial_reordered_gap,
+        ),
+        AdversarialCase(
             "reordered-far-future",
             HealthCode::Reordered,
-            receiver.accept(&encode(&canonical_bytes, &signature)),
-        );
-    }
-
-    // 1112 rate limited.
-    {
-        let mut receiver = Receiver::conductor();
-        receiver.health.insert(
-            performer.clone(),
-            PeerHealth {
-                minute_messages: MAX_MESSAGES_PER_PEER_PER_MINUTE + RATE_BURST_ALLOWANCE,
-                ..PeerHealth::default()
-            },
-        );
-        record(
+            adversarial_reordered_far_future,
+        ),
+        AdversarialCase(
             "rate-limited",
             HealthCode::RateLimited,
-            receiver.accept(&reference_message(Kind::Pulse)),
-        );
-    }
-
-    // 1113 queue full.
-    {
-        let mut receiver = Receiver::conductor();
-        receiver.health.insert(
-            performer.clone(),
-            PeerHealth {
-                stored_signals: SIGNAL_INBOX_CAPACITY,
-                ..PeerHealth::default()
-            },
-        );
-        record(
-            "inbox-full",
-            HealthCode::QueueFull,
-            receiver.accept(&reference_message(Kind::Signal)),
-        );
-    }
-
-    // 1114 unknown field.
-    {
-        let mut receiver = Receiver::conductor();
-        let mut payload = pulse_payload(&conductor, 1, BASE_NOW);
-        payload["pulse"]["cpu_percent"] = Value::from(42);
-        let (canonical_bytes, signature) = sign_envelope(
-            PERFORMER_SCALAR_HEX,
-            Kind::Pulse.wire(),
-            SESSION_ID_HEX,
-            &nonce_hex(0x01),
-            payload,
-            BASE_NOW,
-        );
-        record(
+            adversarial_rate_limited,
+        ),
+        AdversarialCase("inbox-full", HealthCode::QueueFull, adversarial_inbox_full),
+        AdversarialCase(
             "unknown-field",
             HealthCode::UnknownField,
-            receiver.accept(&encode(&canonical_bytes, &signature)),
-        );
-    }
-
-    // 1114 missing field.
-    {
-        let mut receiver = Receiver::conductor();
-        let mut payload = pulse_payload(&conductor, 1, BASE_NOW);
-        payload["pulse"]
-            .as_object_mut()
-            .unwrap()
-            .remove("uptime_seconds");
-        let (canonical_bytes, signature) = sign_envelope(
-            PERFORMER_SCALAR_HEX,
-            Kind::Pulse.wire(),
-            SESSION_ID_HEX,
-            &nonce_hex(0x01),
-            payload,
-            BASE_NOW,
-        );
-        record(
+            adversarial_unknown_field,
+        ),
+        AdversarialCase(
             "missing-field",
             HealthCode::UnknownField,
-            receiver.accept(&encode(&canonical_bytes, &signature)),
-        );
-    }
-
-    // 1114 unknown health kind.
-    {
-        let mut receiver = Receiver::conductor();
-        let (canonical_bytes, signature) = sign_envelope(
-            PERFORMER_SCALAR_HEX,
-            "health_inventory",
-            SESSION_ID_HEX,
-            &nonce_hex(0x01),
-            pulse_payload(&conductor, 1, BASE_NOW),
-            BASE_NOW,
-        );
-        record(
+            adversarial_missing_field,
+        ),
+        AdversarialCase(
             "unknown-kind",
             HealthCode::UnknownField,
-            receiver.accept(&encode(&canonical_bytes, &signature)),
-        );
+            adversarial_unknown_kind,
+        ),
+    ];
+    let mut observed: Vec<(&'static str, HealthCode)> = Vec::new();
+    for AdversarialCase(name, expected, run) in cases {
+        let actual = run().unwrap_err();
+        assert_eq!(actual, expected, "{name} produced the wrong stable code");
+        observed.push((name, actual));
     }
 
     let covered: HashSet<u16> = observed.iter().map(|(_, code)| code.code()).collect();
@@ -2476,10 +2503,13 @@ fn regenerate_health_plane_vectors() {
         println!("[[vectors]]");
         println!("kind = \"{}\"", kind.wire());
         println!("canonical_bytes = {}", canonical_bytes.len());
-        println!("canonical_hex = \"{}\"", hex(canonical_bytes));
+        println!(
+            "canonical_hex = \"{}\"",
+            omakure::hex::encode(canonical_bytes)
+        );
         println!(
             "signature_hex = \"{}\"",
-            hex(&encoded[encoded.len() - SIGNATURE_BYTES..])
+            omakure::hex::encode(&encoded[encoded.len() - SIGNATURE_BYTES..])
         );
         println!();
     }

@@ -10,8 +10,8 @@ machine-owned single-process `node serve` service.
    overrides, debug defaults, and platform defaults.
 2. The shared filesystem repository scans supported script extensions while
    excluding metadata and `.omakureignore` matches.
-3. Each script may embed a PascalCase JSON schema. The schema describes fields,
-   outputs, queue cases, and an optional cron `Schedule`.
+3. Each script may embed a PascalCase JSON schema. The schema describes fields
+   and an optional cron `Schedule`.
 4. CLI commands and HTTP routes call the same operations. CLI output is human
    readable or the stable JSON envelope; HTTP adds authentication, policy, and
    status mapping.
@@ -65,8 +65,12 @@ caller:
 - `.githooks/pre-commit` and `.githooks/pre-push` route exactly to fast and
   full. Every Mise `run` entry points to one existing executable script;
   composition is kept in these shell layers, not inline in `mise.toml`.
-- CI and release matrix jobs invoke
-  `scripts/tasks/check/platform/${{ matrix.platform }} "${{ matrix.target }}"`.
+- CI and release matrix jobs invoke the selected
+  `scripts/tasks/check/platform/${{ matrix.platform }}` route. Release adds
+  `--build-only` so native tests run in CI only.
+- Complexity CI and the trusted soak share `scripts/tasks/complexity-workflow`
+  for canonical reports, evidence, and the changed-function gate. The soak
+  workflow owns its trusted state and artifact persistence.
   Packaging remains an archive assertion around the same platform build; it
   does not reproduce test/build/static-link/smoke commands in workflow YAML.
 
@@ -112,103 +116,143 @@ verify workspace paths or host runtimes.
 
 | Layer | Technology | Purpose |
 |---|---|---|
-| Language | Rust 2021 | Portable application and CLI |
+| Language | Rust 2024 | Portable application and CLI |
 | CLI | clap 4.5, clap_complete 4.5 | Commands, help, and completions |
-| Serialization | serde, serde_json, toml | Schemas, envelopes, config, policy |
-| HTTP | axum 0.7, tokio 1, tower 0.5 | Authenticated management API |
-| Storage | rusqlite 0.31, bundled SQLite | Runs, queue state, traces, search index |
-| Errors | thiserror 1.0 | Typed domain and application errors |
-| Scheduling | cron 0.12, chrono 0.4 | Schedule parsing and next-fire calculation |
+| Serialization | serde, serde_json, toml 1.1, serde_urlencoded 0.7 | Schemas, envelopes, config, policy, HTTP query strings |
+| Canonical JSON | serde_jcs 0.2 | RFC 8785 bytes for signed envelopes and Health reports |
+| HTTP | axum 0.8, tokio 1, tower 0.5 | Authenticated management API |
+| Storage | rusqlite 0.40.2, bundled SQLite | Runs, queue state, traces, search index, node registry |
+| Errors | thiserror 2.0 | Typed domain and application errors |
+| Scheduling | cron 0.12, chrono 0.4, humantime 2.1 | Schedule parsing, next-fire calculation, duration flags |
 | Processes | signal-hook 0.3, daemonize 0.5 | Graceful workers and Unix daemon mode |
-| Security | argon2, subtle, sha2, rand, k256, snow | Token hashing, BIP-340 identity, Noise transport, comparison, and generation |
-| Resolution | hickory-resolver | Bounded async static-peer DNS resolution |
-| Filesystem | dirs 5, fs2 | Platform paths and file coordination |
-| Windows | winreg 0.52 | Documents path and install-path handling |
+| Script runtime | mlua 0.12 (`lua54`, `vendored`) | Embedded Lua host for `.lua` scripts |
+| Tokens | argon2 0.5, subtle 2.6, sha2 0.10, rand 0.9 | Token hashing, constant-time comparison, digests, generation |
+| Identity and transport | k256 0.14, snow 0.10, curve25519-dalek 4.1 | BIP-340 identity, Noise XX sessions, X25519 key checks |
+| Resolution | hickory-resolver 0.25 | Bounded async static-peer DNS resolution |
+| Filesystem | fs2 0.4, tempfile 3.10 | File locks, staged installs, and atomic writes |
+| Unix | libc 0.2 | Ownership, permission, and process checks |
+| Windows | winreg 0.56, windows-sys 0.61 | Install-path registry handling, ACLs, and process checks |
+| Docs generator (`usage-generator` feature) | clap_usage 5, usage-lib 6.6 (`jdx/usage` rev `9732c63`) | Usage KDL, Markdown, and roff artifacts; not in runtime builds |
 
-Direct dependencies are intentionally limited to the retained headless surface.
-The package does not declare `ratatui`, `crossterm`, or `rattles`. It does
-declare `mlua` (`lua54`, `vendored`), the embedded runtime for the `.lua`
-script kind; the removed TUI widget runtime is unrelated and stays removed.
+Direct dependencies match the supported headless runtime. `mlua` (`lua54`,
+`vendored`) runs the `.lua` script kind.
 
 ## Source structure
 
 ```text
 src/
 ├── main.rs                  CLI parsing, workspace resolution, dispatch
+├── lib.rs                   crate surface shared by the binaries and tests;
+│                            auth, key custody, secrets, and redaction stay crate scoped
+├── bin/                     cli-reference, usage-kdl, usage-docs, operation-catalog generators
 ├── cli/                     command adapters and JSON output
-│   ├── args.rs              clap command tree and long-form help
-│   ├── api.rs               authenticated Axum management server
+│   ├── args/                clap command tree and long-form help
+│   ├── command_metadata.rs   live Clap-tree inventory and reference projections
+│   ├── api/                 authenticated Axum management server (boot, router,
+│   │                        bearer auth, bounded blocking work, audit, and route groups)
 │   ├── node_service.rs      HTTP + workers + scheduler lifecycle
-│   ├── run.rs               synchronous execution entry point
-│   ├── queue.rs             queue producers and worker
+│   ├── run/                synchronous execution entry point and tests
+│   ├── queue/               queue command dispatch, producers, and tests
 │   ├── history.rs           run and trace queries
-│   ├── serve.rs             standalone cron scheduler
+│   ├── serve/              standalone cron scheduler and lifecycle
 │   ├── env.rs               managed environment commands
 │   ├── battery.rs           Battery repository commands
 │   ├── help_ai.rs           clap-derived machine surface
-│   └── json.rs              stable envelope and error codes
+│   ├── node.rs              node, trust, enrollment, health, and baseline commands
+│   ├── json.rs              stable envelope and error codes
+│   └── …                    one adapter per remaining verb (init, trace, token, update, …)
 ├── domain/                  pure schema, parsing, validation, scheduling
+│   └── health_plane/        frozen bounds, value types, and storage contract
 ├── operations/              protocol-neutral CLI/HTTP behavior
-│   ├── core.rs              scripts, runs, queue, and workspace operations
+│   ├── core/                scripts, runs, queue, and workspace operations
 │   ├── config.rs            resolved config and environment diagnostics
 │   ├── doctor.rs            runtime and schema diagnostics
 │   ├── envs.rs              managed environment operations
 │   ├── scripts.rs           safe tree/content operations
 │   ├── search.rs            indexed script search
-│   └── battery.rs           sync, inspect, install, and provenance
-├── adapters/                filesystem, process, environment, and checks
-├── ports/                   repository and environment interfaces
-├── runs.rs                  SQLite state machine and structured traces
-├── run_executor.rs          shared child lifecycle and redaction
+│   ├── battery/             sync, inspect, install, and provenance
+│   ├── node/                node status, trust, enrollment, and discovery
+│   ├── health/             fleet-status, Signal-feed, and local fact projections
+│   ├── cue.rs               Cue service dispatch validation and outcomes
+│   ├── baseline/            baseline delivery, install, status, and rollback
+│   └── worker.rs            queue worker lifecycle, Cue recovery, preflight, and finalization
+├── adapters/                platform filesystem, process, environment, and checks
+│   ├── environments/        managed environment files, parsing, and adapter errors
+│   ├── git.rs               isolated Git process execution and bounded probes
+│   ├── system_checks.rs     interpreter checks and bounded runtime version probes
+│   ├── fs/                  Battery file operations and node platform syscalls/ACL inspection
+│   └── signals.rs           process shutdown signal registration
+├── error.rs                 shared script and schema adapter errors
+├── util/                    shared filesystem, process, path, encoding, and OS entropy helpers
+├── app_meta.rs              package version constant
+├── inventory/               pure Clap-tree inventory conversion, CLI reference rendering, and HTTP routes
+├── cli_http_parity/         CLI/HTTP parity manifest and observable comparator
+├── operation_catalog/       versioned metadata, validation, rendering, and tests
+├── runs/                    SQLite state machine, opaque run store, and traces
+├── run_executor/           shared child lifecycle and redaction
 ├── search_index.rs          SQLite full-text index
 ├── runtime.rs               Script-kind detection and command construction
 ├── workspace.rs             one workspace root and metadata layout
-├── auth.rs                  token-file and legacy token authentication
+├── auth/                    token-file parsing, bearer verification, scopes, and reload
 ├── policy.rs                deploy-time route and runtime policy
 ├── secrets.rs               secret references and provider resolution
 ├── redaction.rs             output and trace redaction
-├── node.rs                  node paths, platform rules, and state validation
+├── node/                    node paths, filesystem security policy, and state validation
 ├── node_identity.rs         BIP-340 machine identity and node ID derivation
-├── node_registry.rs         node-owned trust and delivery persistence boundary
-│   └── health.rs            Health Plane reads and receive-order application
-├── direct_transport.rs      Noise framing, certificates, envelopes, and replay limits
-├── direct_service.rs        production direct listener, peer admission, and outboxes
+├── node_key.rs              shared private-key custody and file validation
+├── node_registry/           node-owned trust and delivery persistence boundary
+│   └── health/              Health Plane reads, receive-order application, and store implementation
+├── direct_transport/        Noise framing, certificates, envelopes, and replay limits
+├── direct_service/          production direct listener, peer admission, and outboxes
+│   └── ack.rs               shared signed ACK verification for Cue and Baseline
 ├── direct_health.rs         Health Plane carriage over an established direct session
-├── health_plane/            protocol-neutral Health Plane domain and operations
-│   ├── model.rs             Profile, Pulse, and the closed Signal kinds
+├── health_plane.rs          store-neutral Health Plane ingest and fleet projection
+├── health_plane/            Health Plane schema, reporting, lifecycle, and tests
 │   ├── schema.rs            frozen wire schema
-│   ├── bounds.rs            frozen size and rate bounds
-│   ├── report.rs            Performer-side reporting
+│   ├── report/              Performer-side facts, reporting, payloads, sanitization, and IDs
 │   └── lifecycle.rs         enrolled/revoked lifecycle Signals
-├── remote_cue.rs            receive half of the Cue plane and its refusal codes
+├── remote_cue/              receive half of the Cue plane and its refusal codes
 ├── baseline.rs              signed baseline manifest: the versioned set a fleet ships
-├── baseline_push.rs         receive half of baseline delivery, install, and rollback
+├── baseline_push/           receive half of baseline delivery, install, and rollback
 ├── baseline_publisher.rs    custody of the key that signs a baseline
 ├── enrollment_authority.rs  custody of the key that mints fleet membership
-├── discovery.rs             bounded trust-neutral LAN discovery
+├── discovery/              bounded trust-neutral LAN discovery
 ├── enrollment.rs            manual and signed-bundle enrollment records
 ├── node_transport.rs        node-owned transport state and static peers
 └── installer.rs             standalone installer binary
 ```
 
+Node filesystem policy stays in `src/node/fs_unix.rs` and
+`src/node/fs_windows.rs`: those modules choose ownership, permissions, path
+identity, and ACL rules and map failures to `NodeError`. The platform calls and
+unsafe bindings live in `src/adapters/fs/`. This keeps the node's platform
+policy together while sharing one filesystem I/O boundary with Battery and
+script-content reads.
+
 ## Boundaries and invariants
 
 - `domain/` is I/O-free. `operations/` owns validation and stable errors;
   CLI and HTTP only parse/render requests and responses.
-- `runs.rs` is the sole owner of `runs.sqlite`. The state machine allows
-  `queued`, `running`, `completed`, `failed`, `cancelled`, `timed_out`, and
-  `dead_letter` with a closed transition graph.
+- `runs/` is the sole owner of `runs.sqlite`. Core run queries, enqueue
+  operations, local Health facts, peer revocation, queue workers, the
+  standalone scheduler, direct CLI runs, and CLI trace writes use an opaque
+  `RunStore` handle.
+  Core queries map typed run errors at the operation boundary. The state
+  machine allows `queued`, `running`, `completed`, `failed`, `cancelled`,
+  `timed_out`, and `dead_letter` with a closed transition graph.
 - Direct runs, queue workers, and scheduled runs all use
   `run_executor::execute_with_heartbeat`, including cancellation, timeout,
   reserved environment variables, and output redaction.
 - `node serve` validates and initializes machine state before binding HTTP,
-   then starts optional workers and scheduler and shuts
+  then starts optional workers and scheduler and shuts
   them down in reverse order. `/v1/health` and `/v1/ready` are unauthenticated;
-  other routes require bearer auth and policy scopes.
+  other routes require bearer auth and policy scopes. The resolved bootstrap
+  token file path reaches cleanup recovery and the authenticated bundle handler
+  through process-owned state.
 - Schedules are declared in script schemas. `serve` scans every five seconds,
   prevents overlapping fires, and records scheduler provenance in SQLite.
-- Scheduler run-table reads are exposed by the tested `runs.rs` APIs
-  `last_scheduled_fire_ms` and `has_live_scheduled_run`; `src/cli/serve.rs`
+- Scheduler run-table reads are exposed by the tested `runs/` APIs
+  `last_scheduled_fire_ms` and `has_live_scheduled_run`; `src/cli/serve/`
   only discovers schedules and enqueues due work.
 - `tests/architecture_contract.rs` parses handwritten Rust with the pinned
   `syn` development dependency and checks HTTP, domain, run-table SQL, and
@@ -248,11 +292,20 @@ src/
   direct envelope — `health_profile`, `health_pulse`, `health_signal`,
   `health_ack`, `health_error` — and no new transport, signature construction,
   key material, or capability. `src/direct_health.rs` is the only seam between
-  the shipped session and `src/health_plane/`, which owns authorization,
-  ordering, idempotency, capacity, retention, and every bound.
-  `src/operations/health.rs` projects the Conductor-local fleet-status and
+  the shipped session and `src/health_plane.rs`, which owns authorization,
+  ordering, idempotency, capacity, retention, and every bound through the
+  `domain::health_plane::store::HealthStore` interface. The registry implements
+  that interface while retaining exclusive ownership of its SQL transactions.
+  The companion
+  `src/health_plane/` directory holds its wire schema, reporting, and lifecycle
+  support.
+  `src/operations/health/` projects the Conductor-local fleet-status and
   Signal-feed reports that `omakure node health` / `node signals` and
-  `GET /v1/node/health` / `GET /v1/node/signals` both render. Health state is
+  `GET /v1/node/health` / `GET /v1/node/signals` both render. It also supplies
+  local Performer facts. `src/operations/node/status.rs` opens existing node
+  state for observational reads before the Health operations receive the
+  registry. Local lifecycle Signals consume a P0 trust-transition
+  view that excludes audit actor and reason. Health state is
   written only by the authenticated node-to-node exchange; CLI and HTTP are read
   surfaces and have no write path. Every quantitative bound is frozen in
   `docs/internal/health-plane-contract.md` and asserted by
@@ -260,9 +313,9 @@ src/
 - The baseline plane is the only one that carries code, so it is the only one
   authorized by two independent authorities: `src/baseline.rs` signs a versioned
   set of scripts under a publisher key held in `src/baseline_publisher.rs`, and
-  `src/baseline_push.rs` will install one only for an active Conductor holding
+  `src/baseline_push/` will install one only for an active Conductor holding
   `baseline-push` *and* a publisher the receiver's own config names.
-  `src/operations/baseline.rs` makes the install all-or-nothing on the
+  `src/operations/baseline/` makes the install all-or-nothing on the
   filesystem, retains exactly one previous version, and re-runs the same
   verification when a node is rolled back onto it. `node_registry` refuses to
   let one node hold a publisher key and record a Performer, so authoring code

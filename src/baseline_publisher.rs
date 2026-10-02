@@ -15,15 +15,9 @@
 //! cannot redirect it, and never returned by any read path.
 
 use crate::node::{NodeContext, NodeError};
-use k256::elliptic_curve::Generate;
+use crate::node_key::{HeldKey, KeyFileError};
 use k256::schnorr::SigningKey;
-use sha2::{Digest, Sha256};
 use std::fs;
-use std::io::Read;
-use std::path::Path;
-
-/// The bytes of the publisher scalar.
-const PUBLISHER_PRIVATE_BYTES: usize = 32;
 
 /// Domain separator for the publisher key id.
 ///
@@ -66,6 +60,22 @@ impl From<NodeError> for PublisherError {
     }
 }
 
+impl KeyFileError for PublisherError {
+    fn state(detail: String) -> Self {
+        Self::State(detail)
+    }
+
+    fn invalid_key() -> Self {
+        Self::InvalidKey
+    }
+}
+
+const PUBLISHER_KEY: HeldKey = HeldKey {
+    label: "baseline publisher",
+    article: "a",
+    scalar: "publisher",
+};
+
 /// The baseline publisher this node holds, if it holds one.
 pub struct BaselinePublisher {
     signing_key: SigningKey,
@@ -91,15 +101,8 @@ impl BaselinePublisher {
         context: &NodeContext,
         registry: &crate::node_registry::NodeRegistry,
     ) -> Result<Self, PublisherError> {
-        context.ensure_state_directory()?;
         let path = context.publisher_key_path();
-        if fs::symlink_metadata(&path).is_ok() {
-            return Err(PublisherError::State(
-                "this node already holds a baseline publisher key".to_string(),
-            ));
-        }
-        let signing_key = SigningKey::generate();
-        crate::node::write_atomic_new(&path, signing_key.to_bytes().as_ref(), 0o600)?;
+        let signing_key = PUBLISHER_KEY.generate::<PublisherError>(context, &path)?;
         if let Err(error) = registry.reject_conductor_authority() {
             let _ = fs::remove_file(&path);
             return Err(PublisherError::State(error.to_string()));
@@ -110,45 +113,14 @@ impl BaselinePublisher {
 
     /// Load the publisher key, without creating anything.
     pub fn load_existing(context: &NodeContext) -> Result<Self, PublisherError> {
-        if !context.validate_existing_state_directory()? {
-            return Err(PublisherError::State(
-                "node state is not initialized".to_string(),
-            ));
-        }
-        let path = context.publisher_key_path();
-        let metadata = fs::symlink_metadata(&path).map_err(|_| {
-            PublisherError::State("this node holds no baseline publisher key".to_string())
-        })?;
-        if !metadata.file_type().is_file() {
-            return Err(PublisherError::State(
-                "the baseline publisher key is not a regular file".to_string(),
-            ));
-        }
-        context.validate_private_file(&path)?;
-        let bytes = read_publisher_key(context, &path)?;
-        let signing_key = SigningKey::from_slice(&bytes).map_err(|_| PublisherError::InvalidKey)?;
-        // The same normalization check the identity and the authority make: a
-        // scalar that was not stored even-Y normalized would sign under a
-        // different public key than the one the fleet records.
-        if signing_key.to_bytes().as_slice() != bytes.as_slice() {
-            return Err(PublisherError::State(
-                "the persisted publisher scalar is not even-Y normalized".to_string(),
-            ));
-        }
+        let signing_key =
+            PUBLISHER_KEY.load::<PublisherError>(context, &context.publisher_key_path())?;
         Ok(Self { signing_key })
-    }
-
-    /// Whether this node holds a publisher key at all.
-    pub fn is_present(context: &NodeContext) -> bool {
-        fs::symlink_metadata(context.publisher_key_path())
-            .is_ok_and(|metadata| metadata.file_type().is_file())
     }
 
     /// The x-only public key, as a receiver's recorded publisher carries it.
     pub fn public_key(&self) -> [u8; crate::baseline::PUBLISHER_KEY_BYTES] {
-        let mut key = [0u8; crate::baseline::PUBLISHER_KEY_BYTES];
-        key.copy_from_slice(self.signing_key.verifying_key().to_bytes().as_slice());
-        key
+        crate::node_key::xonly_public_key(&self.signing_key)
     }
 
     /// The stable id a manifest carries and a receiver's publisher record
@@ -157,10 +129,7 @@ impl BaselinePublisher {
     /// Derived from the public key rather than stored, so the two can never
     /// disagree and there is no second piece of state to keep in step.
     pub fn key_id(&self) -> [u8; crate::baseline::PUBLISHER_ID_BYTES] {
-        let digest = Sha256::digest([PUBLISHER_ID_DOMAIN, &self.public_key()[..]].concat());
-        let mut id = [0u8; crate::baseline::PUBLISHER_ID_BYTES];
-        id.copy_from_slice(&digest[..crate::baseline::PUBLISHER_ID_BYTES]);
-        id
+        crate::node_key::derive_key_id(PUBLISHER_ID_DOMAIN, &self.signing_key)
     }
 
     /// Sign one baseline over the script bodies themselves.
@@ -187,58 +156,14 @@ impl BaselinePublisher {
     }
 }
 
-/// Read the scalar without following a symlink, re-validating owner and mode.
-fn read_publisher_key(
-    context: &NodeContext,
-    path: &Path,
-) -> Result<[u8; PUBLISHER_PRIVATE_BYTES], PublisherError> {
-    let mut options = fs::OpenOptions::new();
-    options.read(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.custom_flags(libc::O_NOFOLLOW);
-    }
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::OpenOptionsExt;
-        const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
-        options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
-    }
-    let mut file = options.open(path)?;
-    if !file.metadata()?.file_type().is_file() {
-        return Err(PublisherError::State(
-            "the baseline publisher key has an unexpected file type".to_string(),
-        ));
-    }
-    context.validate_private_file(path)?;
-    let mut bytes = Vec::new();
-    file.read_to_end(&mut bytes)?;
-    bytes.try_into().map_err(|_| PublisherError::InvalidKey)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::baseline::{BaselinePublisherKey, SignedBaselineManifest};
-    use crate::node::{NodePathOverrides, NodePlatform};
+    use crate::test_support::{baseline_scripts, configured_node_context};
 
     const ISSUED_AT: u64 = 1_800_000_000;
     const EXPIRES_AT: u64 = 1_800_003_600;
-
-    fn node_context(root: &Path) -> NodeContext {
-        let config = root.join("node.toml");
-        std::fs::write(&config, "version = 1\n").expect("write config");
-        NodeContext::resolve_for(
-            NodePlatform::current(),
-            NodePathOverrides::new(Some(root.join("state")), Some(config)),
-            true,
-            None,
-            None,
-            None,
-        )
-        .expect("resolve node context")
-    }
 
     /// A publisher needs the trust store to ask whether this node already
     /// conducts anyone, so every custody test opens one.
@@ -252,18 +177,11 @@ mod tests {
         .expect("registry")
     }
 
-    fn scripts() -> Vec<(String, Vec<u8>)> {
-        vec![
-            ("ops/deploy.sh".to_string(), b"echo deploy\n".to_vec()),
-            ("audit.py".to_string(), b"print('audit')\n".to_vec()),
-        ]
-    }
-
     /// Creating twice must refuse rather than rotate.
     #[test]
     fn a_publisher_key_is_never_silently_replaced() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let context = node_context(dir.path());
+        let context = configured_node_context(dir.path());
 
         let first =
             BaselinePublisher::create(&context, &registry(&context)).expect("create the publisher");
@@ -286,7 +204,7 @@ mod tests {
     #[test]
     fn the_key_id_is_a_function_of_the_public_key() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let context = node_context(dir.path());
+        let context = configured_node_context(dir.path());
         let publisher = BaselinePublisher::create(&context, &registry(&context)).expect("create");
 
         assert_eq!(
@@ -297,7 +215,7 @@ mod tests {
         );
 
         let other_dir = tempfile::tempdir().expect("tempdir");
-        let other_context = node_context(other_dir.path());
+        let other_context = configured_node_context(other_dir.path());
         assert_ne!(
             publisher.key_id(),
             BaselinePublisher::create(&other_context, &registry(&other_context))
@@ -312,7 +230,7 @@ mod tests {
     #[test]
     fn a_publisher_key_is_not_the_enrollment_authority_key() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let context = node_context(dir.path());
+        let context = configured_node_context(dir.path());
 
         let authority =
             crate::enrollment_authority::EnrollmentAuthority::create(&context).expect("authority");
@@ -335,10 +253,9 @@ mod tests {
     #[test]
     fn loading_without_a_key_refuses_instead_of_creating_one() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let context = node_context(dir.path());
+        let context = configured_node_context(dir.path());
         context.ensure_state_directory().expect("state dir");
 
-        assert!(!BaselinePublisher::is_present(&context));
         assert!(BaselinePublisher::load_existing(&context).is_err());
         assert!(
             !context.publisher_key_path().exists(),
@@ -353,7 +270,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
 
         let dir = tempfile::tempdir().expect("tempdir");
-        let context = node_context(dir.path());
+        let context = configured_node_context(dir.path());
         BaselinePublisher::create(&context, &registry(&context)).expect("create");
         assert!(BaselinePublisher::load_existing(&context).is_ok());
 
@@ -380,11 +297,11 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
 
         let dir = tempfile::tempdir().expect("tempdir");
-        let context = node_context(dir.path());
+        let context = configured_node_context(dir.path());
         context.ensure_state_directory().expect("state dir");
 
         let decoy_dir = tempfile::tempdir().expect("tempdir");
-        let decoy_context = node_context(decoy_dir.path());
+        let decoy_context = configured_node_context(decoy_dir.path());
         let decoy = BaselinePublisher::create(&decoy_context, &registry(&decoy_context))
             .expect("a real key elsewhere");
         let elsewhere = decoy_context.publisher_key_path();
@@ -411,7 +328,7 @@ mod tests {
     #[test]
     fn the_amended_state_allow_list_admits_the_key_and_nothing_else() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let context = node_context(dir.path());
+        let context = configured_node_context(dir.path());
         crate::node_identity::NodeIdentity::load_or_initialize(&context).expect("identity");
         BaselinePublisher::create(&context, &registry(&context)).expect("create");
 
@@ -437,11 +354,16 @@ mod tests {
     #[test]
     fn a_published_baseline_verifies_under_this_publishers_own_record() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let context = node_context(dir.path());
+        let context = configured_node_context(dir.path());
         let publisher = BaselinePublisher::create(&context, &registry(&context)).expect("create");
 
         let encoded = publisher
-            .publish("acme".to_string(), &scripts(), ISSUED_AT, EXPIRES_AT)
+            .publish(
+                "acme".to_string(),
+                &baseline_scripts(),
+                ISSUED_AT,
+                EXPIRES_AT,
+            )
             .expect("publish");
         let manifest = SignedBaselineManifest::decode(&encoded).expect("decode");
 
@@ -459,7 +381,7 @@ mod tests {
 
         let other_dir = tempfile::tempdir().expect("tempdir");
         let other = {
-            let other_context = node_context(other_dir.path());
+            let other_context = configured_node_context(other_dir.path());
             let other_registry = registry(&other_context);
             BaselinePublisher::create(&other_context, &other_registry)
         }

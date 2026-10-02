@@ -27,7 +27,7 @@ cyclomatic-complexity measurement.
 reviewed baseline. A row's key is its normalized repository-relative path plus
 its qualified source signature. A path or signature rename is intentionally a
 delete plus an add, so the replacement receives the new-function policy.
-Unchanged legacy hotspots remain informational and do not fail the gate.
+Unchanged baseline hotspots remain informational and do not fail the gate.
 Generated and dependency-classified sources are retained in evidence but are
 not changed-function gates; unclassified source fails closed.
 
@@ -67,6 +67,12 @@ and maintains the temporal informational soak. The soak audit records trusted
 successful runs and reports whether the chain has ten consecutive records
 spanning at least seven calendar days. This evidence is informational and does
 not weaken local changed-function enforcement.
+
+Both CI workflows use `scripts/tasks/complexity-workflow` to verify pinned
+analyzers and fixtures, generate repeated reports, write run evidence, and
+enforce the ratchet. Its `trusted-soak` mode also records the fixed corpus hash
+and analyzer identity before the dedicated workflow updates the temporal chain.
+The `calibration` mode leaves that trusted state untouched.
 
 The soak proves that the pinned analyzer keeps producing the same output for
 the same input across days and runners. Each record therefore carries the

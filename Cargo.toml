@@ -1,9 +1,15 @@
 [package]
 name = "omakure"
-version = "0.4.5"
+version = "0.4.6"
 repository = "https://github.com/This-Is-NPC/omakure"
 license = "MIT"
-edition = "2021"
+edition = "2024"
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "warn"
+
+[lints.clippy]
+all = "warn"
 
 [[bin]]
 name = "omakure"
@@ -34,20 +40,19 @@ usage_docs = { package = "usage-lib", version = "=6.6.0", git = "https://github.
 
 # Embedded Lua host. `vendored` builds the interpreter from source so a node
 # needs no system Lua; this keeps the shipped script runtime self-contained.
-mlua = { version = "0.10", features = ["lua54", "vendored"] }
+mlua = { version = "0.12.1", features = ["lua54", "vendored"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-rusqlite = { version = "0.31", features = ["bundled"] }
-thiserror = "1.0"
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+thiserror = "2.0"
 clap = { version = "4.5", features = ["derive", "env"] }
 clap_complete = "4.5"
-toml = "0.8"
-dirs = "5.0"
+toml = "1.1.6"
 humantime = "2.1"
 signal-hook = "0.3"
 cron = "0.12"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
-axum = "0.7"
+axum = "0.8.9"
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "time", "sync"] }
 tower = { version = "0.5", features = ["util"] }
 serde_urlencoded = "0.7"
@@ -55,7 +60,7 @@ subtle = "2.6"
 sha2 = "0.10"
 k256 = { version = "0.14.0", default-features = false, features = ["schnorr", "getrandom"] }
 argon2 = { version = "0.5.3", features = ["std"] }
-rand = "0.8"
+rand = "0.9.5"
 fs2 = "0.4"
 snow = { version = "0.10.0", default-features = false, features = ["use-curve25519", "use-chacha20poly1305", "use-sha2", "use-getrandom"] }
 hickory-resolver = { version = "0.25.2", default-features = false, features = ["system-config", "tokio"] }
@@ -70,11 +75,10 @@ libc = "0.2"
 [dev-dependencies]
 rstest = "0.23"
 pretty_assertions = "1.4"
-tempfile = "3.10"
 syn = { version = "2.0", features = ["full", "visit"] }
 
 [target.'cfg(windows)'.dependencies]
-winreg = "0.52"
+winreg = "0.56.0"
 windows-sys = { version = "0.61.2", features = [
     "Win32_Foundation",
     "Win32_Security",
@@ -82,3 +86,9 @@ windows-sys = { version = "0.61.2", features = [
     "Win32_Storage_FileSystem",
     "Win32_System_Threading",
 ] }
+
+[profile.dev.package.argon2]
+opt-level = 3
+
+[profile.dev.package.blake2]
+opt-level = 3

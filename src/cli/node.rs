@@ -1,25 +1,16 @@
 use crate::cli::args::{NodeArgs, NodeCommand, NodeEnrollCommand};
+use crate::cli::emit::emit_native_operation_error;
 use crate::cli::json;
 use crate::domain::NodeConfig;
 use crate::node::{NodeContext, NodeError, NodePathOverrides};
 use crate::operations::node as node_ops;
 use crate::operations::{OperationError, OperationErrorCode, OperationResult};
+use crate::operations::{baseline as baseline_ops, cue as cue_ops};
+use crate::util::hex;
 use std::error::Error;
 use std::fs;
 use std::io::Read;
 use std::time::Duration;
-
-const CUE_ID_INVALID_MESSAGE: &str = "cue id must be 32 lowercase hexadecimal characters";
-
-fn validate_cue_id(cue_id: Option<&str>) -> Result<(), OperationError> {
-    if cue_id.is_some_and(|id| !crate::remote_cue::is_well_formed_cue_id(id)) {
-        return Err(OperationError::new(
-            OperationErrorCode::InvalidInput,
-            CUE_ID_INVALID_MESSAGE,
-        ));
-    }
-    Ok(())
-}
 
 /// The local status read that explains a failed probe is a loopback lookup, not
 /// a remote wait, so it gets a short budget of its own.
@@ -40,7 +31,7 @@ fn dispatch_cue(
     scripts_dir: &std::path::Path,
     args: crate::cli::args::NodeCueArgs,
 ) -> OperationResult<serde_json::Value> {
-    validate_cue_id(args.cue_id.as_deref())?;
+    cue_ops::validate_cue_id(args.cue_id.as_deref())?;
     if !args.direct {
         match dispatch_cue_via_service(context, scripts_dir, &args) {
             Ok(data) => return Ok(data),
@@ -55,7 +46,7 @@ fn dispatch_cue(
                 return Err(OperationError::new(
                     OperationErrorCode::InvalidInput,
                     error.to_string(),
-                ))
+                ));
             }
         }
     }
@@ -80,7 +71,7 @@ fn dispatch_cue(
             "outcome_seen": outcome.outcome_seen,
         })
     })
-    .map_err(map_direct_error)
+    .map_err(node_ops::map_direct_service_error)
 }
 
 /// Ask the running service to send it over the session it already holds.
@@ -141,8 +132,8 @@ fn dispatch_baseline(
                 )?;
             Ok(serde_json::json!({
                 "created": true,
-                "key_id": hex_of(&publisher.key_id()),
-                "public_key": hex_of(&publisher.public_key()),
+                "key_id": hex::encode(&publisher.key_id()),
+                "public_key": hex::encode(&publisher.public_key()),
             }))
         }
         NodeBaselineCommand::Publish(publish) => {
@@ -157,7 +148,7 @@ fn dispatch_baseline(
                 &publisher,
                 &config.organization.id,
                 &publish.scripts,
-                unix_now(),
+                crate::util::time::unix_seconds(),
                 publish.lifetime_seconds,
                 &publish.out,
             )
@@ -193,12 +184,11 @@ fn dispatch_baseline(
             // The same policy the receive path reads, from this node's own
             // config, so a rollback can never be more permissive than the push
             // that installed the set would be if it arrived today.
-            let policy = crate::baseline_push::read_policy(context);
-            crate::operations::baseline::rollback_baseline(
+            baseline_ops::rollback_local_baseline(
                 &workspace,
-                &policy,
+                context,
                 rollback.confirmed,
-                unix_now() as i64,
+                crate::util::time::unix_seconds() as i64,
             )
             .map(|record| serde_json::to_value(record).expect("baseline record serializes"))
         }
@@ -227,25 +217,14 @@ fn push_baseline_via_service(
         "/v1/node/baselines",
         &serde_json::json!({
             "peer_node_id": args.peer_node_id,
-            "manifest": hex_of(manifest),
-            "scripts": bodies.iter().map(|body| hex_of(body)).collect::<Vec<_>>(),
+            "manifest": hex::encode(manifest),
+            "scripts": bodies.iter().map(|body| hex::encode(body)).collect::<Vec<_>>(),
             "wait_seconds": args.wait_seconds,
         }),
         crate::direct_service::dispatch_client_timeout(std::time::Duration::from_secs(u64::from(
             args.wait_seconds,
         ))),
     )
-}
-
-fn hex_of(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-}
-
-fn unix_now() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_secs())
-        .unwrap_or_default()
 }
 
 /// Probe one peer, and name the one cause the prober cannot see for itself.
@@ -287,7 +266,7 @@ fn dispatch_direct_probe(
             ),
         ));
     }
-    Err(map_direct_error(error))
+    Err(node_ops::map_direct_service_error(error))
 }
 
 /// Whether the peer accepted the connection and then dropped it without
@@ -342,25 +321,24 @@ fn service_holds_session(context: &NodeContext, scripts_dir: &std::path::Path, p
 ///
 /// The service records this itself, because `api.bind` in the config is only a
 /// request — `node serve --bind` wins over it, and a process reading the config
-/// alone would look in the wrong place. The config is still the fallback for a
-/// service started before this file existed.
+/// alone would look in the wrong place. The config is still the fallback when
+/// the service could not record it.
 fn node_api_bind(
     context: &NodeContext,
     scripts_dir: &std::path::Path,
 ) -> Option<std::net::SocketAddr> {
     let workspace = crate::workspace::Workspace::new(scripts_dir.to_path_buf());
-    if let Ok(recorded) = fs::read_to_string(workspace.service_endpoint_path()) {
-        if let Some(addr) = serde_json::from_str::<serde_json::Value>(&recorded)
-            .ok()
-            .and_then(|value| {
-                value
-                    .get("api_bind")
-                    .and_then(serde_json::Value::as_str)
-                    .and_then(|bind| bind.parse::<std::net::SocketAddr>().ok())
-            })
-        {
-            return Some(addr);
-        }
+    if let Some(addr) = fs::read_to_string(workspace.service_endpoint_path())
+        .ok()
+        .and_then(|recorded| serde_json::from_str::<serde_json::Value>(&recorded).ok())
+        .and_then(|value| {
+            value
+                .get("api_bind")
+                .and_then(serde_json::Value::as_str)
+                .and_then(|bind| bind.parse::<std::net::SocketAddr>().ok())
+        })
+    {
+        return Some(addr);
     }
     let mut file = context.open_public_file().ok()??;
     let mut contents = String::new();
@@ -381,7 +359,7 @@ pub fn run(
     let context =
         match NodeContext::resolve(NodePathOverrides::new(args.state_dir, args.config_path)) {
             Ok(context) => context,
-            Err(error) => return emit_error(json_output, map_node_error(error)),
+            Err(error) => return emit_native_operation_error(json_output, map_node_error(error)),
         };
     let result: OperationResult<serde_json::Value> = match args.command {
         NodeCommand::Serve(args) => {
@@ -427,13 +405,13 @@ pub fn run(
             .map(|result| serde_json::to_value(result).expect("peer list serializes")),
         // Thin adapter: the protocol-neutral operation decides everything and
         // this arm only renders it. The identical value backs `GET /v1/node/health`.
-        NodeCommand::Health => crate::operations::health::open_observational_registry(&context)
+        NodeCommand::Health => crate::operations::node::open_observational_registry(&context)
             .and_then(|registry| crate::operations::health::fleet_status(&registry))
             .map(|result| serde_json::to_value(result).expect("fleet status serializes")),
         // Thin adapter, same shape: the bounded Signal feed is decided by the
         // protocol-neutral operation and only rendered here. The identical
         // value backs `GET /v1/node/signals`.
-        NodeCommand::Signals => crate::operations::health::open_observational_registry(&context)
+        NodeCommand::Signals => crate::operations::node::open_observational_registry(&context)
             .and_then(|registry| crate::operations::health::signal_feed(&registry))
             .map(|result| serde_json::to_value(result).expect("signal feed serializes")),
         NodeCommand::Discovery(args) => node_ops::scan_discovery(
@@ -531,11 +509,7 @@ fn apply_bundle_inputs(
                 "signed enrollment bundle could not be read",
             )
         })?;
-    let bundle_hex = if bundle.len().is_multiple_of(2)
-        && bundle
-            .iter()
-            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
-    {
+    let bundle_hex = if bundle.len().is_multiple_of(2) && hex::is_lower(&bundle) {
         String::from_utf8(bundle).map_err(|_| {
             OperationError::new(
                 OperationErrorCode::EnrollmentInvalid,
@@ -543,7 +517,7 @@ fn apply_bundle_inputs(
             )
         })?
     } else {
-        crate::enrollment::hex_bytes(&bundle)
+        hex::encode(&bundle)
     };
     Ok(node_ops::SignedBundleApplyRequest {
         bundle_hex,
@@ -573,48 +547,6 @@ fn read_bounded_file(path: &std::path::Path, max_bytes: usize) -> std::io::Resul
     Ok(contents)
 }
 
-fn map_direct_error(error: crate::direct_service::DirectServiceError) -> OperationError {
-    let code = match &error {
-        crate::direct_service::DirectServiceError::Protocol(error) => match error.code() {
-            crate::direct_transport::ProtocolErrorCode::UnsupportedVersion => {
-                OperationErrorCode::TransportUnsupportedVersion
-            }
-            crate::direct_transport::ProtocolErrorCode::InvalidFrame => {
-                OperationErrorCode::TransportInvalidFrame
-            }
-            crate::direct_transport::ProtocolErrorCode::MessageTooLarge => {
-                OperationErrorCode::TransportMessageTooLarge
-            }
-            crate::direct_transport::ProtocolErrorCode::HandshakeFailed => {
-                OperationErrorCode::TransportHandshakeFailed
-            }
-            crate::direct_transport::ProtocolErrorCode::IdentityMismatch => {
-                OperationErrorCode::TransportIdentityMismatch
-            }
-            crate::direct_transport::ProtocolErrorCode::NotEnrolled => {
-                OperationErrorCode::TransportNotEnrolled
-            }
-            crate::direct_transport::ProtocolErrorCode::Revoked => {
-                OperationErrorCode::TransportRevoked
-            }
-            crate::direct_transport::ProtocolErrorCode::Expired => {
-                OperationErrorCode::TransportExpired
-            }
-            crate::direct_transport::ProtocolErrorCode::Replay => {
-                OperationErrorCode::TransportReplay
-            }
-            crate::direct_transport::ProtocolErrorCode::RateLimited => {
-                OperationErrorCode::TransportRateLimited
-            }
-            crate::direct_transport::ProtocolErrorCode::Internal => {
-                OperationErrorCode::TransportInternal
-            }
-        },
-        _ => OperationErrorCode::TransportInternal,
-    };
-    OperationError::new(code, error.to_string())
-}
-
 fn emit_result<T: serde::Serialize>(
     json_output: bool,
     result: OperationResult<T>,
@@ -628,49 +560,47 @@ fn emit_result<T: serde::Serialize>(
             }
             Ok(())
         }
-        Err(error) => emit_error(json_output, error),
+        Err(error) => emit_native_operation_error(json_output, error),
     }
-}
-
-fn emit_error(json_output: bool, error: OperationError) -> Result<(), Box<dyn Error>> {
-    if json_output {
-        json::print_err(error.code.as_str(), error.message);
-        std::process::exit(1);
-    }
-    Err(error.to_string().into())
 }
 
 fn map_node_error(error: NodeError) -> OperationError {
-    match error {
-        NodeError::InvalidPath { .. }
-        | NodeError::IncompleteTestOverrides
-        | NodeError::TestOverrideOutsideTestMode
-        | NodeError::TestModeUnavailable => {
-            OperationError::new(OperationErrorCode::InvalidInput, error.to_string())
-        }
-        NodeError::Config(error) => {
-            OperationError::new(OperationErrorCode::InvalidInput, error.to_string())
-        }
-        NodeError::InsecurePath(_) => {
-            OperationError::new(OperationErrorCode::RegistryInvalid, error.to_string())
-        }
-        NodeError::UnsafePath(_)
-        | NodeError::UnexpectedFileType(_)
-        | NodeError::ExistingConfig(_) => {
-            OperationError::new(OperationErrorCode::RegistryInvalid, error.to_string())
-        }
-        NodeError::LifecycleBusy => OperationError::new(
-            OperationErrorCode::Conflict,
-            "node service is active; stop it before resetting",
-        ),
-        NodeError::Io(error) => {
-            OperationError::new(OperationErrorCode::IoFailed, error.to_string())
-        }
-    }
+    matches!(error, NodeError::TestModeUnavailable)
+        .then(|| OperationError::new(OperationErrorCode::InvalidInput, error.to_string()))
+        .unwrap_or_else(|| node_ops::map_node_error(error))
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn node_error_mapping_preserves_cli_test_mode_message() {
+        let unavailable = map_node_error(NodeError::TestModeUnavailable);
+        assert_eq!(unavailable.code, OperationErrorCode::InvalidInput);
+        assert_eq!(
+            unavailable.message,
+            "node test mode is unavailable in this build"
+        );
+    }
+
+    #[test]
+    fn node_error_mapping_delegates_shared_variants() {
+        let error = map_node_error(NodeError::InvalidPath {
+            field: "config",
+            reason: "missing".to_string(),
+        });
+        assert_eq!(error.code, OperationErrorCode::InvalidInput);
+        assert_eq!(error.message, "invalid node path for config: missing");
+
+        let override_error = map_node_error(NodeError::TestOverrideOutsideTestMode);
+        assert_eq!(override_error.code, OperationErrorCode::InvalidInput);
+        assert_eq!(
+            override_error.message,
+            "OMAKURE_NODE_STATE_DIR and OMAKURE_NODE_CONFIG are only allowed with OMAKURE_NODE_TEST_MODE=1"
+        );
+    }
+
     /// No wait-bounded command may set its own client timeout.
     ///
     /// `--wait-seconds` is the budget the *peer* is given to answer in. The

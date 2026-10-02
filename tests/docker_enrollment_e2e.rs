@@ -8,90 +8,63 @@ use serde_json::Value;
 use std::fs;
 use std::net::TcpStream;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
-use std::sync::OnceLock;
-use std::time::{Duration, Instant};
+use std::process::Output;
+use std::sync::LazyLock;
+use std::time::Duration;
 use tempfile::TempDir;
 
-const TARGET_API: &str = "http://127.0.0.1:17878";
+#[path = "support/compose_env.rs"]
+mod compose_env;
+use compose_env::{ComposeEnv, ComposePorts};
+#[path = "support/docker.rs"]
+mod docker;
+#[path = "support/docker_output.rs"]
+mod docker_output;
+use docker::{bounded_command, safe_generation_stderr};
+use docker_output::{json_output, output_text};
 
-fn compose_project() -> &'static str {
-    static PROJECT: OnceLock<String> = OnceLock::new();
-    PROJECT
-        .get_or_init(|| format!("omakure-enrollment-{}", std::process::id()))
-        .as_str()
-}
-
-/// Every Docker call is bounded, so a wedged daemon cannot hang the suite.
-///
-/// Two different budgets, because two different things are being bounded. An
-/// operation on a stack that is already up is fast, and 120s is a generous
-/// ceiling for one. A call carrying `--build` may compile this crate inside the
-/// container from a cold layer cache, which on an ordinary machine does not fit
-/// in two minutes -- and when it did not, `timeout` killed the build and the
-/// test reported `compose up failed`, which reads exactly like the product
-/// refusing to start. One budget for both made a slow machine indistinguishable
-/// from a broken node.
-const COMPOSE_OPERATION_TIMEOUT: &str = "120s";
-const COMPOSE_BUILD_TIMEOUT: &str = "1800s";
-
-fn bounded_command_within(program: &str, budget: &str) -> Command {
-    let mut command = Command::new("timeout");
-    command.args(["--foreground", "--kill-after=10s", budget, program]);
-    command
-}
-
-fn bounded_command(program: &str) -> Command {
-    bounded_command_within(program, COMPOSE_OPERATION_TIMEOUT)
-}
-
-/// The budget a Compose invocation gets, decided by whether it can build.
-fn compose_timeout(args: &[&str]) -> &'static str {
-    if args.contains(&"--build") {
-        COMPOSE_BUILD_TIMEOUT
-    } else {
-        COMPOSE_OPERATION_TIMEOUT
-    }
-}
+static PROJECT: LazyLock<String> = LazyLock::new(|| docker::compose_project_name("enrollment"));
 
 struct ComposeGuard {
     root: PathBuf,
     _tokens_dir: TempDir,
+    env: ComposeEnv,
     finalized: bool,
 }
 
 impl ComposeGuard {
     fn new() -> Self {
+        let guard = Self::prepare();
+        guard.start(false);
+        guard
+    }
+
+    fn prepare() -> Self {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let tokens_dir = TempDir::new().expect("create ephemeral enrollment token directory");
         let (target_tokens, target_client) = generate_auth(tokens_dir.path(), "enrollment-target");
         let (candidate_tokens, candidate_client) =
             generate_auth(tokens_dir.path(), "enrollment-candidate");
-        std::env::set_var("OMAKURE_ENROLLMENT_TARGET_TOKENS_FILE", &target_tokens);
-        std::env::set_var("OMAKURE_ENROLLMENT_TARGET_CLIENT_FILE", &target_client);
-        std::env::set_var(
-            "OMAKURE_ENROLLMENT_CANDIDATE_TOKENS_FILE",
-            &candidate_tokens,
-        );
-        std::env::set_var(
-            "OMAKURE_ENROLLMENT_CANDIDATE_CLIENT_FILE",
-            &candidate_client,
-        );
-        let guard = Self {
+        Self {
             root,
             _tokens_dir: tokens_dir,
+            env: ComposeEnv::new(
+                target_tokens,
+                target_client,
+                candidate_tokens,
+                candidate_client,
+                ComposePorts::from_environment(),
+            ),
             finalized: false,
-        };
-        guard.start();
-        guard
+        }
     }
 
-    fn start(&self) {
-        if std::env::var_os("OMAKURE_E2E_INDUCE_PARTIAL_UP").is_some() {
-            let partial = compose(&self.root, &["up", "--build", "-d", "enrollment-target"]);
+    fn start(&self, induce_partial_up: bool) {
+        if induce_partial_up {
+            let partial = compose(self, &["up", "--build", "-d", "enrollment-target"]);
             assert!(partial.status.success(), "partial Compose setup failed");
             let failed = compose(
-                &self.root,
+                self,
                 &[
                     "up",
                     "--build",
@@ -107,7 +80,7 @@ impl ComposeGuard {
             panic!("induced partial-up failure");
         }
         let output = compose(
-            &self.root,
+            self,
             &[
                 "up",
                 "--build",
@@ -124,7 +97,7 @@ impl ComposeGuard {
     }
 
     fn finalize(mut self) {
-        if let Err(error) = cleanup(&self.root) {
+        if let Err(error) = cleanup(&self) {
             panic!("enrollment Docker cleanup failed: {error}");
         }
         self.finalized = true;
@@ -174,118 +147,55 @@ fn generate_auth(directory: &Path, id: &str) -> (PathBuf, PathBuf) {
 
 impl Drop for ComposeGuard {
     fn drop(&mut self) {
-        if !self.finalized {
-            if let Err(error) = cleanup(&self.root) {
-                eprintln!("enrollment Docker cleanup after panic failed: {error}");
-            }
+        if !self.finalized
+            && let Err(error) = cleanup(self)
+        {
+            eprintln!("enrollment Docker cleanup after panic failed: {error}");
         }
     }
 }
 
-fn cleanup(root: &Path) -> Result<(), String> {
-    let mut failures = Vec::new();
-    let down = compose(root, &["down", "--volumes", "--remove-orphans"]);
-    if !down.status.success() {
-        failures.push(format!(
-            "compose down status={} stderr={}",
-            down.status,
-            safe_stderr(&down)
-        ));
-    }
-    for resource in ["container", "network", "volume"] {
-        let output = bounded_command("docker")
-            .args([
-                resource,
-                "ls",
-                "-q",
-                "--filter",
-                &format!("label=com.docker.compose.project={}", compose_project()),
-            ])
-            .output();
-        match output {
-            Ok(output) if !output.status.success() => failures.push(format!(
-                "inspect {resource} status={} stderr={}",
-                output.status,
-                safe_stderr(&output)
-            )),
-            Ok(output) if !String::from_utf8_lossy(&output.stdout).trim().is_empty() => {
-                failures.push(format!("project-labeled {resource} remains"));
-            }
-            Ok(_) => {}
-            Err(error) => failures.push(format!("inspect {resource}: {error}")),
-        }
-    }
-    cleanup_result(failures)
-}
-
-fn cleanup_result(failures: Vec<String>) -> Result<(), String> {
-    if failures.is_empty() {
-        Ok(())
-    } else {
-        Err(failures.join("; "))
-    }
-}
-
-#[cfg(test)]
-mod cleanup_tests {
-    use super::cleanup_result;
-
-    #[test]
-    fn cleanup_reports_all_failures() {
-        let error = cleanup_result(vec!["down failed".into(), "network remains".into()])
-            .expect_err("cleanup failure should be returned");
-        assert!(error.contains("down failed"));
-        assert!(error.contains("network remains"));
-    }
+fn cleanup(guard: &ComposeGuard) -> Result<(), String> {
+    docker::cleanup_project(
+        PROJECT.as_str(),
+        &["down", "--volumes", "--remove-orphans"],
+        |args| compose(guard, args),
+    )
 }
 
 #[test]
 #[ignore]
 fn cleanup_after_induced_partial_up() {
-    std::env::set_var("OMAKURE_E2E_INDUCE_PARTIAL_UP", "1");
-    let result = std::panic::catch_unwind(ComposeGuard::new);
-    std::env::remove_var("OMAKURE_E2E_INDUCE_PARTIAL_UP");
+    let mut guard = ComposeGuard::prepare();
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| guard.start(true)));
     assert!(result.is_err(), "induced partial-up should fail");
-    cleanup(&PathBuf::from(env!("CARGO_MANIFEST_DIR")))
-        .expect("induced partial-up cleanup should leave no resources");
+    cleanup(&guard).expect("induced partial-up cleanup should leave no resources");
+    guard.finalized = true;
 }
 
-fn safe_stderr(output: &Output) -> String {
-    String::from_utf8_lossy(&output.stderr).trim().to_string()
+fn compose(guard: &ComposeGuard, args: &[&str]) -> Output {
+    docker::compose_command(
+        &guard.root,
+        |command| guard.env.apply(command),
+        &["-p", PROJECT.as_str()],
+        args,
+    )
+    .output()
+    .expect("run docker compose")
 }
 
-fn safe_generation_stderr(output: &Output) -> String {
-    let stderr = safe_stderr(output);
-    let lower = stderr.to_ascii_lowercase();
-    assert!(
-        !lower.contains("bearer ") && !lower.contains("$argon2") && !lower.contains("token ="),
-        "token generation stderr contained sensitive material"
-    );
-    stderr
-}
-
-fn compose(root: &Path, args: &[&str]) -> Output {
-    bounded_command_within("docker", compose_timeout(args))
-        .current_dir(root)
-        .args(["compose", "-p", compose_project()])
-        .args(args)
-        .output()
-        .expect("run docker compose")
-}
-
-fn exec(service: &str, args: &[&str]) -> Output {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+fn exec(guard: &ComposeGuard, service: &str, args: &[&str]) -> Output {
     let mut command = bounded_command("docker");
+    guard.env.apply(&mut command);
     command
-        .current_dir(root)
-        .args(["compose", "-p", compose_project(), "exec", "-T", service])
+        .current_dir(&guard.root)
+        .args(["compose", "-p", PROJECT.as_str(), "exec", "-T", service])
         .args(args);
     command.output().expect("run docker compose exec")
 }
 
-fn container_ip(service: &str) -> String {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let id = compose(&root, &["ps", "-q", service]);
+fn container_ip(guard: &ComposeGuard, service: &str) -> String {
+    let id = compose(guard, &["ps", "-q", service]);
     assert!(
         id.status.success(),
         "cannot locate {service}: {}",
@@ -309,47 +219,28 @@ fn container_ip(service: &str) -> String {
     String::from_utf8_lossy(&output.stdout).trim().to_string()
 }
 
-fn output_text(output: &Output) -> String {
-    format!(
-        "stdout={} stderr={}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    )
-}
-
-fn json_output(output: &Output) -> Value {
-    assert!(
-        output.status.success(),
-        "expected successful command: {}",
-        output_text(output)
-    );
-    serde_json::from_slice(&output.stdout)
-        .unwrap_or_else(|error| panic!("invalid JSON output ({error}): {}", output_text(output)))
-}
-
 fn health(port: u16) -> bool {
     TcpStream::connect(("127.0.0.1", port)).is_ok()
 }
 
-fn wait_for_health() {
-    let deadline = Instant::now() + Duration::from_secs(30);
-    while Instant::now() < deadline {
-        if health(17878)
-            && health(17879)
-            && health(17988)
-            && health(17989)
-            && transport_ready("enrollment-target")
-            && transport_ready("enrollment-candidate")
-        {
-            return;
-        }
-        std::thread::sleep(Duration::from_millis(250));
-    }
-    panic!("Docker enrollment services did not expose their API ports");
+fn wait_for_health(guard: &ComposeGuard) {
+    let ports = guard.env.ports();
+    assert!(
+        docker::wait_until(Duration::from_secs(30), Duration::from_millis(250), || {
+            health(ports.target)
+                && health(ports.candidate)
+                && health(17988)
+                && health(17989)
+                && transport_ready(guard, "enrollment-target")
+                && transport_ready(guard, "enrollment-candidate")
+        }),
+        "Docker enrollment services did not expose their API ports"
+    );
 }
 
-fn transport_ready(service: &str) -> bool {
+fn transport_ready(guard: &ComposeGuard, service: &str) -> bool {
     let output = exec(
+        guard,
         service,
         &[
             "test",
@@ -363,7 +254,7 @@ fn transport_ready(service: &str) -> bool {
     output.status.success()
 }
 
-fn curl(method: &str, url: &str, body: Option<&str>) -> Value {
+fn curl(guard: &ComposeGuard, method: &str, url: &str, body: Option<&str>) -> Value {
     let mut args = vec![
         "--fail",
         "--silent",
@@ -377,12 +268,8 @@ fn curl(method: &str, url: &str, body: Option<&str>) -> Value {
         url,
     ];
     let body_arg = body.map(str::to_string);
-    let client_file = if url.contains(":17879/") {
-        std::env::var_os("OMAKURE_ENROLLMENT_CANDIDATE_CLIENT_FILE").expect("candidate client file")
-    } else {
-        std::env::var_os("OMAKURE_ENROLLMENT_TARGET_CLIENT_FILE").expect("target client file")
-    };
-    let token = fs::read_to_string(client_file).expect("read protected enrollment client token");
+    let token = fs::read_to_string(guard.env.client_file(url))
+        .expect("read protected enrollment client token");
     let header_file = tempfile::NamedTempFile::new().expect("create curl header file");
     fs::write(
         header_file.path(),
@@ -408,28 +295,16 @@ fn curl(method: &str, url: &str, body: Option<&str>) -> Value {
     serde_json::from_slice(&output.stdout).expect("curl returned JSON")
 }
 
-fn lower_hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-}
-
-fn decode_hex(value: &str) -> Vec<u8> {
-    assert_eq!(value.len() % 2, 0);
-    value
-        .as_bytes()
-        .chunks_exact(2)
-        .map(|chunk| u8::from_str_radix(std::str::from_utf8(chunk).unwrap(), 16).unwrap())
-        .collect()
-}
-
-fn copy_from_container(service: &str, source: &str, destination: &Path) {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+fn copy_from_container(guard: &ComposeGuard, service: &str, source: &str, destination: &Path) {
     let destination = destination.to_str().expect("temporary path is UTF-8");
-    let output = bounded_command("docker")
-        .current_dir(root)
+    let mut command = bounded_command("docker");
+    guard.env.apply(&mut command);
+    let output = command
+        .current_dir(&guard.root)
         .args([
             "compose",
             "-p",
-            compose_project(),
+            PROJECT.as_str(),
             "cp",
             &format!("{service}:{source}"),
             destination,
@@ -540,10 +415,13 @@ fn registry_snapshot(path: &Path) -> RegistrySnapshot {
 #[ignore = "requires Docker and intentionally runs the full two-container transaction"]
 fn docker_manual_enrollment_is_pending_blocked_approved_and_restart_stable() {
     let compose_guard = ComposeGuard::new();
-    wait_for_health();
-    let target_endpoint = format!("{}:7988", container_ip("enrollment-target"));
+    let target_api = compose_guard.env.target_api();
+    let candidate_api = compose_guard.env.candidate_api();
+    wait_for_health(&compose_guard);
+    let target_endpoint = format!("{}:7988", container_ip(&compose_guard, "enrollment-target"));
 
     let target_status_output = exec(
+        &compose_guard,
         "enrollment-target",
         &["omakure", "--json", "node", "status"],
     );
@@ -559,6 +437,7 @@ fn docker_manual_enrollment_is_pending_blocked_approved_and_restart_stable() {
         .to_string();
 
     let blocked = exec(
+        &compose_guard,
         "enrollment-candidate",
         &[
             "omakure",
@@ -577,6 +456,7 @@ fn docker_manual_enrollment_is_pending_blocked_approved_and_restart_stable() {
     );
 
     let request_output = exec(
+        &compose_guard,
         "enrollment-candidate",
         &[
             "omakure",
@@ -593,7 +473,12 @@ fn docker_manual_enrollment_is_pending_blocked_approved_and_restart_stable() {
         ],
     );
     if !request_output.status.success() {
-        let pending = curl("GET", &format!("{TARGET_API}/v1/node/enrollments"), None);
+        let pending = curl(
+            &compose_guard,
+            "GET",
+            &format!("{target_api}/v1/node/enrollments"),
+            None,
+        );
         panic!(
             "manual enrollment request failed: {}; target pending={pending}",
             output_text(&request_output)
@@ -608,7 +493,12 @@ fn docker_manual_enrollment_is_pending_blocked_approved_and_restart_stable() {
     );
     assert_eq!(request["data"]["state"], "pending");
 
-    let pending = curl("GET", &format!("{TARGET_API}/v1/node/enrollments"), None);
+    let pending = curl(
+        &compose_guard,
+        "GET",
+        &format!("{target_api}/v1/node/enrollments"),
+        None,
+    );
     assert_eq!(pending["ok"], true);
     assert_eq!(pending["data"].as_array().unwrap().len(), 1);
     let pending_node_id = pending["data"][0]["node_id"].as_str().unwrap();
@@ -620,32 +510,41 @@ fn docker_manual_enrollment_is_pending_blocked_approved_and_restart_stable() {
     let reciprocal_code = request["data"]["reciprocal_code"]
         .as_str()
         .expect("reciprocal code");
-    let request_bytes = decode_hex(request["data"]["request_hex"].as_str().unwrap());
-    let reciprocal_bytes = decode_hex(reciprocal_request);
+    let request_bytes = omakure::hex::decode(request["data"]["request_hex"].as_str().unwrap())
+        .expect("decode enrollment request hex");
+    let reciprocal_bytes =
+        omakure::hex::decode(reciprocal_request).expect("decode reciprocal request hex");
     assert_eq!(request_bytes[4], 2);
     assert_eq!(reciprocal_bytes[4], 2);
     assert_eq!(&request_bytes[5..21], &reciprocal_bytes[5..21]);
     assert!(request_bytes[5..21].iter().any(|byte| *byte != 0));
     assert_ne!(&request_bytes[21..37], &reciprocal_bytes[21..37]);
 
-    let candidate_pending = curl("GET", "http://127.0.0.1:17879/v1/node/enrollments", None);
+    let candidate_pending = curl(
+        &compose_guard,
+        "GET",
+        &format!("{candidate_api}/v1/node/enrollments"),
+        None,
+    );
     assert_eq!(candidate_pending["ok"], true);
     assert_eq!(candidate_pending["data"].as_array().unwrap().len(), 1);
     assert_eq!(candidate_pending["data"][0]["node_id"], target_node_id);
 
     let _ = compose(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR")),
+        &compose_guard,
         &["stop", "enrollment-target", "enrollment-candidate"],
     );
     let preapproval_dir = TempDir::new().unwrap();
     let target_preapproval_db = preapproval_dir.path().join("target-node.sqlite");
     let candidate_preapproval_db = preapproval_dir.path().join("candidate-node.sqlite");
     copy_from_container(
+        &compose_guard,
         "enrollment-target",
         "/var/lib/omakure/node.sqlite",
         &target_preapproval_db,
     );
     copy_from_container(
+        &compose_guard,
         "enrollment-candidate",
         "/var/lib/omakure/node.sqlite",
         &candidate_preapproval_db,
@@ -660,7 +559,7 @@ fn docker_manual_enrollment_is_pending_blocked_approved_and_restart_stable() {
         assert_eq!(snapshot.pending_manual_requests, 1);
     }
     let restarted_before_approval = compose(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR")),
+        &compose_guard,
         &["start", "enrollment-target", "enrollment-candidate"],
     );
     assert!(
@@ -668,10 +567,11 @@ fn docker_manual_enrollment_is_pending_blocked_approved_and_restart_stable() {
         "restart before approval failed: {}",
         output_text(&restarted_before_approval)
     );
-    wait_for_health();
-    let target_endpoint = format!("{}:7988", container_ip("enrollment-target"));
+    wait_for_health(&compose_guard);
+    let target_endpoint = format!("{}:7988", container_ip(&compose_guard, "enrollment-target"));
 
     let still_blocked = exec(
+        &compose_guard,
         "enrollment-candidate",
         &[
             "omakure",
@@ -692,11 +592,12 @@ fn docker_manual_enrollment_is_pending_blocked_approved_and_restart_stable() {
     let certificate_path = TempDir::new().unwrap();
     let certificate_file = certificate_path.path().join("transport.cert");
     copy_from_container(
+        &compose_guard,
         "enrollment-candidate",
         "/var/lib/omakure/transport.cert",
         &certificate_file,
     );
-    let certificate = lower_hex(&fs::read(&certificate_file).unwrap());
+    let certificate = omakure::hex::encode(&fs::read(&certificate_file).unwrap());
     let approval_body = serde_json::json!({
         "request_hex": request["data"]["request_hex"].as_str().unwrap(),
         "transport_certificate": certificate,
@@ -706,27 +607,44 @@ fn docker_manual_enrollment_is_pending_blocked_approved_and_restart_stable() {
         "confirmed": true
     });
     let approved = curl(
+        &compose_guard,
         "POST",
-        &format!("{TARGET_API}/v1/node/enrollments/{pending_node_id}/approve"),
+        &format!("{target_api}/v1/node/enrollments/{pending_node_id}/approve"),
         Some(&approval_body.to_string()),
     );
     assert_eq!(approved["ok"], true);
     assert_eq!(approved["data"]["state"], "active");
 
-    let candidate_still_pending = curl("GET", "http://127.0.0.1:17879/v1/node/enrollments", None);
+    let candidate_still_pending = curl(
+        &compose_guard,
+        "GET",
+        &format!("{candidate_api}/v1/node/enrollments"),
+        None,
+    );
     assert_eq!(candidate_still_pending["data"].as_array().unwrap().len(), 1);
-    let candidate_one_direction = curl("GET", "http://127.0.0.1:17879/v1/node/peers", None);
+    let candidate_one_direction = curl(
+        &compose_guard,
+        "GET",
+        &format!("{candidate_api}/v1/node/peers"),
+        None,
+    );
     assert_eq!(candidate_one_direction["data"][0]["state"], "pending");
-    let target_one_direction = curl("GET", &format!("{TARGET_API}/v1/node/peers"), None);
+    let target_one_direction = curl(
+        &compose_guard,
+        "GET",
+        &format!("{target_api}/v1/node/peers"),
+        None,
+    );
     assert_eq!(target_one_direction["data"][0]["state"], "active");
     let target_certificate_path = TempDir::new().unwrap();
     let target_certificate_file = target_certificate_path.path().join("transport.cert");
     copy_from_container(
+        &compose_guard,
         "enrollment-target",
         "/var/lib/omakure/transport.cert",
         &target_certificate_file,
     );
-    let target_certificate = lower_hex(&fs::read(&target_certificate_file).unwrap());
+    let target_certificate = omakure::hex::encode(&fs::read(&target_certificate_file).unwrap());
     let candidate_approval_body = serde_json::json!({
         "request_hex": reciprocal_request,
         "transport_certificate": target_certificate,
@@ -736,19 +654,31 @@ fn docker_manual_enrollment_is_pending_blocked_approved_and_restart_stable() {
         "confirmed": true
     });
     let candidate_approved = curl(
+        &compose_guard,
         "POST",
-        &format!("http://127.0.0.1:17879/v1/node/enrollments/{target_node_id}/approve"),
+        &format!("{candidate_api}/v1/node/enrollments/{target_node_id}/approve"),
         Some(&candidate_approval_body.to_string()),
     );
     assert_eq!(candidate_approved["ok"], true);
     assert_eq!(candidate_approved["data"]["state"], "active");
-    let candidate_both_directions = curl("GET", "http://127.0.0.1:17879/v1/node/peers", None);
+    let candidate_both_directions = curl(
+        &compose_guard,
+        "GET",
+        &format!("{candidate_api}/v1/node/peers"),
+        None,
+    );
     assert_eq!(candidate_both_directions["data"][0]["state"], "active");
-    let active = curl("GET", &format!("{TARGET_API}/v1/node/peers"), None);
+    let active = curl(
+        &compose_guard,
+        "GET",
+        &format!("{target_api}/v1/node/peers"),
+        None,
+    );
     assert_eq!(active["data"][0]["node_id"], pending_node_id);
     assert_eq!(active["data"][0]["state"], "active");
 
     let accepted = exec(
+        &compose_guard,
         "enrollment-candidate",
         &[
             "omakure",
@@ -763,35 +693,46 @@ fn docker_manual_enrollment_is_pending_blocked_approved_and_restart_stable() {
     );
     assert_eq!(json_output(&accepted)["data"]["accepted"], true);
 
-    let before_restart = curl("GET", &format!("{TARGET_API}/v1/node/status"), None);
+    let before_restart = curl(
+        &compose_guard,
+        "GET",
+        &format!("{target_api}/v1/node/status"),
+        None,
+    );
     let target_db = TempDir::new().unwrap();
     let target_db_path = target_db.path().join("node.sqlite");
-    let _ = compose(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR")),
-        &["stop", "enrollment-target"],
-    );
+    let _ = compose(&compose_guard, &["stop", "enrollment-target"]);
     copy_from_container(
+        &compose_guard,
         "enrollment-target",
         "/var/lib/omakure/node.sqlite",
         &target_db_path,
     );
     let before_registry = registry_snapshot(&target_db_path);
-    assert!(before_registry
-        .peers
-        .iter()
-        .any(|peer| peer.contains("|active")));
-    assert!(before_registry
-        .trusted
-        .iter()
-        .any(|peer| peer.contains("|active|active")));
-    assert!(before_registry
-        .audits
-        .iter()
-        .any(|event| event.starts_with("enrollment_pending|")));
-    assert!(before_registry
-        .audits
-        .iter()
-        .any(|event| event.starts_with("enrollment_approved|") && event.contains("docker-e2e")));
+    assert!(
+        before_registry
+            .peers
+            .iter()
+            .any(|peer| peer.contains("|active"))
+    );
+    assert!(
+        before_registry
+            .trusted
+            .iter()
+            .any(|peer| peer.contains("|active|active"))
+    );
+    assert!(
+        before_registry
+            .audits
+            .iter()
+            .any(|event| event.starts_with("enrollment_pending|"))
+    );
+    assert!(
+        before_registry
+            .audits
+            .iter()
+            .any(|event| event.starts_with("enrollment_approved|") && event.contains("docker-e2e"))
+    );
     assert!(
         before_registry
             .enrollment_audits
@@ -802,7 +743,7 @@ fn docker_manual_enrollment_is_pending_blocked_approved_and_restart_stable() {
     );
 
     let restarted = compose(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR")),
+        &compose_guard,
         &["start", "enrollment-target", "enrollment-candidate"],
     );
     assert!(
@@ -810,15 +751,26 @@ fn docker_manual_enrollment_is_pending_blocked_approved_and_restart_stable() {
         "restart failed: {}",
         output_text(&restarted)
     );
-    wait_for_health();
-    let after_restart = curl("GET", &format!("{TARGET_API}/v1/node/status"), None);
+    wait_for_health(&compose_guard);
+    let after_restart = curl(
+        &compose_guard,
+        "GET",
+        &format!("{target_api}/v1/node/status"),
+        None,
+    );
     assert_eq!(
         after_restart["data"]["identity"]["node_id"],
         before_restart["data"]["identity"]["node_id"]
     );
-    let active_after_restart = curl("GET", &format!("{TARGET_API}/v1/node/peers"), None);
+    let active_after_restart = curl(
+        &compose_guard,
+        "GET",
+        &format!("{target_api}/v1/node/peers"),
+        None,
+    );
     assert_eq!(active_after_restart["data"][0]["state"], "active");
     let accepted_after_restart = exec(
+        &compose_guard,
         "enrollment-candidate",
         &[
             "omakure",

@@ -15,29 +15,35 @@
 //! These assertions provide regression coverage for the production listener and
 //! transport compatibility that the shipped Health Plane relies on.
 
-mod support;
+#[path = "support/canonical_json.rs"]
+mod canonical_json;
+
+use canonical_json::canonical;
+
+pub mod support;
 
 use omakure::direct_transport::{
-    sign_probe, unix_seconds, verify_envelope, HandshakeRole, NoiseHandshake, TransportCertificate,
-    TransportSession, ENVELOPE_KIND,
+    ENVELOPE_KIND, HandshakeRole, NoiseHandshake, TransportCertificate, TransportSession,
+    sign_probe, unix_seconds, verify_envelope,
 };
-use omakure::node::{NodeContext, NodePathOverrides, NodePlatform};
 use omakure::node_identity::NodeIdentity;
 use rusqlite::Connection;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use std::io::{Read, Write};
-use std::net::TcpStream;
+use std::io::Write;
+use std::net::{Shutdown, TcpStream};
 use std::path::Path;
-use std::process::{Command, Output};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-const TOKEN: &str = "health-plane-feasibility-token-with-enough-entropy-001";
 const TRANSPORT_CERTIFICATE_BYTES: usize = 245;
 
 const ROLE_CONDUCTOR: i64 = 1;
 const ROLE_PERFORMER: i64 = 2;
 const CAPABILITY_PROFILE_PULSE: &str = "inventory-health";
+const TRUST_AUDIT: (&str, &str) = (
+    "health-plane-feasibility",
+    "health plane contract feasibility probe",
+);
 const CAPABILITY_SIGNAL: &str = "notifications";
 
 // ---------------------------------------------------------------------------
@@ -76,10 +82,10 @@ fn decide(row: Option<&TrustRow>, kind: &str) -> Decision {
     if row.role != required_role {
         return Decision::WrongRole;
     }
-    if let Some(capability) = required_capability {
-        if !row.capabilities.iter().any(|value| value == capability) {
-            return Decision::MissingCapability;
-        }
+    if let Some(capability) = required_capability
+        && !row.capabilities.iter().any(|value| value == capability)
+    {
+        return Decision::MissingCapability;
     }
     Decision::Allow
 }
@@ -114,16 +120,8 @@ fn trust_row(workspace: &Path, node_id: &str) -> Option<TrustRow> {
 // Health Plane message construction, mirroring the frozen envelope exactly.
 // ---------------------------------------------------------------------------
 
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-}
-
-fn canonical(value: &Value) -> Vec<u8> {
-    serde_jcs::to_vec(value).expect("canonical JSON")
-}
-
 fn health_payload(kind: &str, target: &str, seed: u8) -> Value {
-    let message_id = hex(&[seed; 16]);
+    let message_id = omakure::hex::encode(&[seed; 16]);
     match kind {
         "health_profile" => json!({
             "health_version": 1,
@@ -174,7 +172,7 @@ fn health_payload(kind: &str, target: &str, seed: u8) -> Value {
                 "occurred_at": 0,
                 "run": Value::Null,
                 "sequence": 1,
-                "signal_id": hex(&[seed ^ 0xff; 16]),
+                "signal_id": omakure::hex::encode(&[seed ^ 0xff; 16]),
                 "subject": target
             }
         }),
@@ -205,10 +203,10 @@ fn sign_health_envelope(
     let envelope = json!({
         "created_at": now,
         "kind": kind,
-        "nonce": hex(&nonce),
+        "nonce": omakure::hex::encode(&nonce),
         "payload": payload,
         "sender": sender,
-        "session_id": hex(session.session_id()),
+        "session_id": omakure::hex::encode(session.session_id()),
         "version": 1,
     });
     let canonical_bytes = canonical(&envelope);
@@ -225,117 +223,6 @@ fn sign_health_envelope(
 // ---------------------------------------------------------------------------
 // Node process helpers.
 // ---------------------------------------------------------------------------
-
-fn run_node(workspace: &Path, args: &[String]) -> Output {
-    let state = workspace.join(".node-state");
-    let config = workspace.join("node.toml");
-    Command::new(support::omakure_bin())
-        .arg("--scripts-dir")
-        .arg(workspace)
-        .arg("--json")
-        .arg("node")
-        .arg("--node-state-dir")
-        .arg(state)
-        .arg("--node-config")
-        .arg(config)
-        .args(args)
-        .env("OMAKURE_NODE_TEST_MODE", "1")
-        .env("OMAKURE_API_TOKEN", TOKEN)
-        .output()
-        .expect("run node command")
-}
-
-fn assert_success(output: &Output) -> Value {
-    assert!(
-        output.status.success(),
-        "node command failed: stdout={:?} stderr={:?}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let envelope = support::json_envelope(&output.stdout);
-    assert_eq!(envelope["ok"], true, "envelope: {envelope}");
-    envelope["data"].clone()
-}
-
-fn init_node(workspace: &Path) -> Value {
-    assert_success(&run_node(workspace, &["init".to_string()]));
-    assert_success(&run_node(workspace, &["status".to_string()]))
-}
-
-fn trust_peer(
-    workspace: &Path,
-    peer_workspace: &Path,
-    peer_status: &Value,
-    role: &str,
-    capabilities: &[&str],
-) {
-    let certificate = hex(
-        &std::fs::read(peer_workspace.join(".node-state/transport.cert"))
-            .expect("read peer transport certificate"),
-    );
-    let mut args = vec![
-        "trust".to_string(),
-        "--node-id".to_string(),
-        peer_status["identity"]["node_id"].as_str().unwrap().into(),
-        "--public-key".to_string(),
-        peer_status["identity"]["public_key"]
-            .as_str()
-            .unwrap()
-            .into(),
-        "--transport-certificate".to_string(),
-        certificate,
-        "--role".to_string(),
-        role.to_string(),
-        "--actor".to_string(),
-        "health-plane-feasibility".to_string(),
-        "--reason".to_string(),
-        "health plane contract feasibility probe".to_string(),
-        "--confirmed".to_string(),
-    ];
-    for capability in capabilities {
-        args.push("--capability".to_string());
-        args.push((*capability).to_string());
-    }
-    let data = assert_success(&run_node(workspace, &args));
-    assert_eq!(data["state"], "active");
-}
-
-fn node_material(workspace: &Path) -> (NodeIdentity, [u8; 32], TransportCertificate) {
-    let context = NodeContext::resolve_for(
-        NodePlatform::current(),
-        NodePathOverrides::new(
-            Some(workspace.join(".node-state")),
-            Some(workspace.join("node.toml")),
-        ),
-        true,
-        None,
-        None,
-        None,
-    )
-    .expect("resolve node context");
-    let identity = NodeIdentity::load_existing(&context).expect("load node identity");
-    let private: [u8; 32] = std::fs::read(context.transport_key_path())
-        .expect("read transport key")
-        .try_into()
-        .expect("transport key length");
-    let certificate = TransportCertificate::from_bytes(
-        &std::fs::read(context.transport_certificate_path()).expect("read transport certificate"),
-    )
-    .expect("parse transport certificate");
-    (identity, private, certificate)
-}
-
-fn read_frame(stream: &mut TcpStream) -> Vec<u8> {
-    let mut prefix = [0_u8; 4];
-    stream.read_exact(&mut prefix).expect("read frame prefix");
-    let length = u32::from_be_bytes(prefix) as usize;
-    let mut encoded = vec![0_u8; length + 4];
-    encoded[..4].copy_from_slice(&prefix);
-    stream
-        .read_exact(&mut encoded[4..])
-        .expect("read frame body");
-    encoded
-}
 
 /// Complete a real production handshake and probe/ack round trip against the
 /// production listener, then hand back the live session.
@@ -359,7 +246,7 @@ fn production_session(
     stream
         .write_all(&handshake.write_next().expect("message 1"))
         .expect("send message 1");
-    let response = read_frame(&mut stream);
+    let response = support::direct_client::read_frame(&mut stream);
     handshake
         .read_next(&response, unix_seconds())
         .expect("read message 2");
@@ -376,7 +263,7 @@ fn production_session(
         .expect("encrypt probe");
     stream.write_all(&frame).expect("send probe");
 
-    let ack_frame = read_frame(&mut stream);
+    let ack_frame = support::direct_client::read_frame(&mut stream);
     let ack = session.read(&ack_frame).expect("decrypt ack");
     assert_eq!(ack.kind, ENVELOPE_KIND);
     verify_envelope(
@@ -393,10 +280,7 @@ fn production_session(
 
 fn identity_key_bytes(status: &Value) -> [u8; 32] {
     let text = status["identity"]["public_key"].as_str().unwrap();
-    let bytes: Vec<u8> = (0..text.len() / 2)
-        .map(|index| u8::from_str_radix(&text[index * 2..index * 2 + 2], 16).unwrap())
-        .collect();
-    bytes.try_into().expect("identity key length")
+    omakure::hex::decode_array::<32>(text).expect("32-byte hexadecimal identity key")
 }
 
 fn audit_totals(workspace: &Path) -> (i64, i64) {
@@ -458,8 +342,8 @@ fn trust_snapshot(workspace: &Path) -> String {
 fn health_plane_reaches_the_production_listener_and_authorization_is_enforceable() {
     let conductor = support::TestWorkspace::new("health_plane_conductor");
     let performer = support::TestWorkspace::new("health_plane_performer");
-    let conductor_status = init_node(conductor.path());
-    let performer_status = init_node(performer.path());
+    let conductor_status = support::init_node(conductor.path());
+    let performer_status = support::init_node(performer.path());
     let conductor_id = conductor_status["identity"]["node_id"]
         .as_str()
         .unwrap()
@@ -478,30 +362,35 @@ fn health_plane_reaches_the_production_listener_and_authorization_is_enforceable
     derivation.extend_from_slice(&identity_key_bytes(&performer_status));
     assert_eq!(
         performer_id,
-        format!("omk1_{}", hex(Sha256::digest(derivation).as_slice()))
+        format!(
+            "omk1_{}",
+            omakure::hex::encode(Sha256::digest(derivation).as_slice())
+        )
     );
 
     // The Conductor trusts the Performer with both Health Plane capabilities;
     // the Performer trusts the Conductor with none.
-    trust_peer(
+    support::trust_fleet_peer(
         conductor.path(),
         performer.path(),
         &performer_status,
         "performer",
         &[CAPABILITY_PROFILE_PULSE, CAPABILITY_SIGNAL],
+        TRUST_AUDIT,
     );
-    trust_peer(
+    support::trust_fleet_peer(
         performer.path(),
         conductor.path(),
         &conductor_status,
         "conductor",
         &[],
+        TRUST_AUDIT,
     );
 
     let conductor_port = support::unique_loopback_port().to_string();
     let conductor_server = support::HttpServer::start_node_service(
         conductor.path(),
-        TOKEN,
+        &["*"],
         &[
             "--workers",
             "0",
@@ -519,7 +408,7 @@ fn health_plane_reaches_the_production_listener_and_authorization_is_enforceable
 
     // 1. Reach the production listener over the real handshake and probe path.
     let (performer_identity, performer_private, performer_certificate) =
-        node_material(performer.path());
+        support::direct_client::node_material(performer.path());
     let (mut stream, mut session) = production_session(
         &endpoint,
         performer_private,
@@ -575,8 +464,26 @@ fn health_plane_reaches_the_production_listener_and_authorization_is_enforceable
             .expect("deliver health plane envelope to the production listener");
     }
 
-    // Give the listener a bounded moment to process the delivered frames.
-    std::thread::sleep(Duration::from_millis(500));
+    stream
+        .shutdown(Shutdown::Write)
+        .expect("finish sending health plane frames");
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let status = conductor_server.get("/v1/node/status");
+        let transport = if status.status == 200 {
+            status.json()["data"]["transport"].clone()
+        } else {
+            Value::Null
+        };
+        if transport["connected_peer_count"] == 0 {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "production listener did not finish the health plane session: {transport}"
+        );
+        std::thread::sleep(Duration::from_millis(25));
+    }
 
     // 3. No Health Plane message mutated identity, trust, capability, or
     //    revocation state on the production node.
@@ -639,7 +546,7 @@ fn health_plane_reaches_the_production_listener_and_authorization_is_enforceable
     let exit = conductor_server.terminate();
     support::assert_terminated(exit);
 
-    assert_success(&run_node(
+    support::assert_node_success(&support::run_node(
         conductor.path(),
         &[
             "capabilities".to_string(),
@@ -663,7 +570,7 @@ fn health_plane_reaches_the_production_listener_and_authorization_is_enforceable
     );
 
     // 6. Revocation through the production CLI denies every kind.
-    assert_success(&run_node(
+    support::assert_node_success(&support::run_node(
         conductor.path(),
         &[
             "revoke".to_string(),

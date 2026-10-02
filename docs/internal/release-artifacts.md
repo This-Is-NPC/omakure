@@ -36,12 +36,15 @@ The CI and release workflows share the same matrix-facing route:
 ```text
 matrix platform + target
   -> scripts/tasks/check/platform/{linux-gnu,linux-musl,macos,windows}
-  -> native tests, target build, static-link check where applicable, binary smoke
+  -> CI: native tests on GNU/macOS/Windows, then target build and smoke
+  -> release: --build-only, target build and smoke
+  -> musl: static-link check after target build
   -> archive packaging and binary-only assertion
 ```
 
-Each release matrix entry invokes the selected platform script rather than
-embedding test/build/static-link/smoke commands in workflow YAML. The release
+Each release matrix entry invokes the selected platform script with
+`--build-only` rather than embedding build/static-link/smoke commands in
+workflow YAML. The release
 workflow then packages the resulting binary and asserts the archive contents.
 The eight entries cover the targets above, and each platform/release matrix job
 has a 60-minute bound. Atomic routes forward their remaining arguments.

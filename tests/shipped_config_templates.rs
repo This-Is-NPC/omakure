@@ -1,5 +1,10 @@
 //! The shipped node config templates, checked against the struct they seed.
 
+#[path = "support/text.rs"]
+mod text;
+
+use text::normalize_line_endings;
+
 /// The shipped config templates must not drift from the struct they seed.
 ///
 /// There are three hand-maintained copies of the same document — the runtime
@@ -12,10 +17,6 @@
 ///
 /// Comparing the parsed template to `NodeConfig::default()` catches it at the
 /// commit that introduces it rather than in a container weeks later.
-fn normalize_line_endings(text: &str) -> String {
-    text.replace("\r\n", "\n").replace('\r', "\n")
-}
-
 #[test]
 fn every_shipped_config_template_matches_the_default_it_seeds() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));

@@ -7,9 +7,7 @@ Guidelines for working in the Omakure codebase.
 Omakure is a headless Rust automation runner. Its supported surfaces are the
 CLI, the authenticated HTTP management API, and the machine-owned `node serve`
 process.
-The CLI and HTTP adapters call shared protocol-neutral operations. There is no
-interactive terminal application, theme subsystem, or directory widget
-runtime.
+The CLI and HTTP adapters call shared protocol-neutral operations.
 
 **Key concepts:**
 
@@ -53,17 +51,17 @@ mise run test:node-service  # focused CLI/HTTP/node-service integration tests
 
 Never use bare `omakure` as an interactive app. No-argument invocation prints
 help; operational commands must be explicit (`omakure scripts`, `omakure run`,
-`omakure api`, or `omakure node serve`). The `scripts/tasks/dev/smoke` helper
-starts the node service on a temporary local port, checks health/readiness, and
-cleans up.
+`omakure api`, or `omakure node serve`). The `scripts/tasks/atomic/dev-smoke` atomic
+(`mise run dev:smoke`) starts the node service on a local port
+(`OMAKURE_DEV_PORT`, default 17878), checks health/readiness, and cleans up.
 
 ## Workspace selection
 
 `--scripts-dir` is the supported explicit override. Resolution then considers
-`OMAKURE_SCRIPTS_DIR`, legacy `OVERTURE_SCRIPTS_DIR` and
-`CLOUD_MGMT_SCRIPTS_DIR`, the debug `scripts/workspace` fixture, platform
-defaults, and legacy default directory names. Positional script paths are not
-accepted.
+`OMAKURE_SCRIPTS_DIR`, the debug `scripts/workspace` fixture, and the platform
+default `~/Documents/omakure-scripts`. A bare positional argument never
+selects the workspace root. Script commands accept names or paths confined to
+the selected workspace.
 
 The debug build uses `scripts/workspace` when it exists. Omakure creates
 `.omakure/`, `.history/`, and `omakure.toml` only below the selected workspace.
@@ -72,32 +70,34 @@ fixtures is never a Battery subject.
 
 ## Architecture
 
+`docs/internal/architecture.md` is the canonical module map, stack, and
+invariant list; update it with any structural change. In summary:
+
 ```text
 src/
-├── cli/                  # clap command adapters and JSON output
-│   ├── args.rs           # command tree and long-form help
-│   ├── api.rs            # authenticated HTTP adapter
-│   ├── node_service.rs   # HTTP + workers + scheduler lifecycle
-│   ├── run.rs            # direct execution
-│   ├── queue.rs          # queue producers and workers
-│   ├── history.rs        # run and trace reads
-│   ├── serve.rs          # cron scheduler
-│   ├── env.rs            # environment management
-│   ├── battery.rs        # Battery management
-│   ├── help_ai.rs        # clap-derived machine surface
-│   └── json.rs           # stable envelope/errors
-├── domain/               # pure schemas, parsing, validation, cron
-├── operations/           # shared behavior used by CLI and HTTP
-├── adapters/             # filesystem, process, env, runtime checks
-├── ports/                # repository and environment interfaces
-├── runs.rs               # SQLite state machine and trace storage
-├── run_executor.rs       # shared child lifecycle and redaction
-├── search_index.rs       # SQLite full-text search
-├── runtime.rs            # Bash/PowerShell/Python command construction
-├── workspace.rs          # one-root workspace layout
-├── auth.rs/policy.rs     # tokens and deploy policy
-├── secrets.rs/redaction.rs
-└── installer.rs          # standalone installer binary
+├── main.rs, lib.rs, bin/    # binary entry, crate surface, doc/catalog generators
+├── cli/                     # clap adapters (args, api, node_service, node, run,
+│                            #   queue, history, serve, env, battery, help_ai,
+│                            #   command_metadata, json, …)
+├── operations/              # protocol-neutral behavior shared by CLI and HTTP
+├── domain/                  # pure schemas, parsing, validation, cron, node config,
+│                            #   Health Plane storage contract
+├── adapters/                # filesystem syscalls and ACL inspection, process adapters
+├── runs/, run_executor/     # runs.sqlite state machine; shared child lifecycle
+├── runtime.rs, search_index.rs, workspace.rs
+├── auth/, policy.rs, secrets.rs, redaction.rs
+├── inventory/               # CLI command conversion and HTTP route inventory
+├── cli_http_parity/, operation_catalog/  # versioned parity and operation catalogs
+├── installer.rs             # standalone installer binary
+└── fleet planes:
+    ├── node/, node_identity.rs, node_transport.rs  # node state, identity, filesystem policy
+    ├── node_registry/ (+ health/)        # node.sqlite trust/health persistence
+    ├── direct_transport/, direct_service/  # Noise transport and listener
+    ├── discovery/                       # trust-neutral LAN discovery
+    ├── enrollment.rs, enrollment_authority.rs  # manual/signed enrollment
+    ├── health_plane.rs, health_plane/, direct_health.rs  # Health Plane and carriage
+    ├── remote_cue/                       # Cue plane receive half
+    └── baseline.rs, baseline_push/, baseline_publisher.rs  # Baseline plane
 ```
 
 ### Boundaries
@@ -109,18 +109,20 @@ src/
   SQLite directly.
 - Direct runs, queue workers, and scheduled runs must use
   `run_executor::execute_with_heartbeat`.
-- `runs.rs` is the sole owner of `.history/runs.sqlite` access.
+- `runs/` is the sole owner of `.history/runs.sqlite` access.
 - Keep Omakure-reserved variables and secret redaction rules centralized.
 
 ## Dependencies
 
-Retained runtime dependencies include `clap`, `clap_complete`, `serde`,
-`serde_json`, `toml`, `rusqlite`, `axum`, `tokio`, `tower`, `thiserror`, `cron`,
-`chrono`, `signal-hook`, `daemonize`, `humantime`, `dirs`, `fs2`, `argon2`,
-`subtle`, `sha2`, `rand`, and Windows-only `winreg`. The headless package must
-not reintroduce `ratatui`, `crossterm`, or `rattles`. `mlua` is declared
-deliberately and must stay: it is the embedded runtime for the `.lua` script
-kind, which is a different Lua from the removed TUI widget runtime.
+Runtime dependencies are exactly those in `Cargo.toml`: `mlua`, `serde`,
+`serde_json`, `rusqlite`, `thiserror`, `clap`, `clap_complete`, `toml`,
+`humantime`, `signal-hook`, `cron`, `chrono`, `axum`, `tokio`, `tower`,
+`serde_urlencoded`, `subtle`, `sha2`, `k256`, `argon2`, `rand`, `fs2`, `snow`,
+`hickory-resolver`, `curve25519-dalek`, `serde_jcs`, and `tempfile`; Unix-only
+`daemonize` and `libc`; Windows-only `winreg` and `windows-sys`. `clap_usage`
+and `usage-lib` are optional and enabled only by the `usage-generator` feature.
+The stack table in `docs/internal/architecture.md` records what each one is
+for. `mlua` is the embedded runtime for the `.lua` script kind.
 
 ## Script schema
 
@@ -144,8 +146,7 @@ Schema fields may be strings, numbers, booleans, or secrets. Optional
 AI-facing CLI commands support `--json` and emit
 `{ ok, data, error, schema_version }`. `help-ai` always emits JSON and is
 generated from clap metadata. HTTP health/readiness are unauthenticated;
-other routes require bearer auth. Prefer scoped Argon2id tokens from a
-`--tokens-file`; legacy `OMAKURE_API_TOKEN` mode is for local compatibility.
+other routes require a scoped Argon2id bearer token from a `--tokens-file`.
 
 ## Testing
 
@@ -173,8 +174,7 @@ cargo test --lib --locked test_dependency_checks
 
 Unit tests are inline. Integration tests launch the compiled binary and use
 temporary workspaces. Keep secrets out of test output. Packaging tests verify
-that removed UI/theme/widget assets and dependencies are absent and that
-release archives contain only the binary. See `docs/internal/development.md`
+that release archives contain only the binary. See `docs/internal/development.md`
 for hook routing and platform suite layout.
 
 ## Release

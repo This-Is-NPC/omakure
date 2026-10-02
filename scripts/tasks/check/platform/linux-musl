@@ -5,6 +5,10 @@ root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../../.." && pwd -P)"
 cd "$root"
 export MISE_PROJECT_ROOT="$root"
 
+if [[ "${1:-}" == --build-only ]]; then
+    shift
+fi
+
 die() {
     printf 'check:platform:linux-musl: %s\n' "$1" >&2
     exit 2
@@ -17,8 +21,6 @@ case "$target" in
     *) die "unsupported Linux musl target: $target" ;;
 esac
 
-printf 'check:platform:linux-musl: native host tests (%s)\n' "$target"
-"$root/scripts/tasks/suite/native-tests"
 printf 'check:platform:linux-musl: static release build (%s)\n' "$target"
 "$root/scripts/tasks/atomic/build-release" --target-triple "$target"
 printf 'check:platform:linux-musl: static ELF verification (%s)\n' "$target"

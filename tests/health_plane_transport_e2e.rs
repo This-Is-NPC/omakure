@@ -18,11 +18,16 @@
 //!   boundary seconds. No test sleeps for ten minutes and no window is
 //!   approximated.
 
-mod support;
+#[path = "support/message_id.rs"]
+mod fixture_ids;
+
+use fixture_ids::repeated_hex_16 as message_id;
+
+pub mod support;
 
 use omakure::direct_transport::{
-    sign_health_envelope, sign_probe, unix_seconds, verify_envelope, HandshakeRole, NoiseHandshake,
-    TransportCertificate, TransportSession, ENVELOPE_KIND,
+    ENVELOPE_KIND, HandshakeRole, NoiseHandshake, TransportSession, sign_health_envelope,
+    sign_probe, unix_seconds, verify_envelope,
 };
 use omakure::health_plane::bounds::{
     MAX_AGE_SECONDS, MAX_CANONICAL_PROFILE, MAX_FUTURE_SKEW_SECONDS,
@@ -35,21 +40,25 @@ use omakure::node::{NodeContext, NodePathOverrides, NodePlatform};
 use omakure::node_identity::NodeIdentity;
 use omakure::node_registry::NodeRegistry;
 use rusqlite::Connection;
-use serde_json::{json, Value};
-use std::io::{Read, Write};
+use serde_json::{Value, json};
+use std::io::Write;
 use std::net::TcpStream;
 use std::path::Path;
-use std::process::{Command, Output};
+use std::process::Command;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::{Duration, Instant};
 
-const TOKEN: &str = "health-plane-transport-token-with-enough-entropy-01";
 const CAPABILITY_PROFILE_PULSE: &str = "inventory-health";
+const TRUST_AUDIT: (&str, &str) = (
+    "health-plane-transport",
+    "health plane wave 3 certification",
+);
 /// How long a bounded real wait may run before the certification fails.
 const REACH_TIMEOUT: Duration = Duration::from_secs(45);
 /// One frozen 60-second admission window plus slack, for a certification
 /// client that has to share a source address with a reconnecting fleet.
 const ADMISSION_WINDOW_TIMEOUT: Duration = Duration::from_secs(90);
+const ADMISSION_RETRY_INTERVAL: Duration = Duration::from_secs(2);
 /// The bounded wait the three-node certification uses. It runs one more
 /// service than the two-node suite and shares a host with every other suite,
 /// so it waits longer - but still strictly inside the frozen 120-second
@@ -59,80 +68,6 @@ const FLEET_REACH_TIMEOUT: Duration = Duration::from_secs(110);
 // ---------------------------------------------------------------------------
 // Node lifecycle helpers.
 // ---------------------------------------------------------------------------
-
-fn run_node(workspace: &Path, args: &[String]) -> Output {
-    Command::new(support::omakure_bin())
-        .arg("--scripts-dir")
-        .arg(workspace)
-        .arg("--json")
-        .arg("node")
-        .arg("--node-state-dir")
-        .arg(workspace.join(".node-state"))
-        .arg("--node-config")
-        .arg(workspace.join("node.toml"))
-        .args(args)
-        .env("OMAKURE_NODE_TEST_MODE", "1")
-        .env("OMAKURE_API_TOKEN", TOKEN)
-        .output()
-        .expect("run node command")
-}
-
-fn assert_success(output: &Output) -> Value {
-    assert!(
-        output.status.success(),
-        "node command failed: stdout={:?} stderr={:?}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let envelope = support::json_envelope(&output.stdout);
-    assert_eq!(envelope["ok"], true, "envelope: {envelope}");
-    envelope["data"].clone()
-}
-
-fn init_node(workspace: &Path) -> Value {
-    assert_success(&run_node(workspace, &["init".to_string()]));
-    assert_success(&run_node(workspace, &["status".to_string()]))
-}
-
-fn trust_peer(
-    workspace: &Path,
-    peer_workspace: &Path,
-    peer_status: &Value,
-    role: &str,
-    capabilities: &[&str],
-) {
-    let certificate = hex(
-        &std::fs::read(peer_workspace.join(".node-state/transport.cert"))
-            .expect("read peer transport certificate"),
-    );
-    let mut args = vec![
-        "trust".to_string(),
-        "--node-id".to_string(),
-        peer_status["identity"]["node_id"].as_str().unwrap().into(),
-        "--public-key".to_string(),
-        peer_status["identity"]["public_key"]
-            .as_str()
-            .unwrap()
-            .into(),
-        "--transport-certificate".to_string(),
-        certificate,
-        "--role".to_string(),
-        role.to_string(),
-        "--actor".to_string(),
-        "health-plane-transport".to_string(),
-        "--reason".to_string(),
-        "health plane wave 3 certification".to_string(),
-        "--confirmed".to_string(),
-    ];
-    for capability in capabilities {
-        args.push("--capability".to_string());
-        args.push((*capability).to_string());
-    }
-    assert_eq!(
-        assert_success(&run_node(workspace, &args))["state"],
-        "active"
-    );
-}
 
 fn configure_direct(workspace: &Path, direct_port: u16, peer_node_id: &str, peer_port: u16) {
     configure_direct_peers(workspace, direct_port, &[(peer_node_id, peer_port)]);
@@ -159,30 +94,16 @@ fn configure_direct_peers(workspace: &Path, direct_port: u16, peers: &[(&str, u1
 fn serve(workspace: &Path) -> support::HttpServer {
     support::HttpServer::start_node_service(
         workspace,
-        TOKEN,
-        &[
-            "--workers",
-            "1",
-            "--no-scheduler",
-            "--capability",
-            "node:read",
-        ],
+        &["node:read"],
+        &["--workers", "1", "--no-scheduler"],
         &[],
         Duration::from_secs(20),
     )
 }
 
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-}
-
 fn identity_key_bytes(status: &Value) -> [u8; 32] {
     let text = status["identity"]["public_key"].as_str().unwrap();
-    (0..32)
-        .map(|index| u8::from_str_radix(&text[index * 2..index * 2 + 2], 16).unwrap())
-        .collect::<Vec<u8>>()
-        .try_into()
-        .expect("identity key length")
+    omakure::hex::decode_array::<32>(text).expect("32-byte hexadecimal identity key")
 }
 
 // ---------------------------------------------------------------------------
@@ -196,7 +117,7 @@ fn fleet_status_http(server: &support::HttpServer) -> Value {
 }
 
 fn fleet_status_cli(workspace: &Path) -> Value {
-    assert_success(&run_node(workspace, &["health".to_string()]))
+    support::assert_node_success(&support::run_node(workspace, &["health".to_string()]))
 }
 
 fn signal_feed_http(server: &support::HttpServer) -> Value {
@@ -206,7 +127,7 @@ fn signal_feed_http(server: &support::HttpServer) -> Value {
 }
 
 fn signal_feed_cli(workspace: &Path) -> Value {
-    assert_success(&run_node(workspace, &["signals".to_string()]))
+    support::assert_node_success(&support::run_node(workspace, &["signals".to_string()]))
 }
 
 /// Every Signal in the feed reported by one source with one kind.
@@ -251,13 +172,12 @@ fn wait_for_pulse_after(server: &support::HttpServer, node_id: &str, sequence: u
     let mut last = Value::Null;
     while Instant::now() < deadline {
         last = fleet_status_http(server);
-        if let Some(node) = node_row(&last, node_id) {
-            if node["pulse"]["sequence"]
+        if let Some(node) = node_row(&last, node_id)
+            && node["pulse"]["sequence"]
                 .as_u64()
                 .is_some_and(|next| next > sequence)
-            {
-                return last;
-            }
+        {
+            return last;
         }
         std::thread::sleep(Duration::from_millis(250));
     }
@@ -279,10 +199,10 @@ fn wait_for_presence_within(
     let mut last = Value::Null;
     while Instant::now() < deadline {
         last = fleet_status_http(server);
-        if let Some(node) = node_row(&last, node_id) {
-            if node["presence"] == presence {
-                return last;
-            }
+        if let Some(node) = node_row(&last, node_id)
+            && node["presence"] == presence
+        {
+            return last;
         }
         std::thread::sleep(Duration::from_millis(250));
     }
@@ -293,52 +213,35 @@ fn wait_for_presence_within(
 // Raw production client, for the adversary half.
 // ---------------------------------------------------------------------------
 
-fn node_material(workspace: &Path) -> (NodeIdentity, [u8; 32], TransportCertificate) {
-    let context = NodeContext::resolve_for(
-        NodePlatform::current(),
-        NodePathOverrides::new(
-            Some(workspace.join(".node-state")),
-            Some(workspace.join("node.toml")),
-        ),
-        true,
-        None,
-        None,
-        None,
-    )
-    .expect("resolve node context");
-    let identity = NodeIdentity::load_existing(&context).expect("load node identity");
-    let private: [u8; 32] = std::fs::read(context.transport_key_path())
-        .expect("read transport key")
-        .try_into()
-        .expect("transport key length");
-    let certificate = TransportCertificate::from_bytes(
-        &std::fs::read(context.transport_certificate_path()).expect("read transport certificate"),
-    )
-    .expect("parse transport certificate");
-    (identity, private, certificate)
-}
-
-fn read_frame(stream: &mut TcpStream) -> Vec<u8> {
-    let mut prefix = [0_u8; 4];
-    stream.read_exact(&mut prefix).expect("read frame prefix");
-    let length = u32::from_be_bytes(prefix) as usize;
-    let mut encoded = vec![0_u8; length + 4];
-    encoded[..4].copy_from_slice(&prefix);
-    stream
-        .read_exact(&mut encoded[4..])
-        .expect("read frame body");
-    encoded
-}
-
 /// Complete a real production handshake and probe/ack round trip, then hand
 /// back the live session.
+struct LiveAdversary {
+    stream: TcpStream,
+    session: TransportSession,
+    identity: NodeIdentity,
+}
+
+impl LiveAdversary {
+    fn exchange_profile(&mut self, payload: Value, created_at: u64, nonce_seed: u8) -> Exchange {
+        exchange(
+            &mut self.stream,
+            &mut self.session,
+            &self.identity,
+            "health_profile",
+            payload,
+            created_at,
+            nonce_seed,
+        )
+    }
+}
+
 fn production_session(
     endpoint: &str,
     workspace: &Path,
     remote_node_id: &str,
     remote_identity_key: &[u8; 32],
-) -> (TcpStream, TransportSession, NodeIdentity) {
-    let (identity, private, certificate) = node_material(workspace);
+) -> LiveAdversary {
+    let (identity, private, certificate) = support::direct_client::node_material(workspace);
     let mut handshake = NoiseHandshake::new(HandshakeRole::Initiator, private, certificate)
         .expect("build production Noise handshake");
     let mut stream = TcpStream::connect(endpoint).expect("connect production listener");
@@ -351,7 +254,7 @@ fn production_session(
     stream
         .write_all(&handshake.write_next().expect("message 1"))
         .expect("send message 1");
-    let response = read_frame(&mut stream);
+    let response = support::direct_client::read_frame(&mut stream);
     handshake
         .read_next(&response, unix_seconds())
         .expect("read message 2");
@@ -367,7 +270,7 @@ fn production_session(
         .write(ENVELOPE_KIND, &probe.encoded())
         .expect("encrypt probe");
     stream.write_all(&frame).expect("send probe");
-    let ack_frame = read_frame(&mut stream);
+    let ack_frame = support::direct_client::read_frame(&mut stream);
     let ack = session.read(&ack_frame).expect("decrypt ack");
     verify_envelope(
         &ack.body,
@@ -378,7 +281,11 @@ fn production_session(
         &nonce,
     )
     .expect("the production listener must acknowledge an authorized peer");
-    (stream, session, identity)
+    LiveAdversary {
+        stream,
+        session,
+        identity,
+    }
 }
 
 /// Complete one production handshake and probe/ack round trip, returning
@@ -389,7 +296,7 @@ fn try_production_session(
     remote_node_id: &str,
     remote_identity_key: &[u8; 32],
 ) -> Option<(TcpStream, TransportSession, NodeIdentity)> {
-    let (identity, private, certificate) = node_material(workspace);
+    let (identity, private, certificate) = support::direct_client::node_material(workspace);
     let mut handshake = NoiseHandshake::new(HandshakeRole::Initiator, private, certificate).ok()?;
     let mut stream = TcpStream::connect(endpoint).ok()?;
     stream
@@ -399,7 +306,7 @@ fn try_production_session(
         .set_write_timeout(Some(Duration::from_secs(10)))
         .ok()?;
     stream.write_all(&handshake.write_next().ok()?).ok()?;
-    let response = try_read_frame(&mut stream)?;
+    let response = support::frame::read_frame(&mut stream, None, None).ok()?;
     handshake.read_next(&response, unix_seconds()).ok()?;
     stream.write_all(&handshake.write_next().ok()?).ok()?;
     let mut session = handshake.into_session().ok()?;
@@ -408,7 +315,7 @@ fn try_production_session(
     let probe = sign_probe(&identity, session.session_id(), nonce, unix_seconds()).ok()?;
     let frame = session.write(ENVELOPE_KIND, &probe.encoded()).ok()?;
     stream.write_all(&frame).ok()?;
-    let ack_frame = try_read_frame(&mut stream)?;
+    let ack_frame = support::frame::read_frame(&mut stream, None, None).ok()?;
     let ack = session.read(&ack_frame).ok()?;
     verify_envelope(
         &ack.body,
@@ -420,16 +327,6 @@ fn try_production_session(
     )
     .ok()?;
     Some((stream, session, identity))
-}
-
-fn try_read_frame(stream: &mut TcpStream) -> Option<Vec<u8>> {
-    let mut prefix = [0_u8; 4];
-    stream.read_exact(&mut prefix).ok()?;
-    let length = u32::from_be_bytes(prefix) as usize;
-    let mut encoded = vec![0_u8; length + 4];
-    encoded[..4].copy_from_slice(&prefix);
-    stream.read_exact(&mut encoded[4..]).ok()?;
-    Some(encoded)
 }
 
 /// The frozen admission controller accepts a bounded number of handshakes per
@@ -449,16 +346,13 @@ fn production_session_within_admission_window(
         {
             return session;
         }
+        let remaining = deadline.saturating_duration_since(Instant::now());
         assert!(
-            Instant::now() < deadline,
+            !remaining.is_zero(),
             "the production listener never admitted a session within {ADMISSION_WINDOW_TIMEOUT:?}"
         );
-        std::thread::sleep(Duration::from_secs(2));
+        std::thread::sleep(ADMISSION_RETRY_INTERVAL.min(remaining));
     }
-}
-
-fn message_id(seed: u8) -> String {
-    hex(&[seed; 16])
 }
 
 fn profile_payload(target: &str, seed: u8, revision: u64) -> Value {
@@ -532,16 +426,12 @@ fn exchange(
         stream
             .set_read_timeout(Some(remaining.max(Duration::from_millis(50))))
             .expect("reply timeout");
-        let mut prefix = [0_u8; 4];
-        if stream.read_exact(&mut prefix).is_err() {
-            break;
-        }
-        let length = u32::from_be_bytes(prefix) as usize;
-        let mut encoded = vec![0_u8; length + 4];
-        encoded[..4].copy_from_slice(&prefix);
-        stream
-            .read_exact(&mut encoded[4..])
-            .expect("read reply body");
+        let mut read_stage = support::frame::ReadStage::Prefix;
+        let encoded = match support::frame::read_frame(stream, None, Some(&mut read_stage)) {
+            Ok(encoded) => encoded,
+            Err(_) if matches!(read_stage, support::frame::ReadStage::Prefix) => break,
+            Err(error) => panic!("read reply body: {error:?}"),
+        };
         let message = session.read(&encoded).expect("decrypt reply");
         let value: Value = serde_json::from_slice(&message.body[..message.body.len() - 64])
             .expect("parse reply envelope");
@@ -576,12 +466,11 @@ fn health_audit_codes(workspace: &Path) -> Vec<i64> {
     let mut statement = connection
         .prepare("SELECT error_code FROM health_audit WHERE error_code IS NOT NULL")
         .expect("prepare health audit query");
-    let codes = statement
+    statement
         .query_map([], |row| row.get::<_, i64>(0))
         .expect("query health audit")
         .map(|row| row.expect("audit row"))
-        .collect();
-    codes
+        .collect()
 }
 
 /// Assert the frozen "drop, audit, and send nothing" outcome.
@@ -671,11 +560,12 @@ fn trust_snapshot(workspace: &Path) -> String {
 /// holding the shutdown open until its next cadence. Elsewhere the portable
 /// terminate path is used, which still proves the process is reaped.
 fn stop_cleanly(server: &mut Option<support::HttpServer>) {
-    let Some(mut running) = server.take() else {
+    let Some(running) = server.take() else {
         return;
     };
     #[cfg(unix)]
     {
+        let mut running = running;
         let pid = running.child_id();
         // SAFETY: libc::kill is the standard way to signal a child process.
         let rc = unsafe { libc::kill(pid as i32, libc::SIGTERM) };
@@ -764,9 +654,9 @@ fn two_real_nodes_exchange_profile_and_pulse_and_both_adapters_agree() {
     let conductor = support::TestWorkspace::new("health_tx_conductor");
     let performer = support::TestWorkspace::new("health_tx_performer");
     let bystander = support::TestWorkspace::new("health_tx_bystander");
-    let conductor_status = init_node(conductor.path());
-    let performer_status = init_node(performer.path());
-    let bystander_status = init_node(bystander.path());
+    let conductor_status = support::init_node(conductor.path());
+    let performer_status = support::init_node(performer.path());
+    let bystander_status = support::init_node(bystander.path());
     let conductor_id = conductor_status["identity"]["node_id"]
         .as_str()
         .unwrap()
@@ -783,26 +673,29 @@ fn two_real_nodes_exchange_profile_and_pulse_and_both_adapters_agree() {
     // The Conductor manages one Performer with the frozen Profile/Pulse
     // capability, and separately trusts a peer that never runs at all: that
     // peer is the "never seen" row the projection must still report.
-    trust_peer(
+    support::trust_fleet_peer(
         conductor.path(),
         performer.path(),
         &performer_status,
         "performer",
         &[CAPABILITY_PROFILE_PULSE],
+        TRUST_AUDIT,
     );
-    trust_peer(
+    support::trust_fleet_peer(
         conductor.path(),
         bystander.path(),
         &bystander_status,
         "performer",
         &[CAPABILITY_PROFILE_PULSE],
+        TRUST_AUDIT,
     );
-    trust_peer(
+    support::trust_fleet_peer(
         performer.path(),
         conductor.path(),
         &conductor_status,
         "conductor",
         &[CAPABILITY_PROFILE_PULSE],
+        TRUST_AUDIT,
     );
 
     let conductor_port = support::unique_loopback_port();
@@ -832,7 +725,6 @@ fn two_real_nodes_exchange_profile_and_pulse_and_both_adapters_agree() {
     // Before the Performer ever runs, both trusted peers are visible with the
     // frozen `unknown` presence and no Profile or Pulse.
     let cold = fleet_status_http(&conductor_server);
-    assert_eq!(cold["enabled"], true);
     assert_eq!(cold["presence"]["unknown"], 2);
     assert_eq!(cold["presence"]["online"], 0);
     for node_id in [&performer_id, &bystander_id] {
@@ -878,7 +770,6 @@ fn two_real_nodes_exchange_profile_and_pulse_and_both_adapters_agree() {
     // 2. Both shipped adapters render one operation, so they agree exactly.
     let via_cli = fleet_status_cli(conductor.path());
     assert_eq!(via_cli["local_node_id"], conductor_id);
-    assert_eq!(via_cli["enabled"], true);
     for node_id in [&performer_id, &bystander_id] {
         let http_row = node_row(&online, node_id).expect("http row");
         let cli_row = node_row(&via_cli, node_id).expect("cli row");
@@ -944,10 +835,10 @@ fn two_real_nodes_exchange_profile_and_pulse_and_both_adapters_agree() {
     let previous_sequence = node_row(&online, &performer_id).expect("row")["pulse"]["sequence"]
         .as_u64()
         .expect("pulse sequence");
-    let previous_revision = node_row(&online, &performer_id).expect("row")["profile"]
-        ["profile_revision"]
-        .as_u64()
-        .expect("profile revision");
+    let previous_revision =
+        node_row(&online, &performer_id).expect("row")["profile"]["profile_revision"]
+            .as_u64()
+            .expect("profile revision");
     let mut performer_server = Some(serve(performer.path()));
     let recovered = wait_for_pulse_after(&conductor_server, &performer_id, previous_sequence);
     let row = node_row(&recovered, &performer_id).expect("performer row");
@@ -966,7 +857,7 @@ fn two_real_nodes_exchange_profile_and_pulse_and_both_adapters_agree() {
 
     // 6. Revocation is immediate: the peer leaves the projection at once and
     //    its Health Plane state is purged, without touching the other peer.
-    assert_success(&run_node(
+    support::assert_node_success(&support::run_node(
         conductor.path(),
         &[
             "revoke".to_string(),
@@ -997,14 +888,242 @@ fn two_real_nodes_exchange_profile_and_pulse_and_both_adapters_agree() {
 // The adversary half.
 // ---------------------------------------------------------------------------
 
+// 1. Wrong target: a syntactically valid third-party node ID is rejected
+//    before any state is read or written.
+fn reject_wrong_target(client: &mut LiveAdversary, conductor: &Path, manager_id: &str) {
+    assert_dropped(
+        client.exchange_profile(profile_payload(manager_id, 0x01, 1), unix_seconds(), 0x01),
+        conductor,
+        HealthCode::WrongTarget,
+        "a third-party target",
+    );
+}
+
+// 2. Future beyond the frozen skew, and stale beyond the frozen age.
+fn reject_outside_time_window(client: &mut LiveAdversary, conductor_id: &str) {
+    assert_error(
+        client.exchange_profile(
+            profile_payload(conductor_id, 0x02, 1),
+            unix_seconds() + MAX_FUTURE_SKEW_SECONDS as u64 + 5,
+            0x02,
+        ),
+        HealthCode::Future,
+    );
+    assert_error(
+        client.exchange_profile(
+            profile_payload(conductor_id, 0x03, 1),
+            unix_seconds() - MAX_AGE_SECONDS as u64 - 5,
+            0x03,
+        ),
+        HealthCode::Stale,
+    );
+}
+
+// 3. An unknown field anywhere in the closed schema.
+fn reject_unknown_field(client: &mut LiveAdversary, conductor: &Path, conductor_id: &str) {
+    let mut unknown = profile_payload(conductor_id, 0x04, 1);
+    unknown["profile"]["hostname"] = json!("workshop.local");
+    assert_dropped(
+        client.exchange_profile(unknown, unix_seconds(), 0x04),
+        conductor,
+        HealthCode::UnknownField,
+        "a smuggled hostname field",
+    );
+}
+
+// 4. A grammar violation that would smuggle a path.
+fn reject_path_smuggling(client: &mut LiveAdversary, conductor: &Path, conductor_id: &str) {
+    let mut path_smuggle = profile_payload(conductor_id, 0x05, 1);
+    path_smuggle["profile"]["display_name"] = json!("/etc/shadow");
+    assert_dropped(
+        client.exchange_profile(path_smuggle, unix_seconds(), 0x05),
+        conductor,
+        HealthCode::InvalidMessage,
+        "a display name carrying a filesystem path",
+    );
+}
+
+// 5. Oversized: past the frozen per-kind canonical cap.
+fn reject_oversized_profile(client: &mut LiveAdversary, conductor: &Path, conductor_id: &str) {
+    let mut oversized = profile_payload(conductor_id, 0x06, 1);
+    oversized["profile"]["runtimes"] = json!(
+        (0..64)
+            .map(|index| json!({
+                "available": true,
+                "name": format!("runtime{index}"),
+                "version": "9.9.9999999999999999999999"
+            }))
+            .collect::<Vec<Value>>()
+    );
+    assert!(
+        serde_jcs::to_vec(&oversized).unwrap().len() > MAX_CANONICAL_PROFILE / 2,
+        "the oversized fixture must actually be large"
+    );
+    assert_dropped(
+        client.exchange_profile(oversized, unix_seconds(), 0x06),
+        conductor,
+        HealthCode::MessageTooLarge,
+        "an oversized Profile",
+    );
+}
+
+// 6. An accepted Profile, then the same `message_id` replayed.
+fn accept_then_reject_replayed_message(client: &mut LiveAdversary, conductor_id: &str) {
+    let accepted =
+        client.exchange_profile(profile_payload(conductor_id, 0x07, 1), unix_seconds(), 0x07);
+    let (kind, payload) = accepted
+        .reply
+        .expect("an authorized Profile must be acknowledged");
+    assert_eq!(kind, "health_ack", "payload: {payload}");
+    assert_eq!(payload["ack"]["accepted"], true);
+    assert_eq!(payload["ack"]["acked_message_id"], message_id(0x07));
+
+    assert_error(
+        client.exchange_profile(profile_payload(conductor_id, 0x07, 2), unix_seconds(), 0x08),
+        HealthCode::Replay,
+    );
+}
+
+// 7. An out-of-order Profile revision is a replay, not an acceptance.
+fn reject_stale_profile_revision(client: &mut LiveAdversary, conductor_id: &str) {
+    assert_error(
+        client.exchange_profile(profile_payload(conductor_id, 0x09, 1), unix_seconds(), 0x09),
+        HealthCode::Replay,
+    );
+}
+
+// 8. Flood: past the frozen per-minute allowance plus its burst.
+fn reject_profile_flood(client: &mut LiveAdversary, conductor_id: &str) {
+    let mut rate_limited = false;
+    for seed in 0..(MAX_MESSAGES_PER_PEER_PER_MINUTE + RATE_BURST_ALLOWANCE + 4) {
+        let seed = 0x20 + seed as u8;
+        let reply = client.exchange_profile(
+            profile_payload(conductor_id, seed, 100 + seed as u64),
+            unix_seconds(),
+            seed,
+        );
+        if let Some((kind, payload)) = reply.reply
+            && kind == "health_error"
+            && payload["error"]["code"] == HealthCode::RateLimited.code()
+        {
+            rate_limited = true;
+            break;
+        }
+    }
+    assert!(
+        rate_limited,
+        "a flooding peer must hit the frozen per-peer rate limit"
+    );
+    let _ = client.stream.shutdown(std::net::Shutdown::Both);
+}
+
+// 9. Wrong role: a peer trusted as a Conductor cannot report health, and
+//    the rejection is a silent drop rather than an oracle.
+fn reject_wrong_role(
+    endpoint: &str,
+    manager: &Path,
+    conductor: &Path,
+    conductor_id: &str,
+    conductor_key: &[u8; 32],
+) {
+    let mut client = production_session(endpoint, manager, conductor_id, conductor_key);
+    let wrong_role =
+        client.exchange_profile(profile_payload(conductor_id, 0x60, 1), unix_seconds(), 0x60);
+    // The same session proves both halves of the role rule at once: this node
+    // reports its own Profile to the peer it trusts as a Conductor, and refuses
+    // the Profile that peer sent in the other direction.
+    assert!(
+        wrong_role
+            .unrelated
+            .iter()
+            .any(|kind| kind == "health_profile"),
+        "a node must report to the peer it trusts in the conductor role: {:?}",
+        wrong_role.unrelated
+    );
+    assert_dropped(
+        wrong_role,
+        conductor,
+        HealthCode::WrongRole,
+        "a peer trusted as a Conductor reporting health",
+    );
+    let _ = client.stream.shutdown(std::net::Shutdown::Both);
+}
+
+// 10. Revocation: the same authorized Performer, once revoked, is dropped.
+fn reject_revoked_performer(
+    endpoint: &str,
+    performer: &Path,
+    conductor: &Path,
+    conductor_id: &str,
+    conductor_key: &[u8; 32],
+    performer_id: &str,
+) {
+    support::assert_node_success(&support::run_node(
+        conductor,
+        &[
+            "revoke".to_string(),
+            performer_id.to_string(),
+            "--actor".to_string(),
+            "health-plane-transport".to_string(),
+            "--reason".to_string(),
+            "adversary certification".to_string(),
+            "--confirmed".to_string(),
+        ],
+    ));
+    let revoked_session = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut client = production_session(endpoint, performer, conductor_id, conductor_key);
+        let reply = client.exchange_profile(
+            profile_payload(conductor_id, 0x70, 500),
+            unix_seconds(),
+            0x70,
+        );
+        let _ = client.stream.shutdown(std::net::Shutdown::Both);
+        reply.reply
+    }));
+    // A revoked peer is refused at the transport admission gate or, if it still
+    // reaches the Health Plane, dropped without a reply. Both are fail-closed;
+    // neither may acknowledge.
+    if let Ok(Some((kind, payload))) = revoked_session {
+        panic!("a revoked peer received {kind}: {payload}");
+    }
+}
+
+// 11. Nothing an adversary sent changed identity, trust, capability, or
+//     revocation state beyond the one explicit operator revocation.
+fn assert_only_operator_revocation_changed_trust(
+    conductor: &Path,
+    trust_before: &str,
+    performer_id: &str,
+    manager_id: &str,
+) {
+    let trust_after = trust_snapshot(conductor);
+    assert_ne!(
+        trust_before, trust_after,
+        "the explicit operator revocation must be visible"
+    );
+    assert_eq!(
+        trust_after.matches(performer_id).count(),
+        trust_before.matches(performer_id).count(),
+        "no adversary may add or remove a trust row"
+    );
+    assert!(
+        trust_after.contains(manager_id),
+        "the wrong-role peer's trust row must be untouched"
+    );
+    assert!(
+        trust_after.contains("revoked"),
+        "only the operator's revocation changed trust"
+    );
+}
+
 #[test]
 fn contracted_adversaries_are_rejected_without_unauthorized_state_mutation() {
     let conductor = support::TestWorkspace::new("health_adv_conductor");
     let performer = support::TestWorkspace::new("health_adv_performer");
     let manager = support::TestWorkspace::new("health_adv_manager");
-    let conductor_status = init_node(conductor.path());
-    let performer_status = init_node(performer.path());
-    let manager_status = init_node(manager.path());
+    let conductor_status = support::init_node(conductor.path());
+    let performer_status = support::init_node(performer.path());
+    let manager_status = support::init_node(manager.path());
     let conductor_id = conductor_status["identity"]["node_id"]
         .as_str()
         .unwrap()
@@ -1020,19 +1139,21 @@ fn contracted_adversaries_are_rejected_without_unauthorized_state_mutation() {
 
     // One authorized Performer, and one peer trusted in the *conductor* role
     // that will try to report health it is not permitted to report.
-    trust_peer(
+    support::trust_fleet_peer(
         conductor.path(),
         performer.path(),
         &performer_status,
         "performer",
         &[CAPABILITY_PROFILE_PULSE],
+        TRUST_AUDIT,
     );
-    trust_peer(
+    support::trust_fleet_peer(
         conductor.path(),
         manager.path(),
         &manager_status,
         "conductor",
         &[],
+        TRUST_AUDIT,
     );
 
     let conductor_port = support::unique_loopback_port();
@@ -1052,273 +1173,36 @@ fn contracted_adversaries_are_rejected_without_unauthorized_state_mutation() {
 
     let trust_before = trust_snapshot(conductor.path());
 
-    let (mut stream, mut session, identity) =
-        production_session(&endpoint, performer.path(), &conductor_id, &conductor_key);
+    let mut client = production_session(&endpoint, performer.path(), &conductor_id, &conductor_key);
 
-    // 1. Wrong target: a syntactically valid third-party node ID is rejected
-    //    before any state is read or written.
-    assert_dropped(
-        exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_profile",
-            profile_payload(&manager_id, 0x01, 1),
-            unix_seconds(),
-            0x01,
-        ),
+    reject_wrong_target(&mut client, conductor.path(), &manager_id);
+    reject_outside_time_window(&mut client, &conductor_id);
+    reject_unknown_field(&mut client, conductor.path(), &conductor_id);
+    reject_path_smuggling(&mut client, conductor.path(), &conductor_id);
+    reject_oversized_profile(&mut client, conductor.path(), &conductor_id);
+    accept_then_reject_replayed_message(&mut client, &conductor_id);
+    reject_stale_profile_revision(&mut client, &conductor_id);
+    reject_profile_flood(&mut client, &conductor_id);
+    reject_wrong_role(
+        &endpoint,
+        manager.path(),
         conductor.path(),
-        HealthCode::WrongTarget,
-        "a third-party target",
+        &conductor_id,
+        &conductor_key,
     );
-
-    // 2. Future beyond the frozen skew, and stale beyond the frozen age.
-    assert_error(
-        exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_profile",
-            profile_payload(&conductor_id, 0x02, 1),
-            unix_seconds() + MAX_FUTURE_SKEW_SECONDS as u64 + 5,
-            0x02,
-        ),
-        HealthCode::Future,
-    );
-    assert_error(
-        exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_profile",
-            profile_payload(&conductor_id, 0x03, 1),
-            unix_seconds() - MAX_AGE_SECONDS as u64 - 5,
-            0x03,
-        ),
-        HealthCode::Stale,
-    );
-
-    // 3. An unknown field anywhere in the closed schema.
-    let mut unknown = profile_payload(&conductor_id, 0x04, 1);
-    unknown["profile"]["hostname"] = json!("workshop.local");
-    assert_dropped(
-        exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_profile",
-            unknown,
-            unix_seconds(),
-            0x04,
-        ),
+    reject_revoked_performer(
+        &endpoint,
+        performer.path(),
         conductor.path(),
-        HealthCode::UnknownField,
-        "a smuggled hostname field",
+        &conductor_id,
+        &conductor_key,
+        &performer_id,
     );
-
-    // 4. A grammar violation that would smuggle a path.
-    let mut path_smuggle = profile_payload(&conductor_id, 0x05, 1);
-    path_smuggle["profile"]["display_name"] = json!("/etc/shadow");
-    assert_dropped(
-        exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_profile",
-            path_smuggle,
-            unix_seconds(),
-            0x05,
-        ),
+    assert_only_operator_revocation_changed_trust(
         conductor.path(),
-        HealthCode::InvalidMessage,
-        "a display name carrying a filesystem path",
-    );
-
-    // 5. Oversized: past the frozen per-kind canonical cap.
-    let mut oversized = profile_payload(&conductor_id, 0x06, 1);
-    oversized["profile"]["runtimes"] = json!((0..64)
-        .map(|index| json!({
-            "available": true,
-            "name": format!("runtime{index}"),
-            "version": "9.9.9999999999999999999999"
-        }))
-        .collect::<Vec<Value>>());
-    assert!(
-        serde_jcs::to_vec(&oversized).unwrap().len() > MAX_CANONICAL_PROFILE / 2,
-        "the oversized fixture must actually be large"
-    );
-    assert_dropped(
-        exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_profile",
-            oversized,
-            unix_seconds(),
-            0x06,
-        ),
-        conductor.path(),
-        HealthCode::MessageTooLarge,
-        "an oversized Profile",
-    );
-
-    // 6. An accepted Profile, then the same `message_id` replayed.
-    let accepted = exchange(
-        &mut stream,
-        &mut session,
-        &identity,
-        "health_profile",
-        profile_payload(&conductor_id, 0x07, 1),
-        unix_seconds(),
-        0x07,
-    );
-    let (kind, payload) = accepted
-        .reply
-        .expect("an authorized Profile must be acknowledged");
-    assert_eq!(kind, "health_ack", "payload: {payload}");
-    assert_eq!(payload["ack"]["accepted"], true);
-    assert_eq!(payload["ack"]["acked_message_id"], message_id(0x07));
-
-    assert_error(
-        exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_profile",
-            profile_payload(&conductor_id, 0x07, 2),
-            unix_seconds(),
-            0x08,
-        ),
-        HealthCode::Replay,
-    );
-
-    // 7. An out-of-order Profile revision is a replay, not an acceptance.
-    assert_error(
-        exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_profile",
-            profile_payload(&conductor_id, 0x09, 1),
-            unix_seconds(),
-            0x09,
-        ),
-        HealthCode::Replay,
-    );
-
-    // 8. Flood: past the frozen per-minute allowance plus its burst.
-    let mut rate_limited = false;
-    for seed in 0..(MAX_MESSAGES_PER_PEER_PER_MINUTE + RATE_BURST_ALLOWANCE + 4) {
-        let seed = 0x20 + seed as u8;
-        let reply = exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_profile",
-            profile_payload(&conductor_id, seed, 100 + seed as u64),
-            unix_seconds(),
-            seed,
-        );
-        if let Some((kind, payload)) = reply.reply {
-            if kind == "health_error" && payload["error"]["code"] == HealthCode::RateLimited.code()
-            {
-                rate_limited = true;
-                break;
-            }
-        }
-    }
-    assert!(
-        rate_limited,
-        "a flooding peer must hit the frozen per-peer rate limit"
-    );
-    let _ = stream.shutdown(std::net::Shutdown::Both);
-
-    // 9. Wrong role: a peer trusted as a Conductor cannot report health, and
-    //    the rejection is a silent drop rather than an oracle.
-    let (mut stream, mut session, identity) =
-        production_session(&endpoint, manager.path(), &conductor_id, &conductor_key);
-    let wrong_role = exchange(
-        &mut stream,
-        &mut session,
-        &identity,
-        "health_profile",
-        profile_payload(&conductor_id, 0x60, 1),
-        unix_seconds(),
-        0x60,
-    );
-    // The same session proves both halves of the role rule at once: this node
-    // reports its own Profile to the peer it trusts as a Conductor, and refuses
-    // the Profile that peer sent in the other direction.
-    assert!(
-        wrong_role
-            .unrelated
-            .iter()
-            .any(|kind| kind == "health_profile"),
-        "a node must report to the peer it trusts in the conductor role: {:?}",
-        wrong_role.unrelated
-    );
-    assert_dropped(
-        wrong_role,
-        conductor.path(),
-        HealthCode::WrongRole,
-        "a peer trusted as a Conductor reporting health",
-    );
-    let _ = stream.shutdown(std::net::Shutdown::Both);
-
-    // 10. Revocation: the same authorized Performer, once revoked, is dropped.
-    assert_success(&run_node(
-        conductor.path(),
-        &[
-            "revoke".to_string(),
-            performer_id.clone(),
-            "--actor".to_string(),
-            "health-plane-transport".to_string(),
-            "--reason".to_string(),
-            "adversary certification".to_string(),
-            "--confirmed".to_string(),
-        ],
-    ));
-    let revoked_session = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let (mut stream, mut session, identity) =
-            production_session(&endpoint, performer.path(), &conductor_id, &conductor_key);
-        let reply = exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_profile",
-            profile_payload(&conductor_id, 0x70, 500),
-            unix_seconds(),
-            0x70,
-        );
-        let _ = stream.shutdown(std::net::Shutdown::Both);
-        reply.reply
-    }));
-    // A revoked peer is refused at the transport admission gate or, if it still
-    // reaches the Health Plane, dropped without a reply. Both are fail-closed;
-    // neither may acknowledge.
-    if let Ok(Some((kind, payload))) = revoked_session {
-        panic!("a revoked peer received {kind}: {payload}");
-    }
-
-    // 11. Nothing an adversary sent changed identity, trust, capability, or
-    //     revocation state beyond the one explicit operator revocation.
-    let trust_after = trust_snapshot(conductor.path());
-    assert_ne!(
-        trust_before, trust_after,
-        "the explicit operator revocation must be visible"
-    );
-    assert_eq!(
-        trust_after.matches(&performer_id).count(),
-        trust_before.matches(&performer_id).count(),
-        "no adversary may add or remove a trust row"
-    );
-    assert!(
-        trust_after.contains(&manager_id),
-        "the wrong-role peer's trust row must be untouched"
-    );
-    assert!(
-        trust_after.contains("revoked"),
-        "only the operator's revocation changed trust"
+        &trust_before,
+        &performer_id,
+        &manager_id,
     );
 
     let _ = conductor_server.terminate();
@@ -1393,7 +1277,7 @@ fn three_real_nodes_carry_one_redacted_run_completed_signal_to_the_conductor() {
             .into_iter()
             .map(|label| {
                 let workspace = support::TestWorkspace::new(label);
-                let status = init_node(workspace.path());
+                let status = support::init_node(workspace.path());
                 (workspace, status)
             })
             .collect();
@@ -1426,33 +1310,37 @@ fn three_real_nodes_carry_one_redacted_run_completed_signal_to_the_conductor() {
     // One Conductor, two independently stateful Performers. Both are granted
     // the frozen Signal capability; only one of them will actually run work.
     let capabilities = [CAPABILITY_PROFILE_PULSE, CAPABILITY_SIGNAL];
-    trust_peer(
+    support::trust_fleet_peer(
         conductor.path(),
         worker.path(),
         &worker_status,
         "performer",
         &capabilities,
+        TRUST_AUDIT,
     );
-    trust_peer(
+    support::trust_fleet_peer(
         conductor.path(),
         idle.path(),
         &idle_status,
         "performer",
         &capabilities,
+        TRUST_AUDIT,
     );
-    trust_peer(
+    support::trust_fleet_peer(
         worker.path(),
         conductor.path(),
         &conductor_status,
         "conductor",
         &capabilities,
+        TRUST_AUDIT,
     );
-    trust_peer(
+    support::trust_fleet_peer(
         idle.path(),
         conductor.path(),
         &conductor_status,
         "conductor",
         &capabilities,
+        TRUST_AUDIT,
     );
 
     let conductor_port = support::unique_loopback_port();
@@ -1476,7 +1364,6 @@ fn three_real_nodes_carry_one_redacted_run_completed_signal_to_the_conductor() {
     // Conductor, so both are already visible as `enrolled` Signals before any
     // node reports anything at all.
     let cold = signal_feed_http(&conductor_server);
-    assert_eq!(cold["enabled"], true);
     assert_eq!(cold["gap"], false);
     let enrolled = signals_from(&cold, "local", "enrolled");
     assert_eq!(enrolled.len(), 2, "one activation per Performer: {cold}");
@@ -1532,9 +1419,11 @@ fn three_real_nodes_carry_one_redacted_run_completed_signal_to_the_conductor() {
     // crosses the boundary.
     let opaque = run["run_id"].as_str().expect("run id");
     assert_eq!(opaque.len(), 32);
-    assert!(opaque
-        .bytes()
-        .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()));
+    assert!(
+        opaque
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    );
     assert_ne!(opaque, local_run_id, "the local run id is never carried");
     let encoded = feed.to_string();
     for forbidden in [

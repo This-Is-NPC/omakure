@@ -6,7 +6,7 @@
 
 - `tests/direct_transport_contract.rs`
 - `tests/direct_transport_e2e.rs`
-- `src/direct_transport.rs`
+- `src/direct_transport/`
 
 ## Run
 

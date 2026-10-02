@@ -2,6 +2,14 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+/// Workspace-owned metadata directory.
+pub const METADATA_DIR: &str = ".omakure";
+/// Run history directory.
+pub const HISTORY_DIR: &str = ".history";
+/// Directory names below the workspace root that are never scripts or script
+/// content.
+pub const RESERVED_DIR_NAMES: [&str; 3] = [METADATA_DIR, HISTORY_DIR, ".git"];
+
 /// Workspace layout used by the headless CLI.
 pub struct Workspace {
     root: PathBuf,
@@ -15,8 +23,8 @@ pub struct Workspace {
 impl Workspace {
     /// Build a workspace rooted at `root`.
     pub fn new(root: PathBuf) -> Self {
-        let omakure_dir = root.join(".omakure");
-        let history_dir = root.join(".history");
+        let omakure_dir = root.join(METADATA_DIR);
+        let history_dir = root.join(HISTORY_DIR);
         let config_path = root.join("omakure.toml");
         let envs_dir = omakure_dir.join("envs");
         let envs_active_path = envs_dir.join("active");

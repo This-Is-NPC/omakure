@@ -3,7 +3,7 @@
 
 name omakure
 bin omakure
-version "0.4.5"
+version "0.4.6"
 about "Omakure - CLI for running and scheduling automation scripts"
 long_about #"""
 Omakure - CLI for running and scheduling automation scripts.
@@ -539,7 +539,7 @@ cmd api display_order=11 disable_version_flag=#true args_override_self=#false he
     long_help #"""
 Run the internal HTTP management API
 
-Starts a loopback-only HTTP API by default at `127.0.0.1:7878`. All endpoints except `/v1/health` and `/v1/ready` require `Authorization: Bearer <token>`. Prefer `--tokens-file` / `OMAKURE_TOKENS_FILE` (per-token Argon2id scopes). Legacy `OMAKURE_API_TOKEN` still works when no tokens file is configured. Binding to non-loopback addresses requires `--allow-non-loopback`.
+Starts a loopback-only HTTP API by default at `127.0.0.1:7878`. All endpoints except `/v1/health` and `/v1/ready` require `Authorization: Bearer <token>` for a token listed in `--tokens-file` / `OMAKURE_TOKENS_FILE` (per-token Argon2id scopes). Binding to non-loopback addresses requires `--allow-non-loopback`.
 """#
     flag --bind help="Address to bind the HTTP API server to" display_order=0 default="127.0.0.1:7878" {
         arg <BIND>
@@ -548,13 +548,10 @@ Starts a loopback-only HTTP API by default at `127.0.0.1:7878`. All endpoints ex
     flag --policy help="Deploy-only policy.toml (route groups + auth/node-service defaults). Overrides `OMAKURE_POLICY_FILE`. Separate from workspace omakure.toml" display_order=2 {
         arg <POLICY>
     }
-    flag --tokens-file help="Multi-token TOML file (Argon2id hashes + per-token scopes). Overrides `OMAKURE_TOKENS_FILE`. When set, process-wide `--capability` is ignored; scopes come from each token" display_order=3 {
+    flag --tokens-file help="Multi-token TOML file (Argon2id hashes + per-token scopes). Overrides `OMAKURE_TOKENS_FILE`. Required unless the deploy policy sets `auth.tokens_file`" display_order=3 {
         arg <TOKENS_FILE>
     }
-    flag --capability help="API capability to grant in legacy single-token mode (`OMAKURE_API_TOKEN`). Repeatable. Ignored when `--tokens-file` is set. Supported: config:read, scripts:read, env:read / envs:read, env:write / envs:write, env:activate / envs:activate, env:use / envs:use, secrets:use, secrets:read-metadata, credentials:use, runs:read, runs:write / runs:enqueue, batteries:read, batteries:write, admin:status, all. Node management uses narrow node:read, node:write, and trust:write capabilities. `all` grants every route capability but does not bypass `--secret-ref` (pass `--secret-ref '*'` for unrestricted refs)" var=#true display_order=4 {
-        arg <CAPABILITIES>… var=#true
-    }
-    flag --secret-ref help="Allowed secret provider ref for secrets:use / credentials:use, e.g. secret://prod/token or secret://prod/*; repeatable. Empty denies provider refs" var=#true display_order=5 {
+    flag --secret-ref help="Allowed secret provider ref for secrets:use / credentials:use, e.g. secret://prod/token or secret://prod/*; repeatable. Empty denies provider refs" var=#true display_order=4 {
         arg <SECRET_REFS>… var=#true
     }
     flag --scripts-dir help="Scripts directory override" global=#true display_order=0 {
@@ -617,14 +614,11 @@ When set, supported subcommands print exactly one JSON envelope `{ ok, data, err
     complete scripts_dir type=path
 }
 cmd init display_order=14 disable_version_flag=#true args_override_self=#false help="Create a new script template" unknown_flags=error {
-    flag --name help="Script path (legacy)" display_order=0 {
-        arg <SCRIPT>
-    }
-    flag --schema-json help="Inline schema JSON or `@path/to/schema.json`. When set, the new script is generated with this schema embedded between the `OMAKURE_SCHEMA_START` / `OMAKURE_SCHEMA_END` markers instead of the default placeholder template" display_order=1 {
+    flag --schema-json help="Inline schema JSON or `@path/to/schema.json`. When set, the new script is generated with this schema embedded between the `OMAKURE_SCHEMA_START` / `OMAKURE_SCHEMA_END` markers instead of the default placeholder template" display_order=0 {
         arg <SCHEMA_JSON>
     }
-    flag --body-stdin help="Read the script body from stdin and write it verbatim under the schema header when `--schema-json` is set. Without `--schema-json`, stdin is ignored and the default placeholder template is written" display_order=2 default="false"
-    flag --force help="Overwrite an existing script of the same name" display_order=3 default="false"
+    flag --body-stdin help="Read the script body from stdin and write it verbatim under the schema header when `--schema-json` is set. Without `--schema-json`, stdin is ignored and the default placeholder template is written" display_order=1 default="false"
+    flag --force help="Overwrite an existing script of the same name" display_order=2 default="false"
     flag --scripts-dir help="Scripts directory override" global=#true display_order=0 {
         arg <SCRIPTS_DIR>
     }
@@ -635,7 +629,7 @@ Emit machine-readable JSON output for AI-facing subcommands.
 When set, supported subcommands print exactly one JSON envelope `{ ok, data, error, schema_version }` on stdout instead of their human-readable form. Subcommands that do not support JSON ignore this flag.
 """#
     }
-    arg "[SCRIPT]" help="Script path" required=#false
+    arg <SCRIPT> help="Script path"
     complete scripts_dir type=path
 }
 cmd env display_order=15 subcommand_required=#true arg_required_else_help=#true disable_version_flag=#true args_override_self=#false help="Manage named environment files" unknown_flags=error {
@@ -830,13 +824,10 @@ On Linux and macOS, production node configuration and state use machine-owned pa
         flag --tokens-file help="Multi-token TOML file. Same as `omakure api --tokens-file`" display_order=13 {
             arg <TOKENS_FILE>
         }
-        flag --capability help="API capability to grant in legacy single-token mode. Repeatable" var=#true display_order=14 {
-            arg <CAPABILITIES>… var=#true
-        }
-        flag --secret-ref help="Allowed secret provider ref for secrets:use. Same as `omakure api --secret-ref`" var=#true display_order=15 {
+        flag --secret-ref help="Allowed secret provider ref for secrets:use. Same as `omakure api --secret-ref`" var=#true display_order=14 {
             arg <SECRET_REFS>… var=#true
         }
-        flag --bootstrap-token-file help="Node-local one-time bootstrap token file for the signed-bundle API" display_order=16 {
+        flag --bootstrap-token-file help="Node-local one-time bootstrap token file for the signed-bundle API" display_order=15 {
             arg <BOOTSTRAP_TOKEN_FILE>
         }
         flag --scripts-dir help="Scripts directory override" global=#true display_order=0 {
@@ -1387,7 +1378,7 @@ cmd config display_order=17 disable_version_flag=#true args_override_self=#false
     long_help #"""
 Show resolved paths and environment diagnostics
 
-Prints the resolved binary path, omakure version, workspace root, scripts root, `.omakure/` directory, history directory, workspace config file, environments directory, active environment, and any known env overrides (`OMAKURE_SCRIPTS_DIR`, `OMAKURE_REPO`, `OVERTURE_*`, `CLOUD_MGMT_*`, `REPO`, `VERSION`). Pass `--json` for the machine-readable envelope.
+Prints the resolved binary path, omakure version, workspace root, scripts root, `.omakure/` directory, history directory, workspace config file, environments directory, active environment, and any known env overrides (`OMAKURE_SCRIPTS_DIR`, `OMAKURE_REPO`, `REPO`, `VERSION`). Pass `--json` for the machine-readable envelope.
 """#
     flag --scripts-dir help="Scripts directory override" global=#true {
         arg <SCRIPTS_DIR>
@@ -1405,9 +1396,9 @@ cmd update display_order=18 disable_version_flag=#true args_override_self=#false
     long_help #"""
 Update omakure from GitHub releases
 
-Downloads the release archive for the current OS/arch and replaces the running binary in place. Also copies any scripts missing from your local scripts directory from the source archive of the target version — existing files are never overwritten. `--repo` defaults to `$OMAKURE_REPO` / `$OVERTURE_REPO` / `$CLOUD_MGMT_REPO` / `$REPO` / `This-Is-NPC/omakure`; `--version` defaults to `$VERSION` or the latest GitHub release.
+Downloads the release archive for the current OS/arch and replaces the running binary in place. Also copies any scripts missing from your local scripts directory from the source archive of the target version — existing files are never overwritten. `--repo` defaults to `$OMAKURE_REPO` / `$REPO` / `This-Is-NPC/omakure`; `--version` defaults to `$VERSION` or the latest GitHub release.
 """#
-    flag --repo help="GitHub repository (`owner/name`). Defaults to `$OMAKURE_REPO` / `$OVERTURE_REPO` / `$CLOUD_MGMT_REPO` / `$REPO` / `This-Is-NPC/omakure`" display_order=0 {
+    flag --repo help="GitHub repository (`owner/name`). Defaults to `$OMAKURE_REPO` / `$REPO` / `This-Is-NPC/omakure`" display_order=0 {
         arg <REPO>
     }
     flag --version help="Release tag to install (e.g. `v0.1.9`). Defaults to `$VERSION` or the latest GitHub release for the configured repo" display_order=1 {

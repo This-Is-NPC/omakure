@@ -1,8 +1,7 @@
 //! Real core/scripts/config/search paired adapter probes.
 
-use super::BehavioralContext;
-use omakure::cli_http_parity::ProbeEvidence;
-use serde_json::{json, Value};
+use super::{BehavioralContext, ProbeEvidence};
+use serde_json::{Value, json};
 use std::process::Output;
 
 pub const CASE_IDS: &[&str] = &[
@@ -290,12 +289,7 @@ fn mismatch_search(ctx: &BehavioralContext) -> Result<ProbeEvidence, String> {
         super::support::TestWorkspace::new(&format!("parity_search_{}", ctx.authorized_actor()));
     let older = workspace.write_schema_script("older.sh", "Another Needle", "echo older");
     super::require_path(&older);
-    let authorized_token = actor_token(ctx.authorized_actor());
-    let seeded = workspace_cli_json(
-        workspace.path(),
-        &["--json", "search", "needle"],
-        &authorized_token,
-    )?;
+    let seeded = workspace_cli_json(workspace.path(), &["--json", "search", "needle"])?;
     if seeded["ok"] != true {
         return Err(format!("search seed failed: {seeded}"));
     }
@@ -309,8 +303,8 @@ fn mismatch_search(ctx: &BehavioralContext) -> Result<ProbeEvidence, String> {
     super::require_path(&fresh);
     let server = super::support::HttpServer::start_with_args(
         workspace.path(),
-        &authorized_token,
-        &["--capability", "scripts:read"],
+        &["scripts:read"],
+        &[],
         &[],
         std::time::Duration::from_secs(10),
     );
@@ -320,11 +314,7 @@ fn mismatch_search(ctx: &BehavioralContext) -> Result<ProbeEvidence, String> {
     if http_status != 200 || http_json["ok"] != true {
         return Err(format!("search HTTP status {http_status}"));
     }
-    let refreshed_cli = workspace_cli_json(
-        workspace.path(),
-        &["--json", "search", "needle"],
-        &authorized_token,
-    )?;
+    let refreshed_cli = workspace_cli_json(workspace.path(), &["--json", "search", "needle"])?;
     let cli_matches = refreshed_cli["data"].as_array().map_or(0, Vec::len);
     let http_matches = http_json["data"].as_array().map_or(0, Vec::len);
     let cli_paths = relative_paths(&refreshed_cli["data"]);
@@ -345,11 +335,7 @@ fn mismatch_search(ctx: &BehavioralContext) -> Result<ProbeEvidence, String> {
     }
 
     let long_query = "q=".to_string() + &"x".repeat(257);
-    let long_cli = workspace_cli(
-        workspace.path(),
-        &["--json", "search", &"x".repeat(257)],
-        &authorized_token,
-    );
+    let long_cli = workspace_cli(workspace.path(), &["--json", "search", &"x".repeat(257)]);
     let query_cli_accepted = long_cli.status.success();
     if !query_cli_accepted {
         return Err("CLI search rejected a query accepted by its local adapter".into());
@@ -384,15 +370,14 @@ fn mismatch_search(ctx: &BehavioralContext) -> Result<ProbeEvidence, String> {
         cli_tag_args.extend(["--tag".to_string(), "x".to_string()]);
     }
     let cli_tag_refs = cli_tag_args.iter().map(String::as_str).collect::<Vec<_>>();
-    let many_tags_cli = workspace_cli(workspace.path(), &cli_tag_refs, &authorized_token);
+    let many_tags_cli = workspace_cli(workspace.path(), &cli_tag_refs);
     let tags_cli_accepted = many_tags_cli.status.success();
     if !tags_cli_accepted {
         return Err("CLI search rejected a tag list accepted by its local adapter".into());
     }
-    let forbidden_token = actor_token(ctx.forbidden_actor());
     let forbidden_server = super::support::HttpServer::start_with_args(
         workspace.path(),
-        &forbidden_token,
+        &[],
         &[],
         &[],
         std::time::Duration::from_secs(10),
@@ -456,7 +441,7 @@ fn assert_search_auth(
     assert_eq!(missing.status, 401, "unauthenticated request was accepted");
     assert_eq!(missing.json()["error"]["code"], "unauthorized");
 
-    let forbidden = forbidden_server.get_with_bearer(endpoint, &actor_token(ctx.forbidden_actor()));
+    let forbidden = forbidden_server.get(endpoint);
     assert_eq!(
         forbidden.status, 403,
         "capability denial for {capability} was accepted"
@@ -476,26 +461,14 @@ fn assert_search_auth(
     })
 }
 
-fn actor_token(actor: &str) -> String {
-    format!("behavioral-parity-{actor}-token-000000000000000000000000")
-}
-
-fn workspace_cli(workspace: &std::path::Path, args: &[&str], token: &str) -> Output {
+fn workspace_cli(workspace: &std::path::Path, args: &[&str]) -> Output {
     let mut command = super::support::omakure_command();
-    command
-        .arg("--scripts-dir")
-        .arg(workspace)
-        .args(args)
-        .env("OMAKURE_API_TOKEN", token);
+    command.arg("--scripts-dir").arg(workspace).args(args);
     super::support::command_with_timeout(&mut command, std::time::Duration::from_secs(10))
 }
 
-fn workspace_cli_json(
-    workspace: &std::path::Path,
-    args: &[&str],
-    token: &str,
-) -> Result<Value, String> {
-    let output = workspace_cli(workspace, args, token);
+fn workspace_cli_json(workspace: &std::path::Path, args: &[&str]) -> Result<Value, String> {
+    let output = workspace_cli(workspace, args);
 
     if !output.status.success() {
         return Err(format!(

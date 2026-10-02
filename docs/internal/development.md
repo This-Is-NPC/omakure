@@ -39,7 +39,10 @@ An atomic under `scripts/tasks/atomic/` performs one operation. A suite under
 `scripts/tasks/suite/` aggregates atomics or retained certification scripts.
 The four platform suites under `scripts/tasks/check/platform/` are
 `linux-gnu`, `linux-musl`, `macos`, and `windows`; each validates its target
-runner and delegates tests/builds/smoke to the canonical atomics and suites.
+runner and delegates builds and smoke checks to the canonical atomics and
+suites. Native Linux GNU, macOS, and Windows cells retain their test suites;
+Linux musl cells build and verify the static release binary without repeating
+the native Linux GNU tests.
 Neither check gate duplicates the other.
 
 Fast is intentionally limited to shell/YAML/static contract fixtures,
@@ -96,7 +99,7 @@ the shell suites rather than inline task commands or dependencies.
 | `mise run test:integration` | every native `tests/*.rs` target once |
 | `mise run test:e2e` | selected end-to-end suite |
 | `mise run lint` | formatting and Clippy suite |
-| `mise run dev` | bounded node-service smoke atomic |
+| `mise run dev:smoke` | bounded node-service smoke atomic |
 | `mise run node` | authenticated node service atomic |
 | `mise run cert` | transport, Health, and VM certification suite |
 | `mise run cert:vm` | destructive Fedora VM certification |
@@ -131,8 +134,7 @@ that report, update `docs/usage/fidelity-allowlist.json` manually only when
 the change is reviewed, then run `mise run usage:kdl -- --write` followed by
 `mise run usage:kdl -- --check`. Write and check are fail-closed: neither
 auto-approves a changed loss nor overwrites a stale allowlist, residual
-semantics record, or generated artifact. The checked residual for
-`init script` is also exercised through actual Clap parser outcomes.
+semantics record, or generated artifact.
 
 After KDL changes, run `mise run usage:docs -- --write` and then
 `mise run usage:docs -- --check`. The check command fails if either generated
@@ -144,9 +146,9 @@ Usage's rename-sensitive `full_cmd`.
 
 Repository automation is under `scripts/tasks/atomic/`, `scripts/tasks/suite/`,
 and `scripts/tasks/check/`. The latter exposes the four platform suites;
-retained certification and developer implementations stay under
-`scripts/tasks/cert/` and `scripts/tasks/dev/`. Installers are under
-`scripts/install/`, release tooling under `scripts/release/`, and fixtures
+retained certification implementations stay under `scripts/tasks/cert/`.
+Installers are under `scripts/install/`, release tooling under
+`scripts/release/`, and fixtures
 under `scripts/fixtures/`. Installers never copy repository automation into a
 workspace. Every resource-owning task is bounded and trap-cleaned, while
 stateful install, node, release, and live certification tasks are repeat-safe
@@ -158,11 +160,11 @@ only under their documented preconditions.
 - `src/operations/`: shared behavior called by CLI and HTTP adapters.
 - `src/cli/`: clap commands, JSON envelopes, API/node-service lifecycle, workers,
   scheduler, history, and local lifecycle commands.
-- `src/runs.rs`: SQLite run state machine and trace storage.
-- `src/run_executor.rs`: one execution path for direct, queued, and scheduled runs.
+- `src/runs/`: SQLite run state machine and trace storage.
+- `src/run_executor/`: one execution path for direct, queued, and scheduled runs.
 - `src/adapters/`: filesystem repository, process runner, environments, and
   runtime checks.
-- `src/auth.rs`, `src/policy.rs`, `src/secrets.rs`, `src/redaction.rs`: deploy
+- `src/auth/`, `src/policy.rs`, `src/secrets.rs`, `src/redaction.rs`: deploy
   trust boundaries and secret handling.
 
 The HTTP layer must remain an adapter. Add shared validation or behavior to an
@@ -187,6 +189,35 @@ mise run check:fast
 basename exactly once. Platform matrix jobs use
 `scripts/tasks/check/platform/{linux-gnu,linux-musl,macos,windows}` instead of
 embedding test or build commands in workflow YAML.
+
+## Dependency review
+
+Run `cargo tree -d --locked --offline` after dependency changes. The current
+`Cargo.lock` contains these distinct-version families, including packages for
+other targets:
+
+| Family | Locked versions |
+|---|---|
+| Crypto | `block-buffer` 0.10.4/0.12.1; `cpufeatures` 0.2.17/0.3.0; `crypto-common` 0.1.7/0.2.2; `digest` 0.10.7/0.11.3; `getrandom` 0.2.17/0.3.4/0.4.2; `rand_core` 0.6.4/0.9.5/0.10.1; `sha2` 0.10.9/0.11.0 |
+| Collections and macros | `foldhash` 0.1.5/0.2.0; `hashbrown` 0.15.5/0.16.1/0.17.1; `syn` 2.0.112/3.0.4 |
+| Platform support | `r-efi` 5.3.0/6.0.0; `windows-link` 0.1.3/0.2.1; `windows-result` 0.3.4/0.4.1; `windows-strings` 0.4.2/0.5.1; `windows-sys` 0.52.0/0.61.2 |
+
+The `sha2` split comes from Omakure and `snow` using 0.10 while `k256`
+uses 0.11. The `getrandom` and `rand_core` versions follow separate
+transitive dependency lines. Review each root with `cargo tree -i
+<name>@<version> --locked`; keep the lockfile and platform checks aligned
+when upgrading a dependency.
+
+The optional Usage generator pins both `clap_usage` and `usage-lib` to the
+same `jdx/usage` revision in `Cargo.toml`. To review that pin, inspect the
+full commit recorded in `Cargo.lock` and `docs/usage/fidelity.json` against
+the candidate upstream commit. Update both manifest revisions together,
+regenerate `Cargo.lock` with `cargo update clap_usage usage-lib`, and review
+the lockfile diff. Then run `mise run usage:kdl -- --review`, approve any
+fidelity-allowlist change explicitly, run the Usage KDL and docs write/check
+commands described above, and finish with `mise run check:full`. Confirm
+that `docs/usage/fidelity.json` records the requested revision and resolved
+commit.
 
 ## Certification toolchain
 
@@ -228,10 +259,12 @@ operations, state transitions, redaction, and runtime resolution.
 
 ## Release checks
 
-CI and release jobs invoke the matrix-selected platform suite, which owns
-native tests, target builds, static-link verification, and binary smoke. The
-workflow files retain packaging/archive assertions but do not duplicate those
-commands. Release archives are produced once per target and reuse the same
-platform routing as CI. Before changing a command contract, run `omakure
+CI jobs invoke the matrix-selected platform suite with `--test-only` for native
+targets, followed by `--build-only` for all eight targets on the same runner.
+Release jobs use the same build route for target builds, static-link
+verification, and binary smoke. The workflow files retain
+packaging/archive assertions but do not duplicate those commands. Release
+archives are produced once per target and reuse the same platform routing as
+CI. Before changing a command contract, run `omakure
 help-ai` from the built binary and update `docs/ai-interface.md`,
 `docs/cli-http-parity.md`, and the relevant tests.

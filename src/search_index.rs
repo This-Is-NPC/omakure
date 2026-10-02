@@ -1,9 +1,27 @@
 use crate::adapters::workspace_repository::FsWorkspaceRepository;
-use crate::ports::ScriptRepository;
-use rusqlite::{params, params_from_iter, Connection, OptionalExtension, TransactionBehavior};
-use std::fs;
+use crate::util::path::logical_relative_path;
+use crate::util::sqlite::WalDatabase;
+use rusqlite::{Connection, TransactionBehavior, params, params_from_iter};
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
+
+#[derive(Debug, thiserror::Error)]
+pub enum SearchIndexError {
+    #[error("{0}")]
+    DatabaseOpen(String),
+    #[error("{operation}: {source}")]
+    Filesystem {
+        operation: &'static str,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("{operation}: {source}")]
+    Sqlite {
+        operation: &'static str,
+        #[source]
+        source: rusqlite::Error,
+    },
+}
 
 #[derive(Debug, Clone)]
 pub struct SearchResult {
@@ -23,16 +41,6 @@ pub struct SearchField {
     pub required: bool,
 }
 
-#[derive(Debug, Clone)]
-#[allow(dead_code)] // detail projection: constructed by `load_details`, asserted by tests
-pub struct SearchDetails {
-    pub display_name: String,
-    pub description: Option<String>,
-    pub tags: Vec<String>,
-    pub fields: Vec<SearchField>,
-    pub schema_error: Option<String>,
-}
-
 #[derive(Clone)]
 pub struct SearchIndex {
     db_path: PathBuf,
@@ -44,29 +52,40 @@ impl SearchIndex {
     }
 
     /// Refresh and read one committed snapshot. A failed refresh never serves stale data.
-    pub fn search(&self, root: &Path, query: &str) -> Result<Vec<SearchResult>, String> {
+    pub fn search(&self, root: &Path, query: &str) -> Result<Vec<SearchResult>, SearchIndexError> {
         let mut conn = open_connection(&self.db_path)?;
         conn.execute("PRAGMA foreign_keys = ON", [])
-            .map_err(|err| format!("Enable foreign keys failed: {err}"))?;
+            .map_err(|err| SearchIndexError::Sqlite {
+                operation: "Enable foreign keys failed",
+                source: err,
+            })?;
         let tx = conn
             .transaction_with_behavior(TransactionBehavior::Immediate)
-            .map_err(|err| format!("Begin search transaction failed: {err}"))?;
+            .map_err(|err| SearchIndexError::Sqlite {
+                operation: "Begin search transaction failed",
+                source: err,
+            })?;
         init_db(&tx)?;
         rebuild_index(&tx, root)?;
         let results = Self::query_connection(&tx, query)?;
-        tx.commit()
-            .map_err(|err| format!("Commit search index failed: {err}"))?;
+        tx.commit().map_err(|err| SearchIndexError::Sqlite {
+            operation: "Commit search index failed",
+            source: err,
+        })?;
         Ok(results)
     }
 
     #[cfg(test)]
-    pub fn query(&self, query: &str) -> Result<Vec<SearchResult>, String> {
+    pub fn query(&self, query: &str) -> Result<Vec<SearchResult>, SearchIndexError> {
         let conn = open_connection(&self.db_path)?;
         init_db(&conn)?;
         Self::query_connection(&conn, query)
     }
 
-    fn query_connection(conn: &Connection, query: &str) -> Result<Vec<SearchResult>, String> {
+    fn query_connection(
+        conn: &Connection,
+        query: &str,
+    ) -> Result<Vec<SearchResult>, SearchIndexError> {
         let tokens = split_query(query);
         let mut sql = String::from(
             "SELECT script_path, display_name, description, tags, schema_error, \
@@ -84,9 +103,10 @@ impl SearchIndex {
         }
         sql.push_str(" ORDER BY display_name COLLATE NOCASE, script_path COLLATE NOCASE");
 
-        let mut stmt = conn
-            .prepare(&sql)
-            .map_err(|err| format!("Search prepare failed: {}", err))?;
+        let mut stmt = conn.prepare(&sql).map_err(|err| SearchIndexError::Sqlite {
+            operation: "Search prepare failed",
+            source: err,
+        })?;
 
         let params: Vec<String> = tokens
             .iter()
@@ -109,91 +129,47 @@ impl SearchIndex {
                     schema_error,
                 })
             })
-            .map_err(|err| format!("Search query failed: {}", err))?;
+            .map_err(|err| SearchIndexError::Sqlite {
+                operation: "Search query failed",
+                source: err,
+            })?;
 
         let mut results = Vec::new();
         for row in rows {
-            results.push(row.map_err(|err| format!("Search row failed: {}", err))?);
+            results.push(row.map_err(|err| SearchIndexError::Sqlite {
+                operation: "Search row failed",
+                source: err,
+            })?);
         }
         Ok(results)
     }
-
-    #[allow(dead_code)]
-    pub fn load_details(&self, script_path: &Path) -> Result<Option<SearchDetails>, String> {
-        let conn = open_connection(&self.db_path)?;
-        init_db(&conn)?;
-        let script_path = script_path.to_string_lossy().to_string();
-
-        let mut stmt = conn
-            .prepare(
-                "SELECT display_name, description, tags, schema_error \
-                 FROM script_index WHERE script_path = ?",
-            )
-            .map_err(|err| format!("Search detail prepare failed: {}", err))?;
-
-        let base = stmt
-            .query_row([script_path.clone()], |row| {
-                let display_name: String = row.get(0)?;
-                let description: Option<String> = row.get(1)?;
-                let tags_raw: Option<String> = row.get(2)?;
-                let schema_error: Option<String> = row.get(3)?;
-                Ok((display_name, description, tags_raw, schema_error))
-            })
-            .optional()
-            .map_err(|err| format!("Search detail query failed: {}", err))?;
-
-        let (display_name, description, tags_raw, schema_error) = match base {
-            Some(base) => base,
-            None => return Ok(None),
-        };
-
-        let mut field_stmt = conn
-            .prepare(
-                "SELECT name, prompt, kind, required \
-                 FROM script_fields WHERE script_path = ? \
-                 ORDER BY field_order",
-            )
-            .map_err(|err| format!("Search fields prepare failed: {}", err))?;
-
-        let rows = field_stmt
-            .query_map([script_path], |row| {
-                Ok(SearchField {
-                    name: row.get(0)?,
-                    prompt: row.get(1)?,
-                    kind: row.get(2)?,
-                    required: row.get::<_, i64>(3)? != 0,
-                })
-            })
-            .map_err(|err| format!("Search fields query failed: {}", err))?;
-
-        let mut fields = Vec::new();
-        for row in rows {
-            fields.push(row.map_err(|err| format!("Search field row failed: {}", err))?);
-        }
-
-        Ok(Some(SearchDetails {
-            display_name,
-            description,
-            tags: parse_tags(tags_raw),
-            fields,
-            schema_error,
-        }))
-    }
 }
 
-fn rebuild_index(tx: &Connection, root: &Path) -> Result<(), String> {
+fn rebuild_index(tx: &Connection, root: &Path) -> Result<(), SearchIndexError> {
     let root = root
         .canonicalize()
-        .map_err(|error| format!("Canonicalize search root failed: {error}"))?;
+        .map_err(|error| SearchIndexError::Filesystem {
+            operation: "Canonicalize search root failed",
+            source: error,
+        })?;
     let repo = FsWorkspaceRepository::new(root.clone());
     let scripts = repo
         .list_scripts_recursive()
-        .map_err(|err| format!("List scripts failed: {}", err))?;
+        .map_err(|err| SearchIndexError::Filesystem {
+            operation: "List scripts failed",
+            source: err,
+        })?;
 
     tx.execute("DELETE FROM script_fields", [])
-        .map_err(|err| format!("Clear fields failed: {}", err))?;
+        .map_err(|err| SearchIndexError::Sqlite {
+            operation: "Clear fields failed",
+            source: err,
+        })?;
     tx.execute("DELETE FROM script_index", [])
-        .map_err(|err| format!("Clear scripts failed: {}", err))?;
+        .map_err(|err| SearchIndexError::Sqlite {
+            operation: "Clear scripts failed",
+            source: err,
+        })?;
 
     for script in &scripts {
         let relative_str = logical_relative_path(script, &root);
@@ -242,7 +218,7 @@ fn rebuild_index(tx: &Connection, root: &Path) -> Result<(), String> {
         } else {
             Some(tags.join(","))
         };
-        let indexed_at = timestamp_ms();
+        let indexed_at = crate::util::time::unix_millis();
 
         tx.execute(
             "INSERT OR REPLACE INTO script_index \
@@ -258,7 +234,10 @@ fn rebuild_index(tx: &Connection, root: &Path) -> Result<(), String> {
                 indexed_at
             ],
         )
-        .map_err(|err| format!("Insert script failed: {}", err))?;
+        .map_err(|err| SearchIndexError::Sqlite {
+            operation: "Insert script failed",
+            source: err,
+        })?;
 
         for (order, field) in fields.iter().enumerate() {
             tx.execute(
@@ -274,43 +253,28 @@ fn rebuild_index(tx: &Connection, root: &Path) -> Result<(), String> {
                     if field.required { 1 } else { 0 }
                 ],
             )
-            .map_err(|err| format!("Insert field failed: {}", err))?;
+            .map_err(|err| SearchIndexError::Sqlite {
+                operation: "Insert field failed",
+                source: err,
+            })?;
         }
     }
 
     Ok(())
 }
 
-fn logical_relative_path(path: &Path, root: &Path) -> String {
-    let path_text = path.to_string_lossy().replace('\\', "/");
-    let root_text = root
-        .to_string_lossy()
-        .replace('\\', "/")
-        .trim_end_matches('/')
-        .to_string();
-    path_text
-        .strip_prefix(&root_text)
-        .and_then(|rest| rest.strip_prefix('/'))
-        .unwrap_or(&path_text)
-        .to_string()
-}
+const SEARCH_DATABASE: WalDatabase = WalDatabase {
+    name: "search",
+    busy_timeout: Duration::from_millis(500),
+    wal_retry_delays: &[],
+};
 
-fn open_connection(db_path: &Path) -> Result<Connection, String> {
-    if let Some(parent) = db_path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|err| format!("Create search db folder failed: {}", err))?;
-    }
-    let conn =
-        Connection::open(db_path).map_err(|err| format!("Open search db failed: {}", err))?;
-    conn.busy_timeout(Duration::from_millis(500))
-        .map_err(|err| format!("Search db busy timeout failed: {}", err))?;
-    let _journal_mode: String = conn
-        .query_row("PRAGMA journal_mode = WAL", [], |row| row.get(0))
-        .map_err(|err| format!("Enable WAL failed: {}", err))?;
-    Ok(conn)
+fn open_connection(db_path: &Path) -> Result<Connection, SearchIndexError> {
+    SEARCH_DATABASE
+        .open(db_path)
+        .map_err(|error| SearchIndexError::DatabaseOpen(error.to_string()))
 }
-
-fn init_db(conn: &Connection) -> Result<(), String> {
+fn init_db(conn: &Connection) -> Result<(), SearchIndexError> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS script_index (\
             script_path TEXT PRIMARY KEY,\
@@ -333,7 +297,10 @@ fn init_db(conn: &Connection) -> Result<(), String> {
         CREATE INDEX IF NOT EXISTS idx_script_search ON script_index(search_blob);\
         CREATE INDEX IF NOT EXISTS idx_script_fields ON script_fields(script_path);",
     )
-    .map_err(|err| format!("Init search db failed: {}", err))
+    .map_err(|err| SearchIndexError::Sqlite {
+        operation: "Init search db failed",
+        source: err,
+    })
 }
 
 pub(crate) fn build_search_blob(
@@ -389,18 +356,12 @@ pub(crate) fn parse_tags(tags_raw: Option<String>) -> Vec<String> {
         .collect()
 }
 
-fn timestamp_ms() -> i64 {
-    let duration = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default();
-    duration.as_millis() as i64
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
     use rstest::rstest;
+    use std::fs;
     use tempfile::TempDir;
 
     // --- Pure helper tests ---
@@ -409,14 +370,6 @@ mod tests {
     fn test_build_search_blob_basic() {
         let result = build_search_blob("path/script.sh", "My Script", Some("desc"), &[], &[]);
         assert_eq!(result, "path/script.sh my script desc");
-    }
-
-    #[test]
-    fn logical_relative_paths_use_forward_slashes_for_windows_fixtures() {
-        let root = Path::new(r"C:\workspace\scripts");
-        let path = Path::new(r"C:\workspace\scripts\tools\deploy.sh");
-
-        assert_eq!(logical_relative_path(path, root), "tools/deploy.sh");
     }
 
     #[test]
@@ -495,6 +448,41 @@ mod tests {
     // --- SQLite integration tests ---
 
     #[test]
+    fn invalid_database_parent_has_typed_open_error() {
+        let tmp = TempDir::new().unwrap();
+        let parent = tmp.path().join("not-a-directory");
+        fs::write(&parent, "file").unwrap();
+        let index = SearchIndex::new(parent.join("search.sqlite"));
+        let error = index.search(tmp.path(), "").unwrap_err();
+        assert!(matches!(&error, SearchIndexError::DatabaseOpen(_)));
+        assert!(
+            error
+                .to_string()
+                .starts_with("Create search db folder failed: ")
+        );
+    }
+
+    #[test]
+    fn missing_search_root_has_typed_filesystem_error() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path().join("missing");
+        let index = SearchIndex::new(tmp.path().join("search.sqlite"));
+        let error = index.search(&root, "").unwrap_err();
+        assert!(matches!(
+            &error,
+            SearchIndexError::Filesystem {
+                operation: "Canonicalize search root failed",
+                ..
+            }
+        ));
+        assert!(
+            error
+                .to_string()
+                .starts_with("Canonicalize search root failed: ")
+        );
+    }
+
+    #[test]
     fn failed_refresh_rolls_back_and_does_not_return_stale_results() {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path().join("scripts");
@@ -513,7 +501,17 @@ mod tests {
         fs::write(root.join("new.sh"), "no schema").unwrap();
 
         let err = index.search(&root, "old").unwrap_err();
-        assert!(err.contains("injected refresh failure"), "{err}");
+        assert!(matches!(
+            err,
+            SearchIndexError::Sqlite {
+                operation: "Insert script failed",
+                ..
+            }
+        ));
+        assert!(
+            err.to_string().contains("injected refresh failure"),
+            "{err}"
+        );
         assert_eq!(index.query("old").unwrap().len(), 1);
         assert!(index.query("new").unwrap().is_empty());
         conn.execute_batch("DROP TRIGGER reject_insert").unwrap();
@@ -545,7 +543,17 @@ mod tests {
         fs::remove_file(root.join("old.sh")).unwrap();
         fs::write(root.join("new.sh"), "no schema").unwrap();
         let err = index.search(&root, "new").unwrap_err();
-        assert!(err.contains("Commit search index failed"), "{err}");
+        assert!(matches!(
+            err,
+            SearchIndexError::Sqlite {
+                operation: "Commit search index failed",
+                ..
+            }
+        ));
+        assert!(
+            err.to_string().contains("Commit search index failed"),
+            "{err}"
+        );
         assert_eq!(index.query("old").unwrap().len(), 1);
         assert!(index.query("new").unwrap().is_empty());
     }
@@ -564,7 +572,7 @@ mod tests {
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .unwrap();
         let err = index.search(&root, "old").unwrap_err();
-        assert!(err.contains("locked"), "{err}");
+        assert!(err.to_string().contains("locked"), "{err}");
         lock.rollback().unwrap();
         assert_eq!(index.search(&root, "old").unwrap().len(), 1);
     }
@@ -610,7 +618,7 @@ mod tests {
                         );
                     }
                     // Contention is bounded, including on a heavily loaded CI runner.
-                    Err(err) => assert!(err.contains("database is locked"), "{err}"),
+                    Err(err) => assert!(err.to_string().contains("database is locked"), "{err}"),
                 }
             }
             assert!(completed > 0, "at least one writer must complete");
@@ -658,9 +666,10 @@ echo deploying
         // Query all
         let all = index.query("").unwrap();
         assert_eq!(all.len(), 2);
-        assert!(all
-            .iter()
-            .any(|result| result.script_path == Path::new("deploy.sh")));
+        assert!(
+            all.iter()
+                .any(|result| result.script_path == Path::new("deploy.sh"))
+        );
     }
 
     #[test]
@@ -694,43 +703,6 @@ echo deploying
         assert_eq!(index.search(&scripts_dir, "").unwrap().len(), 1);
         assert_eq!(index.query("visible").unwrap().len(), 1);
         assert!(index.query("hidden").unwrap().is_empty());
-    }
-
-    #[test]
-    fn test_load_details() {
-        let tmp = TempDir::new().unwrap();
-        let scripts_dir = tmp.path().join("scripts");
-        fs::create_dir_all(&scripts_dir).unwrap();
-
-        fs::write(
-            scripts_dir.join("setup.sh"),
-            r#"#!/bin/bash
-# OMAKURE_SCHEMA_START
-# {"Name": "Setup", "Fields": [{"Name": "env", "Type": "string", "Order": 0, "Required": true}]}
-# OMAKURE_SCHEMA_END
-echo setup
-"#,
-        )
-        .unwrap();
-
-        let db = tmp.path().join("search.sqlite");
-        let index = SearchIndex::new(db);
-        index.search(&scripts_dir, "").unwrap();
-        let details = index.load_details(Path::new("setup.sh")).unwrap().unwrap();
-        assert_eq!(details.display_name, "Setup");
-        assert_eq!(details.fields.len(), 1);
-        assert_eq!(details.fields[0].name, "env");
-        assert!(details.fields[0].required);
-    }
-
-    #[test]
-    fn test_load_details_not_found() {
-        let tmp = TempDir::new().unwrap();
-        let db = tmp.path().join("search.sqlite");
-        let index = SearchIndex::new(db);
-        let _ = index.query(""); // initialize DB
-        let details = index.load_details(Path::new("nonexistent.sh")).unwrap();
-        assert!(details.is_none());
     }
 
     #[test]

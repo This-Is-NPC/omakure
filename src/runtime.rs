@@ -67,14 +67,11 @@ fn lua_host_binary() -> Result<PathBuf, ScriptError> {
 /// Build a command while honoring an injected environment when choosing the
 /// interpreter binary.
 ///
-/// Per the locked spike decision (`tests/spike_command_path_resolution.rs`,
-/// task 1751): if `env` carries a `PATH` entry (e.g. a venv-prepended PATH
-/// produced by env injection), the interpreter name is resolved to an
-/// ABSOLUTE path via a which-style lookup against that injected PATH, then
-/// spawned as `Command::new(abs_path)`. This removes the silent
-/// wrong-interpreter footgun: relying on `Command::new("python3")` name
-/// resolution honoring the child `PATH` is a std implementation detail that
-/// differs across platforms.
+/// When `env` contains `PATH`, resolve the interpreter name to an absolute
+/// path against that value before spawning. The command then executes the
+/// interpreter selected by the injected environment on each platform.
+/// `tests/cli_contract_suite/command_path_resolution.rs` checks the
+/// command-resolution behavior.
 ///
 /// The mechanism is language-agnostic — it merely resolves the interpreter
 /// program against the (possibly venv-prepended) PATH — so the same code path
@@ -133,11 +130,12 @@ fn strip_verbatim_prefix(mut path: String) -> String {
 
 #[cfg(windows)]
 fn bash_safe_drive_path(path: &str) -> String {
-    if let Some((drive, rest)) = path.split_once(':') {
-        if drive.len() == 1 && drive.chars().all(|c| c.is_ascii_alphabetic()) {
-            let rest = rest.strip_prefix('/').unwrap_or(rest);
-            return format!("/{}/{}", drive.to_ascii_lowercase(), rest);
-        }
+    if let Some((drive, rest)) = path.split_once(':')
+        && drive.len() == 1
+        && drive.chars().all(|c| c.is_ascii_alphabetic())
+    {
+        let rest = rest.strip_prefix('/').unwrap_or(rest);
+        return format!("/{}/{}", drive.to_ascii_lowercase(), rest);
     }
     path.to_string()
 }
@@ -206,7 +204,7 @@ pub(crate) fn resolve_bash_program(env: &[(String, String)]) -> Option<PathBuf> 
         let path = path_value(env)
             .map(str::to_owned)
             .or_else(|| std::env::var("PATH").ok())?;
-        return resolve_bash_in_path(&path);
+        resolve_bash_in_path(&path)
     }
     #[cfg(not(windows))]
     {
@@ -345,19 +343,11 @@ fn is_executable_file(path: &Path) -> bool {
 }
 
 pub fn powershell_program() -> &'static str {
-    if cfg!(windows) {
-        "powershell"
-    } else {
-        "pwsh"
-    }
+    if cfg!(windows) { "powershell" } else { "pwsh" }
 }
 
 pub fn python_program() -> &'static str {
-    if cfg!(windows) {
-        "python"
-    } else {
-        "python3"
-    }
+    if cfg!(windows) { "python" } else { "python3" }
 }
 
 #[cfg(test)]
@@ -514,7 +504,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn resolve_program_in_path_finds_first_executable() {
-        let dir = crate::util::generated_executable_tempdir().unwrap();
+        let dir = crate::util::exec::generated_executable_tempdir().unwrap();
         crate::adapters::system_checks::write_test_executable_shim(dir.path(), "python3");
         let shim = dir.path().join("python3");
         let path_var = format!("{}:/nonexistent-dir-xyz", dir.path().display());
@@ -589,7 +579,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn command_for_script_with_env_resolves_and_runs_injected_shim() {
-        let shim_dir = crate::util::generated_executable_tempdir().unwrap();
+        let shim_dir = crate::util::exec::generated_executable_tempdir().unwrap();
         crate::adapters::system_checks::write_test_executable_shim(shim_dir.path(), "python3");
         let shim = shim_dir.path().join("python3");
 
@@ -648,10 +638,10 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn resolve_interpreter_prefers_exact_path_over_case_variant() {
-        let exact_dir = crate::util::generated_executable_tempdir().unwrap();
+        let exact_dir = crate::util::exec::generated_executable_tempdir().unwrap();
         crate::adapters::system_checks::write_test_executable_shim(exact_dir.path(), "python3");
         let exact_shim = exact_dir.path().join("python3");
-        let variant_dir = crate::util::generated_executable_tempdir().unwrap();
+        let variant_dir = crate::util::exec::generated_executable_tempdir().unwrap();
         crate::adapters::system_checks::write_test_executable_shim(variant_dir.path(), "python3");
         let env = vec![
             ("Path".to_string(), variant_dir.path().display().to_string()),
@@ -665,7 +655,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn resolve_interpreter_falls_back_to_case_insensitive_path() {
-        let variant_dir = crate::util::generated_executable_tempdir().unwrap();
+        let variant_dir = crate::util::exec::generated_executable_tempdir().unwrap();
         crate::adapters::system_checks::write_test_executable_shim(variant_dir.path(), "python3");
         let variant_shim = variant_dir.path().join("python3");
         let env = vec![("Path".to_string(), variant_dir.path().display().to_string())];

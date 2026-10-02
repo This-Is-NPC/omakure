@@ -1,9 +1,10 @@
 use crate::operations::core::ScriptSummary;
-use crate::search_index::{SearchIndex, SearchResult};
+use crate::search_index::{SearchIndex, SearchIndexError, SearchResult};
 use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};
 
-use super::{OperationError, OperationErrorCode, OperationResult};
+use super::path::canonical_relative_path;
+use super::{OperationError, OperationErrorCode, OperationResult, io_error};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SearchScriptsRequest {
@@ -20,13 +21,17 @@ pub fn search_scripts(
     let index = SearchIndex::new(workspace.search_db_path());
     let results = index
         .search(workspace.scripts_root(), &request.query)
-        .map_err(|err| OperationError::new(OperationErrorCode::IoFailed, err))?;
+        .map_err(map_search_index_error)?;
 
     Ok(results
         .into_iter()
         .map(|result| to_summary(result, workspace.scripts_root()))
-        .filter(|entry| matches_all_tags(entry, &request.tags))
+        .filter(|entry| super::core::matches_all_tags(entry, &request.tags))
         .collect())
+}
+
+fn map_search_index_error(error: SearchIndexError) -> OperationError {
+    OperationError::new(OperationErrorCode::IoFailed, error.to_string())
 }
 
 fn to_summary(result: SearchResult, root: &std::path::Path) -> ScriptSummary {
@@ -36,7 +41,7 @@ fn to_summary(result: SearchResult, root: &std::path::Path) -> ScriptSummary {
         root.join(&result.script_path)
     };
     let canonical_path = std::fs::canonicalize(&joined);
-    let relative_path = logical_relative_path(&joined, root);
+    let relative_path = canonical_relative_path(&joined, root);
     let absolute_path = canonical_path
         .unwrap_or(joined)
         .to_string_lossy()
@@ -50,32 +55,6 @@ fn to_summary(result: SearchResult, root: &std::path::Path) -> ScriptSummary {
         field_count: result.field_count,
         schema_error: result.schema_error,
     }
-}
-
-fn logical_relative_path(path: &std::path::Path, root: &std::path::Path) -> String {
-    let canonical_root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
-    let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-    let path_text = canonical_path.to_string_lossy().replace('\\', "/");
-    let root_text = canonical_root
-        .to_string_lossy()
-        .replace('\\', "/")
-        .trim_end_matches('/')
-        .to_string();
-    path_text
-        .strip_prefix(&root_text)
-        .and_then(|rest| rest.strip_prefix('/'))
-        .unwrap_or(&path_text)
-        .to_string()
-}
-
-fn matches_all_tags(entry: &ScriptSummary, required: &[String]) -> bool {
-    required
-        .iter()
-        .all(|tag| entry.tags.iter().any(|entry_tag| entry_tag == tag))
-}
-
-fn io_error(err: impl std::error::Error) -> OperationError {
-    OperationError::new(OperationErrorCode::IoFailed, err.to_string())
 }
 
 #[cfg(test)]
@@ -102,6 +81,15 @@ mod tests {
             ),
         )
         .unwrap();
+    }
+
+    #[test]
+    fn search_index_error_maps_to_existing_operation_code_and_message() {
+        let error = map_search_index_error(SearchIndexError::DatabaseOpen(
+            "Open search db failed: unavailable".to_string(),
+        ));
+        assert_eq!(error.code, OperationErrorCode::IoFailed);
+        assert_eq!(error.message, "Open search db failed: unavailable");
     }
 
     #[test]
@@ -138,14 +126,6 @@ mod tests {
                 .to_string()
         );
     }
-    #[test]
-    fn logical_relative_paths_use_forward_slashes_for_windows_fixtures() {
-        let root = std::path::Path::new(r"C:\workspace\scripts");
-        let path = std::path::Path::new(r"C:\workspace\scripts\tools\deploy.sh");
-
-        assert_eq!(logical_relative_path(path, root), "tools/deploy.sh");
-    }
-
     #[test]
     fn search_scripts_refreshes_index_and_filters_tags() {
         let dir = TempDir::new().unwrap();

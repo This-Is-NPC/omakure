@@ -4,10 +4,11 @@ use crate::cli::args::{
     HistoryArgs, HistoryCommand, HistoryListArgs, HistoryShowArgs, HistoryTailArgs,
     HistoryTracesArgs,
 };
+use crate::cli::emit::{default_operation_error_code, emit_error, emit_operation_error};
 use crate::cli::json::{self, codes};
+use crate::operations::OperationErrorCode;
 use crate::operations::core::{self, ListRunsRequest, ListTracesRequest, ShowRunRequest};
-use crate::operations::{OperationError, OperationErrorCode};
-use crate::runs::{self, format_run_timestamp, RunRow, RunStats, TraceRow};
+use crate::runs::{RunRow, RunStats, TraceRow, format_run_timestamp};
 use crate::workspace::Workspace;
 use serde::Serialize;
 use std::error::Error;
@@ -101,15 +102,15 @@ fn list(
         None
     };
 
-    let now = runs::current_unix_ms();
-    let since_ms = match opts.since.as_deref().map(parse_duration_to_ms) {
+    let now = crate::util::time::unix_millis();
+    let since_ms = match opts.since.as_deref().map(parse_compact_duration_ms) {
         Some(Ok(d)) => Some(now - d),
-        Some(Err(err)) => return emit_error(json_output, codes::INVALID_ARGUMENT, err),
+        Some(Err(err)) => return emit_error(json_output, codes::INVALID_ARGUMENT, err.to_string()),
         None => None,
     };
-    let until_ms = match opts.until.as_deref().map(parse_duration_to_ms) {
+    let until_ms = match opts.until.as_deref().map(parse_compact_duration_ms) {
         Some(Ok(d)) => Some(now - d),
-        Some(Err(err)) => return emit_error(json_output, codes::INVALID_ARGUMENT, err),
+        Some(Err(err)) => return emit_error(json_output, codes::INVALID_ARGUMENT, err.to_string()),
         None => None,
     };
 
@@ -126,7 +127,7 @@ fn list(
 
     let rows = match core::list_runs(workspace, request) {
         Ok(rows) => rows,
-        Err(err) => return emit_operation_error(json_output, err),
+        Err(err) => return emit_operation_error(json_output, err, default_operation_error_code),
     };
 
     if json_output {
@@ -157,34 +158,6 @@ fn format_list_row(row: &RunRow) -> String {
     )
 }
 
-/// Resolve the user-supplied `--state` and `--state-set` flags into concrete
-/// run states. Retained as characterization coverage for the operation-backed
-/// adapter migration.
-///
-/// Default (neither flag): the terminal set, so v0.1 callers see no behavior
-/// change.
-#[cfg(test)]
-fn resolve_state_filter(
-    states: &[String],
-    state_set: Option<&str>,
-) -> Result<Vec<crate::runs::RunState>, String> {
-    if !states.is_empty() && state_set.is_some() {
-        return Err("--state and --state-set are mutually exclusive".to_string());
-    }
-    if let Some(set) = state_set {
-        let parsed: crate::runs::RunStateSet = set.parse()?;
-        return Ok(parsed.to_states());
-    }
-    if !states.is_empty() {
-        let mut out = Vec::with_capacity(states.len());
-        for s in states {
-            out.push(s.parse::<crate::runs::RunState>()?);
-        }
-        return Ok(out);
-    }
-    Ok(crate::runs::RunStateSet::Terminal.to_states())
-}
-
 fn show(
     workspace: &Workspace,
     opts: HistoryShowArgs,
@@ -197,7 +170,7 @@ fn show(
         },
     ) {
         Ok(row) => row,
-        Err(err) => return emit_operation_error(json_output, err),
+        Err(err) => return emit_operation_error(json_output, err, default_operation_error_code),
     };
 
     if json_output {
@@ -272,7 +245,7 @@ fn tail(
         return emit_error(
             json_output,
             codes::NOT_IMPLEMENTED,
-            "history tail --follow is not implemented in v1".into(),
+            "history tail --follow is not implemented in v1",
         );
     }
     let list_opts = HistoryListArgs {
@@ -292,7 +265,7 @@ fn tail(
 fn stats(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn Error>> {
     let stats = match core::run_stats(workspace) {
         Ok(s) => s,
-        Err(err) => return emit_operation_error(json_output, err),
+        Err(err) => return emit_operation_error(json_output, err, default_operation_error_code),
     };
     if json_output {
         json::print_ok(stats);
@@ -345,7 +318,7 @@ fn traces(
                 format!("run not found: {}", run_id),
             );
         }
-        Err(err) => return emit_operation_error(json_output, err),
+        Err(err) => return emit_operation_error(json_output, err, default_operation_error_code),
     };
 
     if json_output {
@@ -379,53 +352,48 @@ fn format_trace_row(trace: &TraceRow) -> String {
     }
 }
 
-fn emit_error(json_output: bool, code: &str, message: String) -> Result<(), Box<dyn Error>> {
-    if json_output {
-        json::print_err(code, message);
-        std::process::exit(1);
-    }
-    Err(message.into())
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
+enum DurationParseError {
+    #[error("empty duration")]
+    Empty,
+    #[error("invalid duration value: {0}")]
+    InvalidValue(String),
+    #[error("invalid duration unit: {0}")]
+    InvalidUnit(char),
+    #[error("duration overflow: {0}")]
+    Overflow(String),
 }
 
-fn emit_operation_error(json_output: bool, err: OperationError) -> Result<(), Box<dyn Error>> {
-    let code = match err.code {
-        OperationErrorCode::InvalidInput => codes::INVALID_ARGUMENT,
-        OperationErrorCode::NotFound => codes::NOT_FOUND,
-        _ => codes::INTERNAL,
-    };
-    emit_error(json_output, code, err.message)
-}
-
-/// Parse a relative-duration string like `30s`, `15m`, `2h`, `7d` into
-/// milliseconds. Returns an error message string on parse failure.
-pub fn parse_duration_to_ms(s: &str) -> Result<i64, String> {
+/// Parse a single `<integer><s|m|h|d>` window such as `30s` or `7d` into
+/// milliseconds; compound humantime spellings are refused.
+fn parse_compact_duration_ms(s: &str) -> Result<i64, DurationParseError> {
     let s = s.trim();
-    if s.is_empty() {
-        return Err("empty duration".into());
-    }
-    let (digits, unit) = s.split_at(s.len() - 1);
-    let unit_char = unit.chars().next().ok_or("missing unit")?;
+    let (unit_index, unit_char) = s
+        .char_indices()
+        .next_back()
+        .ok_or(DurationParseError::Empty)?;
+    let digits = &s[..unit_index];
     let value: i64 = digits
         .parse()
-        .map_err(|_| format!("invalid duration value: {}", s))?;
+        .map_err(|_| DurationParseError::InvalidValue(s.to_string()))?;
     let multiplier = match unit_char {
         's' => 1_000_i64,
         'm' => 60 * 1_000,
         'h' => 60 * 60 * 1_000,
         'd' => 24 * 60 * 60 * 1_000,
-        _ => return Err(format!("invalid duration unit: {}", unit_char)),
+        _ => return Err(DurationParseError::InvalidUnit(unit_char)),
     };
     value
         .checked_mul(multiplier)
-        .ok_or_else(|| format!("duration overflow: {}", s))
+        .ok_or_else(|| DurationParseError::Overflow(s.to_string()))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::runs::{RunState, RunStateSet};
+    use crate::runs::{self, RunState};
+    use crate::test_support::scratch_workspace;
     use std::collections::HashMap;
-    use tempfile::TempDir;
 
     fn sample_row() -> RunRow {
         RunRow {
@@ -456,67 +424,57 @@ mod tests {
         }
     }
 
-    fn temp_workspace() -> Workspace {
-        let tmp = TempDir::new().unwrap();
-        let root = tmp.keep();
-        let workspace = Workspace::new(root);
-        workspace.ensure_layout().unwrap();
-        workspace
+    #[test]
+    fn parse_compact_duration_seconds_minutes_hours_days() {
+        assert_eq!(parse_compact_duration_ms("30s").unwrap(), 30_000);
+        assert_eq!(parse_compact_duration_ms("15m").unwrap(), 900_000);
+        assert_eq!(parse_compact_duration_ms("2h").unwrap(), 7_200_000);
+        assert_eq!(
+            parse_compact_duration_ms("7d").unwrap(),
+            7 * 24 * 3_600 * 1_000
+        );
     }
 
     #[test]
-    fn parse_duration_seconds_minutes_hours_days() {
-        assert_eq!(parse_duration_to_ms("30s").unwrap(), 30_000);
-        assert_eq!(parse_duration_to_ms("15m").unwrap(), 900_000);
-        assert_eq!(parse_duration_to_ms("2h").unwrap(), 7_200_000);
-        assert_eq!(parse_duration_to_ms("7d").unwrap(), 7 * 24 * 3_600 * 1_000);
-    }
-
-    #[test]
-    fn parse_duration_rejects_garbage() {
-        assert!(parse_duration_to_ms("").is_err());
-        assert!(parse_duration_to_ms("abc").is_err());
-        assert!(parse_duration_to_ms("10x").is_err());
-        assert!(parse_duration_to_ms("h").is_err());
-    }
-
-    #[test]
-    fn resolve_state_filter_default_is_terminal_set() {
-        let resolved = resolve_state_filter(&[], None).unwrap();
-        let expected = RunStateSet::Terminal.to_states();
-        assert_eq!(resolved, expected);
-    }
-
-    #[test]
-    fn resolve_state_filter_state_set_in_flight() {
-        let resolved = resolve_state_filter(&[], Some("in_flight")).unwrap();
-        assert!(resolved.contains(&RunState::Queued));
-        assert!(resolved.contains(&RunState::Running));
-        assert!(!resolved.contains(&RunState::Completed));
-    }
-
-    #[test]
-    fn resolve_state_filter_explicit_states() {
-        let resolved = resolve_state_filter(&["queued".into(), "running".into()], None).unwrap();
-        assert_eq!(resolved, vec![RunState::Queued, RunState::Running]);
-    }
-
-    #[test]
-    fn resolve_state_filter_invalid_value_returns_error() {
-        let err = resolve_state_filter(&["bogus".into()], None).unwrap_err();
-        assert!(err.contains("invalid run state"));
-    }
-
-    #[test]
-    fn resolve_state_filter_mutually_exclusive_with_state_set() {
-        let err = resolve_state_filter(&["queued".into()], Some("terminal")).unwrap_err();
-        assert!(err.contains("mutually exclusive"));
-    }
-
-    #[test]
-    fn resolve_state_filter_invalid_state_set_returns_error() {
-        let err = resolve_state_filter(&[], Some("bogus")).unwrap_err();
-        assert!(err.contains("invalid state-set"));
+    fn parse_compact_duration_rejects_garbage() {
+        for (input, expected, message) in [
+            ("", DurationParseError::Empty, "empty duration"),
+            ("   ", DurationParseError::Empty, "empty duration"),
+            (
+                "abc",
+                DurationParseError::InvalidValue("abc".into()),
+                "invalid duration value: abc",
+            ),
+            (
+                "10x",
+                DurationParseError::InvalidUnit('x'),
+                "invalid duration unit: x",
+            ),
+            (
+                "h",
+                DurationParseError::InvalidValue("h".into()),
+                "invalid duration value: h",
+            ),
+            (
+                "10é",
+                DurationParseError::InvalidUnit('é'),
+                "invalid duration unit: é",
+            ),
+            (
+                "é",
+                DurationParseError::InvalidValue("é".into()),
+                "invalid duration value: é",
+            ),
+            (
+                "9223372036854775807d",
+                DurationParseError::Overflow("9223372036854775807d".into()),
+                "duration overflow: 9223372036854775807d",
+            ),
+        ] {
+            let error = parse_compact_duration_ms(input).unwrap_err();
+            assert_eq!(error, expected);
+            assert_eq!(error.to_string(), message);
+        }
     }
 
     #[test]
@@ -633,7 +591,7 @@ mod tests {
 
     #[test]
     fn list_rejects_invalid_since_before_opening_db() {
-        let workspace = temp_workspace();
+        let workspace = scratch_workspace("history");
         let err = list(
             &workspace,
             HistoryListArgs {
@@ -651,12 +609,12 @@ mod tests {
         )
         .unwrap_err();
 
-        assert!(err.to_string().contains("invalid duration"));
+        assert_eq!(err.to_string(), "invalid duration value: nope");
     }
 
     #[test]
     fn tail_follow_returns_not_implemented_error() {
-        let workspace = temp_workspace();
+        let workspace = scratch_workspace("history");
         let err = tail(
             &workspace,
             HistoryTailArgs {
@@ -689,7 +647,7 @@ mod tests {
 
     #[test]
     fn run_dispatches_to_subcommands() {
-        let workspace = temp_workspace();
+        let workspace = scratch_workspace("history");
         let _id = enqueue_one(&workspace);
 
         let scripts_dir = workspace.root().to_path_buf();
@@ -736,7 +694,7 @@ mod tests {
 
     #[test]
     fn list_human_format_prints_runs_and_no_runs() {
-        let workspace = temp_workspace();
+        let workspace = scratch_workspace("history");
         // No rows yet — prints "(no runs)".
         list(
             &workspace,
@@ -776,7 +734,7 @@ mod tests {
 
     #[test]
     fn list_with_success_failure_filters() {
-        let workspace = temp_workspace();
+        let workspace = scratch_workspace("history");
         let _id = enqueue_one(&workspace);
         list(
             &workspace,
@@ -814,7 +772,7 @@ mod tests {
 
     #[test]
     fn list_rejects_invalid_until_value() {
-        let workspace = temp_workspace();
+        let workspace = scratch_workspace("history");
         let err = list(
             &workspace,
             HistoryListArgs {
@@ -831,12 +789,12 @@ mod tests {
             false,
         )
         .unwrap_err();
-        assert!(err.to_string().contains("invalid duration"));
+        assert_eq!(err.to_string(), "invalid duration value: nope");
     }
 
     #[test]
     fn list_rejects_invalid_state_value() {
-        let workspace = temp_workspace();
+        let workspace = scratch_workspace("history");
         let err = list(
             &workspace,
             HistoryListArgs {
@@ -858,7 +816,7 @@ mod tests {
 
     #[test]
     fn show_returns_not_found_for_unknown_id() {
-        let workspace = temp_workspace();
+        let workspace = scratch_workspace("history");
         let err = show(
             &workspace,
             HistoryShowArgs {
@@ -872,7 +830,7 @@ mod tests {
 
     #[test]
     fn show_human_and_json_formats_succeed() {
-        let workspace = temp_workspace();
+        let workspace = scratch_workspace("history");
         let id = enqueue_one(&workspace);
         show(&workspace, HistoryShowArgs { run_id: id.clone() }, false).unwrap();
         show(&workspace, HistoryShowArgs { run_id: id }, true).unwrap();
@@ -880,7 +838,7 @@ mod tests {
 
     #[test]
     fn stats_human_and_json() {
-        let workspace = temp_workspace();
+        let workspace = scratch_workspace("history");
         let _id = enqueue_one(&workspace);
         stats(&workspace, false).unwrap();
         stats(&workspace, true).unwrap();
@@ -888,7 +846,7 @@ mod tests {
 
     #[test]
     fn traces_for_unknown_run_returns_not_found() {
-        let workspace = temp_workspace();
+        let workspace = scratch_workspace("history");
         let err = traces(
             &workspace,
             HistoryTracesArgs {
@@ -904,7 +862,7 @@ mod tests {
 
     #[test]
     fn traces_returns_empty_for_existing_run() {
-        let workspace = temp_workspace();
+        let workspace = scratch_workspace("history");
         let id = enqueue_one(&workspace);
         traces(
             &workspace,
@@ -930,7 +888,7 @@ mod tests {
 
     #[test]
     fn traces_rejects_invalid_level_before_opening_db() {
-        let workspace = temp_workspace();
+        let workspace = scratch_workspace("history");
         let err = traces(
             &workspace,
             HistoryTracesArgs {

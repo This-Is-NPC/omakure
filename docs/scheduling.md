@@ -169,7 +169,7 @@ keeps `omakure serve`'s overlap detection accurate.
 
 ## Limitations
 
-- Scan interval is hard-coded at 5 s (`SCAN_INTERVAL` in `src/cli/serve.rs`).
+- Scan interval is hard-coded at 5 s (`SCAN_INTERVAL` in `src/cli/serve/`).
 - `last_fire_at` is derived from `runs.enqueued_at`, not persisted in a
   dedicated table. Restarting the daemon within the first 2 minutes
   after a fire could theoretically re-enqueue a sub-minute cron; the

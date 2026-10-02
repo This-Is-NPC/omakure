@@ -11,6 +11,12 @@ jobs:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
+    env:
+      RUSTFLAGS: ${{ matrix.rustflags }}
+      CC_x86_64_unknown_linux_musl: musl-gcc
+      CC_aarch64_unknown_linux_musl: musl-gcc
+      CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
+      CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
     strategy:
       fail-fast: false
       matrix:
@@ -69,18 +75,24 @@ jobs:
         with:
           toolchain: 1.97.1
           targets: ${{ matrix.target }}
+          components: clippy
+      - uses: Swatinem/rust-cache@v2.9.2
+        with:
+          shared-key: build-${{ matrix.target }}
       - name: Install musl toolchain
         if: matrix.musl
         run: sudo apt-get update && sudo apt-get install -y musl-tools
-      - name: Run platform checks
+      - name: Run native platform tests
+        if: matrix.musl == false
         shell: bash
-        env:
-          RUSTFLAGS: ${{ matrix.rustflags }}
-          CC_x86_64_unknown_linux_musl: musl-gcc
-          CC_aarch64_unknown_linux_musl: musl-gcc
-          CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
-        run: ./scripts/tasks/check/platform/${{ matrix.platform }} "${{ matrix.target }}"
+        run: ./scripts/tasks/check/platform/${{ matrix.platform }} --test-only "${{ matrix.target }}"
+      - name: Build and smoke platform release
+        shell: bash
+        run: ./scripts/tasks/check/platform/${{ matrix.platform }} --build-only "${{ matrix.target }}"
+      - name: Check Windows all-target Clippy
+        if: matrix.platform == 'windows'
+        shell: bash
+        run: cargo clippy --all-targets --locked --target "${{ matrix.target }}" -- -D warnings
 
   lint:
     runs-on: ubuntu-latest
@@ -90,6 +102,7 @@ jobs:
         with:
           toolchain: 1.97.1
           components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2.9.2
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo fmt --check
       # The certification gates are ~1,400 lines of bash and ~240 of YAML that
@@ -99,7 +112,7 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          scripts=(scripts/tasks/cert/* scripts/tasks/dev/smoke scripts/tasks/complexity-setup-test)
+          scripts=(scripts/tasks/cert/* scripts/tasks/atomic/dev-smoke scripts/tasks/complexity-setup-test)
           (( ${#scripts[@]} >= 5 )) || { echo "expected the certification and complexity scripts; found ${#scripts[@]}" >&2; exit 1; }
           for script in "${scripts[@]}"; do bash -n "$script"; done
           # Fails on zero matches as well as on a parse error: a compose file
@@ -118,7 +131,7 @@ jobs:
           ./scripts/tasks/atomic/generated-exec-contract
 
   usage-artifacts:
-    name: Usage documentation and KDL artifact contract
+    name: CLI reference, Usage, and operation catalog artifact contract
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -126,6 +139,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.97.1
+      - uses: Swatinem/rust-cache@v2.9.2
+      - name: Check generated CLI reference
+        run: |
+          scripts/tasks/cli-reference --check
+          git diff --exit-code -- docs/cli-reference.md
       - name: Check generated Usage artifacts and reviewed losses
         run: cargo run --quiet --locked --features usage-generator --bin usage-kdl -- --check
       - name: Check generated Usage documentation
@@ -144,6 +162,9 @@ jobs:
         with:
           toolchain: 1.97.1
           components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2.9.2
+        with:
+          cache-targets: false
       - name: Run authoritative local coverage gate
         env:
           COVERAGE_TOOL_ROOT: ${{ runner.temp }}/cargo-llvm-cov
@@ -157,58 +178,8 @@ jobs:
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
-      - name: Acquire and verify pinned native analyzers
-        run: ./scripts/tasks/complexity-setup
-      - name: Check fixed corpus and fail-closed native guards
-        run: ./scripts/tasks/complexity-test
-      - name: Generate two canonical reports and evidence
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p target/quality/complexity-evidence
-          ./scripts/tasks/complexity-report --source-root . \
-            --output target/quality/complexity-report-a.json
-          ./scripts/tasks/complexity-report --source-root . \
-            --output target/quality/complexity-report-b.json
-          cmp --silent target/quality/complexity-report-a.json \
-            target/quality/complexity-report-b.json
-          python3 - <<'PY'
-          import datetime
-          import json
-          import os
-          from pathlib import Path
-          report = json.loads(Path("target/quality/complexity-report-a.json").read_text())
-          evidence = {
-              "status": "success",
-              "run_id": os.environ["GITHUB_RUN_ID"],
-              "sequence": int(os.environ["GITHUB_RUN_NUMBER"]),
-              "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-              "schema_version": report["schema_version"],
-              "canonical_sha256": report["canonical_sha256"],
-              "candidates": report["candidates"],
-              "source_accounting": report["source_accounting"],
-              "audit": report["audit"],
-              "provenance": {
-                  "repository": os.environ["GITHUB_REPOSITORY"],
-                  "workflow": os.environ["GITHUB_WORKFLOW"],
-                  "event": os.environ["GITHUB_EVENT_NAME"],
-                  "ref": os.environ["GITHUB_REF"],
-                  "sha": os.environ["GITHUB_SHA"],
-                  "run_attempt": int(os.environ["GITHUB_RUN_ATTEMPT"]),
-              },
-          }
-          Path("target/quality/complexity-evidence/run.json").write_text(
-              json.dumps(evidence, sort_keys=True, indent=2) + "\n"
-          )
-          PY
-      - name: Enforce changed-function complexity ratchet
-        run: |
-          ./scripts/tasks/complexity-gate \
-            --report target/quality/complexity-report-a.json \
-            --repeat-report target/quality/complexity-report-b.json \
-            --baseline quality/complexity/baseline.json \
-            --exceptions quality/complexity/exceptions.json \
-            --output target/quality/complexity-evidence/gate.json
+      - name: Generate canonical evidence and enforce complexity ratchet
+        run: ./scripts/tasks/complexity-workflow calibration
       - name: Audit non-authoritative complexity evidence
         run: ./scripts/tasks/complexity-soak-audit --directory target/quality/complexity-evidence
       - name: Upload canonical complexity evidence
@@ -228,6 +199,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.97.1
+      - uses: Swatinem/rust-cache@v2.9.2
       - run: cargo test --test packaging_smoke --locked
 
   docker-smoke:
@@ -247,6 +219,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.97.1
+      - uses: Swatinem/rust-cache@v2.9.2
       - name: Install certification inspection tools
         run: sudo apt-get update && sudo apt-get install --yes jq sqlite3
       - name: Run bounded canonical gate
@@ -285,6 +258,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.97.1
+      - uses: Swatinem/rust-cache@v2.9.2
       - name: Install certification inspection tools
         run: sudo apt-get update && sudo apt-get install --yes jq sqlite3
       - name: Run the bounded Health Plane gate

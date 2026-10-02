@@ -23,9 +23,9 @@ omakure-scripts/
 └── <scripts and folders>
 ```
 
-`ensure_layout` creates metadata only below the selected workspace. The CLI has
-no session-root or positional-path mode, so there is no second path anchor and
-no per-directory `omakure.conf` contract.
+`ensure_layout` creates metadata only below the selected workspace. A bare
+positional argument cannot select that root. Script names and paths resolve
+within it, and there is no per-directory `omakure.conf` contract.
 
 Environment files use `KEY=value` lines and are managed through `omakure env`
 or the authenticated HTTP environment routes. Their values can be injected

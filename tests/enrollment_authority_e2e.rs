@@ -8,34 +8,16 @@
 //! These drive the shipped `omakure node authority` verbs against real nodes
 //! and then hand the result to the real apply path.
 
-mod support;
+pub mod support;
 
 use serde_json::Value;
 use std::path::Path;
-use std::process::{Command, Output};
+use std::process::Output;
 
-const TOKEN: &str = "authority-e2e-token-with-enough-entropy-000001";
 const ORGANIZATION: &str = "authority-e2e-org";
 /// The pre-shared bootstrap pair the audience's config commits to by hash.
 const BOOTSTRAP_TOKEN: &str = "authority-e2e-bootstrap-token-000000000001";
 const BOOTSTRAP_NONCE: &str = "00112233445566778899aabbccddeeff";
-
-fn run_node(workspace: &Path, args: &[String]) -> Output {
-    Command::new(support::omakure_bin())
-        .arg("--scripts-dir")
-        .arg(workspace)
-        .arg("--json")
-        .arg("node")
-        .arg("--node-state-dir")
-        .arg(workspace.join(".node-state"))
-        .arg("--node-config")
-        .arg(workspace.join("node.toml"))
-        .args(args)
-        .env("OMAKURE_NODE_TEST_MODE", "1")
-        .env("OMAKURE_API_TOKEN", TOKEN)
-        .output()
-        .expect("run node command")
-}
 
 fn assert_ok(label: &str, output: &Output) -> Value {
     assert!(
@@ -59,8 +41,11 @@ fn assert_refused(label: &str, output: &Output) -> String {
 }
 
 fn init(workspace: &Path) -> Value {
-    assert_ok("init", &run_node(workspace, &["init".to_string()]));
-    assert_ok("status", &run_node(workspace, &["status".to_string()]))
+    assert_ok("init", &support::run_node(workspace, &["init".to_string()]));
+    assert_ok(
+        "status",
+        &support::run_node(workspace, &["status".to_string()]),
+    )
 }
 
 /// The shipped constructions, not a plausible-looking re-implementation.
@@ -68,18 +53,12 @@ fn init(workspace: &Path) -> Value {
 /// Domain-separated SHA-256; getting the separator wrong here would make the
 /// test fail for a reason that has nothing to do with what it is checking.
 fn bootstrap_token_hash(token: &str) -> String {
-    omakure::enrollment::hash_bootstrap_token(token.as_bytes())
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
+    omakure::hex::encode(&omakure::enrollment::hash_bootstrap_token(token.as_bytes()))
 }
 
 fn bootstrap_nonce_hash(nonce_hex: &str) -> String {
     let nonce = omakure::enrollment::parse_hex(nonce_hex, 16).expect("nonce is 16 bytes of hex");
-    omakure::enrollment::hash_bootstrap_nonce(&nonce)
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
+    omakure::hex::encode(&omakure::enrollment::hash_bootstrap_nonce(&nonce))
 }
 
 /// Configure the audience to accept bundles from this authority.
@@ -135,7 +114,7 @@ fn set_organization(workspace: &Path) {
 fn issue(issuer: &Path, audience_id: &str) -> Value {
     assert_ok(
         "authority issue",
-        &run_node(
+        &support::run_node(
             issuer,
             &[
                 "authority".to_string(),
@@ -165,7 +144,7 @@ fn apply(audience: &Path, bundle_hex: &str) -> Output {
     }
     let bundle_path = audience.join("bundle.hex");
     std::fs::write(&bundle_path, bundle_hex).expect("stage the bundle");
-    run_node(
+    support::run_node(
         audience,
         &[
             "enroll".to_string(),
@@ -195,7 +174,7 @@ fn a_bundle_this_fleet_issued_enrolls_a_real_node() {
 
     let authority = assert_ok(
         "authority create",
-        &run_node(
+        &support::run_node(
             issuer,
             &[
                 "authority".to_string(),
@@ -250,7 +229,7 @@ fn a_bundle_from_an_unnamed_authority_is_refused() {
 
     let trusted = assert_ok(
         "authority create",
-        &run_node(
+        &support::run_node(
             issuer,
             &[
                 "authority".to_string(),
@@ -261,7 +240,7 @@ fn a_bundle_from_an_unnamed_authority_is_refused() {
     );
     assert_ok(
         "authority create",
-        &run_node(
+        &support::run_node(
             stranger,
             &[
                 "authority".to_string(),
@@ -307,7 +286,7 @@ fn revoking_an_authority_refuses_a_bundle_it_already_signed() {
 
     let authority = assert_ok(
         "authority create",
-        &run_node(
+        &support::run_node(
             issuer,
             &[
                 "authority".to_string(),
@@ -344,7 +323,7 @@ fn an_authority_is_not_replaced_by_running_the_command_again() {
     init(workspace);
 
     let create = |workspace: &Path| {
-        run_node(
+        support::run_node(
             workspace,
             &[
                 "authority".to_string(),
@@ -358,7 +337,7 @@ fn an_authority_is_not_replaced_by_running_the_command_again() {
 
     let shown = assert_ok(
         "authority show",
-        &run_node(workspace, &["authority".to_string(), "show".to_string()]),
+        &support::run_node(workspace, &["authority".to_string(), "show".to_string()]),
     );
     assert_eq!(
         shown, first,

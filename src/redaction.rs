@@ -18,7 +18,7 @@ pub fn redact_secret(input: &str, secret: &str) -> String {
 
     let mut redacted = input.to_string();
     for form in forms {
-        redacted = redacted.replace(&form, "<redacted>");
+        redacted = redacted.replace(&form, crate::secrets::REDACTED);
     }
     redacted
 }

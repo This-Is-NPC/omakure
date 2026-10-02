@@ -10,8 +10,6 @@ pub struct Schema {
     pub description: Option<String>,
     pub tags: Option<Vec<String>>,
     pub fields: Vec<Field>,
-    pub outputs: Option<Vec<OutputField>>,
-    pub queue: Option<QueueSpec>,
     pub schedule: Option<Schedule>,
 }
 
@@ -212,52 +210,27 @@ mod tests {
         schema.normalize_field_orders();
         assert_eq!(schema.fields[0].order, first);
     }
-}
 
-/// Script output field definition.
-#[derive(Debug, Deserialize, Serialize, Clone)]
-#[serde(rename_all = "PascalCase")]
-pub struct OutputField {
-    pub name: String,
-    #[serde(rename = "Type")]
-    pub kind: String,
-}
+    #[test]
+    fn unsupported_top_level_sections_are_rejected() {
+        for section in [
+            r#""Outputs": [{"Name": "artifact", "Type": "string"}]"#,
+            r#""Queue": {"Cases": [{"Name": "batch", "Values": []}]}"#,
+            r#""Queue": {"Name": "nested", "Fields": []}"#,
+        ] {
+            let json = format!(r#"{{"Name":"job","Fields":[],{section}}}"#);
+            let error = parse_schema(&json).unwrap_err();
+            assert!(
+                matches!(error, crate::error::SchemaError::InvalidJson(_)),
+                "unexpected error for {section}: {error}"
+            );
+            assert!(error.to_string().contains("unsupported schema section"));
+        }
+    }
 
-/// Optional queue specification for batch execution.
-#[derive(Debug, Deserialize, Serialize, Clone)]
-#[serde(rename_all = "PascalCase")]
-pub struct QueueSpec {
-    pub matrix: Option<MatrixSpec>,
-    pub cases: Option<Vec<QueueCase>>,
-}
-
-/// Matrix specification for batch execution.
-#[derive(Debug, Deserialize, Serialize, Clone)]
-#[serde(rename_all = "PascalCase")]
-pub struct MatrixSpec {
-    pub values: Vec<MatrixValue>,
-}
-
-/// Matrix value.
-#[derive(Debug, Deserialize, Serialize, Clone)]
-#[serde(rename_all = "PascalCase")]
-pub struct MatrixValue {
-    pub name: String,
-    pub values: Vec<String>,
-}
-
-/// Queue case entry.
-#[derive(Debug, Deserialize, Serialize, Clone)]
-#[serde(rename_all = "PascalCase")]
-pub struct QueueCase {
-    pub name: Option<String>,
-    pub values: Vec<CaseValue>,
-}
-
-/// Queue case value.
-#[derive(Debug, Deserialize, Serialize, Clone)]
-#[serde(rename_all = "PascalCase")]
-pub struct CaseValue {
-    pub name: String,
-    pub value: String,
+    #[test]
+    fn unrelated_top_level_keys_remain_accepted() {
+        let json = r#"{"Name":"job","Fields":[],"Unknown":{"Name":"nested","Fields":[]}}"#;
+        assert_eq!(parse_schema(json).unwrap().name, "job");
+    }
 }

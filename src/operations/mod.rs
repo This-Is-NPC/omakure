@@ -2,12 +2,16 @@ pub mod baseline;
 pub mod battery;
 pub mod config;
 pub mod core;
+pub mod cue;
 pub mod doctor;
 pub mod envs;
 pub mod health;
 pub mod node;
+pub(crate) mod path;
 pub mod scripts;
 pub mod search;
+mod service_delivery;
+pub(crate) mod worker;
 
 use serde::Serialize;
 use std::fmt;
@@ -63,7 +67,7 @@ pub enum OperationErrorCode {
 }
 
 impl OperationErrorCode {
-    pub fn as_str(self) -> &'static str {
+    pub const fn as_str(self) -> &'static str {
         match self {
             Self::InvalidInput => "invalid_input",
             Self::Forbidden => "forbidden",
@@ -125,6 +129,10 @@ impl OperationError {
             message: message.into(),
         }
     }
+}
+
+pub(crate) fn io_error(err: impl std::error::Error) -> OperationError {
+    OperationError::new(OperationErrorCode::IoFailed, err.to_string())
 }
 
 impl fmt::Display for OperationError {

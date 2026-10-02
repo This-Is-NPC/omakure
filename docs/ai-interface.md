@@ -66,15 +66,14 @@ secret-field args reject plaintext values because queued workers cannot
 reconstruct them without storing the plaintext. If the supplied value is a `secret://...`
 reference, Omakure resolves it before execution and stores the provider
 reference rather than the resolved plaintext. Supported reference forms are
-`secret://env/NAME`, legacy `secret://env:NAME`, and `secret://provider/key`;
+`secret://env/NAME` and `secret://provider/key`;
 non-`env` providers read `<workspace>/.omakure/envs/<provider>.conf` and resolve
 `key` from that file.
 
 During execution, Omakure writes resolved plaintext secrets to a short-lived
 0600 redaction file and injects only `OMAKURE_REDACT_SECRETS_FILE` into the
 child. `omakure trace` reads that file so script-emitted trace messages are
-redacted before persistence; `OMAKURE_REDACT_SECRETS` is retained only as a
-legacy trace fallback. Run output redaction removes secret values from captured
+redacted before persistence. Run output redaction removes secret values from captured
 stdout/stderr in plain, JSON-escaped, slash-escaped, and URL-encoded forms.
 Environment values and direct secret values are not persisted as separate
 records in `runs.sqlite`; residual OS exposure remains for explicit process
@@ -92,7 +91,7 @@ access paths are the documented verbs:
 - reads: `omakure history list|show|stats|traces`, `omakure queue stats`
 
 This is an architectural rule, not a soft convention. Every code path
-in the omakure binary that touches `runs.sqlite` lives in `src/runs.rs`
+in the omakure binary that touches `runs.sqlite` lives in `src/runs/`
 and is the only writer in the codebase. Scripts launched by
 `omakure run` or `omakure queue worker` reach the database **only** by
 re-executing the omakure binary (typically via `omakure trace`), which
@@ -170,7 +169,7 @@ filesystem attribute on each invocation.
 
 This is the trust boundary: anything that wants to write the audit
 log must `execve` the omakure binary, which means it goes through
-clap argument parsing, the typed `runs.rs` helpers, and the JSON
+clap argument parsing, the typed `runs/` helpers, and the JSON
 envelope contract. There is no "write a row directly" path.
 
 ## JSON envelope
@@ -540,7 +539,7 @@ failed → dead_letter
 timed_out → dead_letter
 ```
 
-Any other transition is rejected by `runs.rs` and surfaces as
+Any other transition is rejected by `runs/` and surfaces as
 `error.code = "invalid_argument"` to the caller.
 
 `omakure run` is a synchronous fast path: it inserts the row directly

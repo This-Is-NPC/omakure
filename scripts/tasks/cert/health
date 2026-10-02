@@ -349,6 +349,14 @@ wait_connected() {
         fi
         sleep 1
     done
+    local diagnostic_service diagnostic_status
+    for diagnostic_service in hp-node-1 hp-node-2 hp-node-3 hp-node-4; do
+        if diagnostic_status=$(http_get "$diagnostic_service" /v1/node/status 2>/dev/null); then
+            printf 'health-plane certification: %s transport status=%s\n' \
+                "$diagnostic_service" \
+                "$(jq -c '.data | {identity: .identity.node_id, transport: .transport}' <<<"$diagnostic_status")" >&2
+        fi
+    done
     fail "$service did not connect to $peer_id within ${CONNECT_BUDGET}s; last status=${output:-<none>}"
 }
 
@@ -520,23 +528,12 @@ assert_no_log_leakage() {
     done
 }
 
-# Re-establish both Performers' sessions with the Conductor.
-#
-# This is shipped transport behaviour, not a workaround: `DirectService`'s
-# static-peer dialer stops after the frozen `MAX_RETRY_ATTEMPTS` consecutive
-# connection failures (`src/direct_service.rs`), so a Performer that outlived a
-# Conductor outage longer than its frozen 1/2/4-second backoff needs an explicit
-# restart to dial again. The existing transport certification restarts peers for
-# the same reason. Every step below is bounded.
-restore_fleet_sessions() {
-    local performer
-    "${compose[@]}" restart "$alpha_svc" "$beta_svc" >/dev/null \
-        || fail "restarting the Performers after a Conductor outage failed"
-    for performer in "$alpha_svc" "$beta_svc"; do
-        wait_service "$performer"
-    done
+# Wait for both Performers to reconnect after a Conductor outage.
+wait_fleet_sessions() {
     wait_connected "$conductor_svc" "$alpha_id"
     wait_connected "$conductor_svc" "$beta_id"
+    wait_connected "$alpha_svc" "$conductor_id"
+    wait_connected "$beta_svc" "$conductor_id"
 }
 
 reclaim_material() {
@@ -629,11 +626,8 @@ display_name = "$display_name"
 bind = "127.0.0.1:7878"
 
 [network]
-mode = "direct"
-relays = []
 static_peers = [$peers]
 direct_bind = "0.0.0.0:7879"
-max_message_bytes = 1048576
 
 [trust]
 enrollment = "manual"
@@ -745,7 +739,6 @@ cli_stable=$(jq -Sc '[.data.nodes[] | {node_id, role, capabilities, trust_state,
     || fail "the CLI and HTTP fleet-status adapters disagree: cli=$cli_stable http=$http_stable"
 [[ "$(jq -r '.data.local_node_id' <<<"$fleet")" == "$conductor_id" ]] \
     || fail "the fleet report is not anchored on the Conductor's own identity"
-[[ "$(jq -r '.data.enabled' <<<"$fleet")" == "true" ]] || fail "the Health Plane is not enabled"
 [[ "$(jq -r '.data.presence.online' <<<"$fleet")" == "2" ]] \
     || fail "expected exactly two online Performers: $(jq -c '.data.presence' <<<"$fleet")"
 [[ "$(jq -r '.data.presence.total' <<<"$fleet")" == "2" ]] \
@@ -900,7 +893,7 @@ copy_db "$conductor_svc" "$tmp_dir/conductor.sqlite"
     || fail "the Conductor restart changed its public identity"
 (( $(latest_health_audit_id "$tmp_dir/conductor.sqlite") >= audit_before_restart )) \
     || fail "the Conductor restart regressed the Health Plane audit trail"
-restore_fleet_sessions
+wait_fleet_sessions
 wait_presence "$conductor_svc" "$alpha_id" online "$REPORT_BUDGET" >/dev/null
 wait_presence "$conductor_svc" "$beta_id" online "$REPORT_BUDGET" >/dev/null
 
@@ -1028,7 +1021,7 @@ FROM seeded;
     >/dev/null || fail "restoring seeded database ownership failed"
 "${compose[@]}" start "$conductor_svc" >/dev/null || fail "starting the Conductor failed"
 wait_service "$conductor_svc"
-restore_fleet_sessions
+wait_fleet_sessions
 
 copy_db "$conductor_svc" "$tmp_dir/conductor.sqlite"
 alpha_trust_before=$(peer_trust_snapshot "$tmp_dir/conductor.sqlite" "$alpha_id")
@@ -1126,19 +1119,28 @@ copy_db "$conductor_svc" "$tmp_dir/conductor.sqlite"
     || fail "the corrupt Profile row survived quarantine"
 [[ "$alpha_trust_before" == "$(peer_trust_snapshot "$tmp_dir/conductor.sqlite" "$alpha_id")" ]] \
     || fail "corrupt-state quarantine mutated a Performer's trust row"
-restore_fleet_sessions
+beta_revision_before=$(sql "$tmp_dir/conductor.sqlite" \
+    "SELECT last_profile_revision FROM health_peers WHERE node_id = '$beta_id';")
+(( beta_revision_before > 0 )) || fail "performer beta lost its accepted Profile revision during quarantine"
+# A new reporter starts with a wall-clock Profile revision. Restarting beta
+# exercises sender state reconstruction while the receiver keeps its strict
+# revision cursor.
+"${compose[@]}" restart "$beta_svc" >/dev/null \
+    || fail "restarting performer beta after Profile quarantine failed"
+wait_service "$beta_svc"
+wait_fleet_sessions
 wait_presence "$conductor_svc" "$beta_id" online "$REPORT_BUDGET" >/dev/null
 recovery_deadline=$((SECONDS + REPORT_BUDGET))
-beta_profiles=0
+beta_revision_after=0
 while (( SECONDS < recovery_deadline )); do
     copy_db "$conductor_svc" "$tmp_dir/conductor.sqlite"
-    beta_profiles=$(sql "$tmp_dir/conductor.sqlite" \
-        "SELECT COUNT(*) FROM health_profiles WHERE node_id = '$beta_id';")
-    (( beta_profiles == 1 )) && break
+    beta_revision_after=$(sql "$tmp_dir/conductor.sqlite" \
+        "SELECT COALESCE((SELECT profile_revision FROM health_profiles WHERE node_id = '$beta_id'), 0);")
+    (( beta_revision_after > beta_revision_before )) && break
     sleep 3
 done
-(( beta_profiles == 1 )) \
-    || fail "performer beta did not re-report a fresh Profile after quarantine within ${REPORT_BUDGET}s"
+(( beta_revision_after > beta_revision_before )) \
+    || fail "performer beta did not report a newer Profile after quarantine within ${REPORT_BUDGET}s"
 
 # ---------------------------------------------------------------------------
 # Phase 10: revocation excludes a Performer immediately.
@@ -1268,9 +1270,8 @@ rm -f "$exhaust_ready"
 export OMAKURE_HP_ADVERSARY_ID="$adversary_id"
 export OMAKURE_HP_PERFORMER_ID="$alpha_id"
 
-# Start the harness before the Performer is repointed. The shipped dialer stops
-# after its frozen three attempts, so the listener has to be accepting already;
-# a container start in between would burn that budget.
+# Start the harness before the Performer starts so the test observes the
+# intended connection path as soon as it begins dialing.
 "${compose[@]}" up --detach --no-deps hp-harness >/dev/null \
     || fail "starting the attempt-exhaustion harness failed"
 harness_container=$("${compose[@]}" ps --quiet hp-harness)

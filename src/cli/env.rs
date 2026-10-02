@@ -1,4 +1,5 @@
 use crate::cli::args::{EnvArgs, EnvCommand, EnvCreateArgs, EnvRemoveArgs, EnvSetArgs};
+use crate::cli::emit::{default_operation_error_code, emit_operation_error};
 use crate::cli::json::{self, codes};
 use crate::operations::envs::{self, EnvParam};
 use crate::operations::{OperationError, OperationErrorCode};
@@ -56,11 +57,11 @@ fn create(
 ) -> Result<(), Box<dyn Error>> {
     let params = match parse_params(&opts.params) {
         Ok(params) => params,
-        Err(err) => return emit_operation_error(json_output, err),
+        Err(err) => return emit_operation_error(json_output, err, env_error_code),
     };
     match envs::create_env(workspace, &opts.name, &params) {
         Ok(()) => emit_mutation(json_output, &opts.name, "created"),
-        Err(err) => emit_operation_error(json_output, err),
+        Err(err) => emit_operation_error(json_output, err, env_error_code),
     }
 }
 
@@ -76,18 +77,18 @@ fn show(workspace: &Workspace, name: &str, json_output: bool) -> Result<(), Box<
             }
             Ok(())
         }
-        Err(err) => emit_operation_error(json_output, err),
+        Err(err) => emit_operation_error(json_output, err, env_error_code),
     }
 }
 
 fn set(workspace: &Workspace, opts: EnvSetArgs, json_output: bool) -> Result<(), Box<dyn Error>> {
     let param = match parse_param(&opts.param) {
         Ok(param) => param,
-        Err(err) => return emit_operation_error(json_output, err),
+        Err(err) => return emit_operation_error(json_output, err, env_error_code),
     };
     match envs::set_param(workspace, &opts.name, &param.key, &param.value) {
         Ok(()) => emit_mutation(json_output, &opts.name, "set"),
-        Err(err) => emit_operation_error(json_output, err),
+        Err(err) => emit_operation_error(json_output, err, env_error_code),
     }
 }
 
@@ -98,7 +99,7 @@ fn remove(
 ) -> Result<(), Box<dyn Error>> {
     match envs::remove_param(workspace, &opts.name, &opts.key) {
         Ok(()) => emit_mutation(json_output, &opts.name, "removed"),
-        Err(err) => emit_operation_error(json_output, err),
+        Err(err) => emit_operation_error(json_output, err, env_error_code),
     }
 }
 
@@ -109,18 +110,18 @@ fn replace(
 ) -> Result<(), Box<dyn Error>> {
     let params = match parse_params(&opts.params) {
         Ok(params) => params,
-        Err(err) => return emit_operation_error(json_output, err),
+        Err(err) => return emit_operation_error(json_output, err, env_error_code),
     };
     match envs::replace_env(workspace, &opts.name, &params) {
         Ok(()) => emit_mutation(json_output, &opts.name, "replaced"),
-        Err(err) => emit_operation_error(json_output, err),
+        Err(err) => emit_operation_error(json_output, err, env_error_code),
     }
 }
 
 fn activate(workspace: &Workspace, name: &str, json_output: bool) -> Result<(), Box<dyn Error>> {
     match envs::activate_env(workspace, name) {
         Ok(()) => emit_mutation(json_output, name, "activated"),
-        Err(err) => emit_operation_error(json_output, err),
+        Err(err) => emit_operation_error(json_output, err, env_error_code),
     }
 }
 
@@ -134,14 +135,14 @@ fn deactivate(workspace: &Workspace, json_output: bool) -> Result<(), Box<dyn Er
             }
             Ok(())
         }
-        Err(err) => emit_operation_error(json_output, err),
+        Err(err) => emit_operation_error(json_output, err, env_error_code),
     }
 }
 
 fn delete(workspace: &Workspace, name: &str, json_output: bool) -> Result<(), Box<dyn Error>> {
     match envs::delete_env(workspace, name) {
         Ok(()) => emit_mutation(json_output, name, "deleted"),
-        Err(err) => emit_operation_error(json_output, err),
+        Err(err) => emit_operation_error(json_output, err, env_error_code),
     }
 }
 
@@ -177,19 +178,11 @@ fn parse_param(value: &str) -> Result<EnvParam, OperationError> {
     })
 }
 
-fn emit_operation_error(json_output: bool, err: OperationError) -> Result<(), Box<dyn Error>> {
-    let code = match err.code {
-        OperationErrorCode::InvalidInput | OperationErrorCode::UnsafePath => {
-            codes::INVALID_ARGUMENT
-        }
-        OperationErrorCode::NotFound => codes::NOT_FOUND,
-        _ => codes::INTERNAL,
-    };
-    if json_output {
-        json::print_err(code, err.message);
-        std::process::exit(1);
+fn env_error_code(err: &OperationError) -> &'static str {
+    match err.code {
+        OperationErrorCode::UnsafePath => codes::INVALID_ARGUMENT,
+        _ => default_operation_error_code(err),
     }
-    Err(err.message.into())
 }
 
 #[cfg(test)]

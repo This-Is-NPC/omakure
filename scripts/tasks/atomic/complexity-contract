@@ -10,3 +10,18 @@ for script in complexity-setup-test complexity-gate-test complexity-soak-audit-t
   [[ -x "$path" ]] || { printf 'atomic/complexity-contract: missing executable %s\n' "$path" >&2; exit 1; }
   "$bounded" 5m "$path"
 done
+python3 - <<'PY'
+from pathlib import Path
+
+for workflow, mode in (("ci.yml", "calibration"), ("complexity-soak.yml", "trusted-soak")):
+    source = (Path(".github/workflows") / workflow).read_text()
+    route = f"run: ./scripts/tasks/complexity-workflow {mode}"
+    assert source.count(route) == 1, f"{workflow} must use the canonical {mode} route once"
+    runs = {line.strip() for line in source.splitlines()}
+    assert "run: ./scripts/tasks/complexity-setup" not in runs
+    assert "run: ./scripts/tasks/complexity-test" not in runs
+    assert "run: ./scripts/tasks/complexity-gate-test" not in runs
+    assert "./scripts/tasks/complexity-report " not in source
+    assert "./scripts/tasks/complexity-gate " not in source
+print("complexity workflow routing: PASS")
+PY

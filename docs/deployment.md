@@ -19,14 +19,10 @@ CLI/HTTP adapter semantics, and request audit behavior.
 ## Auth boundary
 
 Use the [HTTP API Authentication Contract](http-api.md#authentication-contract)
-for the preferred multi-token file (`--tokens-file` /
+for the required multi-token file (`--tokens-file` /
 `OMAKURE_TOKENS_FILE`), Argon2id hashes, per-token scopes,
-`omakure token generate`, and SIGHUP reload semantics.
-
-The legacy `OMAKURE_API_TOKEN` still works when no tokens file is set (internal
-id `legacy`, scopes `*`, gated by process-wide `--capability`), unless deploy
-policy sets `auth.legacy_env_token = false`. The policy and deployment
-constraints for that mode are defined below.
+`omakure token generate`, and SIGHUP reload semantics. `omakure api` and
+`omakure node serve` refuse to start without a tokens file.
 
 ## Deploy policy (`policy.toml`)
 
@@ -35,8 +31,7 @@ Deploy-only file via `--policy` / `OMAKURE_POLICY_FILE`. **Not** workspace
 
 ### Load order (api / node serve)
 
-1. Built-in defaults (route groups allowed; node-service workers=1, scheduler on;
-   `auth.legacy_env_token = true`).
+1. Built-in defaults (route groups allowed; node-service workers=1, scheduler on).
 2. Deploy `policy.toml` overlays `[http]` / `[node]` defaults and hard
    `[routes]` / `[auth]` gates.
 3. Explicit CLI flags win when provided (`--bind`, `--workers`,
@@ -112,7 +107,6 @@ metadata_endpoint = false
 
 [auth]
 tokens_file = "/run/secrets/omakure_tokens.toml"
-legacy_env_token = false
 max_concurrent_verifications = 2      # default; see Hard gates below
 ```
 
@@ -135,7 +129,6 @@ max_concurrent_verifications = 2      # default; see Hard gates below
 | `scripts.max_content_bytes` / `tree_entry_limit` | Caps content/tree HTTP responses |
 | `http.body_limit_bytes` | Caps JSON request bodies (and Axum body limit) |
 | `secrets.metadata_endpoint = false` | `GET /v1/secrets` returns `404` |
-| `auth.legacy_env_token = false` | Rejects `OMAKURE_API_TOKEN`; requires tokens file |
 | `auth.max_concurrent_verifications` | Caps in-flight Argon2id bearer verifications (default `2`, maximum `8`) |
 | `http.allow_non_loopback = true` | Same as CLI `--allow-non-loopback` |
 | `node.allow_non_loopback_direct = true` | Allows `network.direct_bind` or `--direct-bind` on a non-loopback address; independent of the HTTP bind policy and CLI `--allow-non-loopback` |
@@ -179,9 +172,8 @@ Private HTTPS Batteries need scopes `batteries:write` (or add/sync) **and**
 > refs — those must be enumerated by exact name (`--secret-ref
 > secret://env/GIT_TOKEN`). This prevents a token holder from reading arbitrary
 > process env (e.g. `AWS_SECRET_ACCESS_KEY`) via a Battery `token_ref`. A bare
-> `--secret-ref 'secret://env/*'` is ignored for the same reason. If you
-> previously relied on `*` to resolve env secrets, list each `secret://env/NAME`
-> explicitly.
+> `--secret-ref 'secret://env/*'` is ignored for the same reason. List each
+> `secret://env/NAME` explicitly.
 
 ### Network egress (SSRF containment)
 
@@ -210,31 +202,16 @@ omakure api --policy /etc/omakure/policy.toml --tokens-file /run/secrets/tokens.
 ### API invocation forms
 
 ```bash
-# Preferred: multi-token file (per-token scopes; --capability ignored)
+# Loopback
 omakure api --bind 127.0.0.1:7878 --tokens-file /run/secrets/omakure_tokens.toml
 
-# Legacy single-token mode (set the required token before either alternative)
-export OMAKURE_API_TOKEN="$(openssl rand -hex 32)"
-
-# Loopback alternative
-omakure api --bind 127.0.0.1:7878 \
-  --capability config:read \
-  --capability scripts:read \
-  --capability runs:read \
-  --capability runs:write \
-  --capability env:read
-
-# Non-loopback alternative
+# Non-loopback
 omakure api --bind 0.0.0.0:7878 --allow-non-loopback \
-  --capability config:read \
-  --capability scripts:read \
-  --capability runs:read \
-  --capability env:read \
-  --capability env:write
+  --tokens-file /run/secrets/omakure_tokens.toml
 ```
 
-See the [HTTP API contract's scope and legacy capability matrix](http-api.md#scope-matching-and-legacy-capabilities)
-for accepted capability names, scope matching, and secret-ref requirements.
+See the [HTTP API contract's scope matrix](http-api.md#scope-matching)
+for accepted scope names, scope matching, and secret-ref requirements.
 
 ### Node service lifecycle
 
@@ -260,8 +237,8 @@ The default HTTP bind is `127.0.0.1:7878`, and loopback needs no extra flag.
 Non-loopback binds, including `0.0.0.0` and `::`, require
 `--allow-non-loopback` **or** deploy policy `[http] allow_non_loopback = true`;
 the service must reject the configuration before it listens when neither
-guard is satisfied. `--tokens-file` / `OMAKURE_TOKENS_FILE` selects the
-multi-token authentication mode described in the
+guard is satisfied. `--tokens-file` / `OMAKURE_TOKENS_FILE` supplies the
+multi-token authentication described in the
 [HTTP API contract](http-api.md#authentication-contract).
 
 ### API-only
@@ -280,14 +257,6 @@ Equivalent node-service form:
 omakure node serve --workers 0 --no-scheduler --tokens-file secrets/tokens.toml
 ```
 
-Legacy single-token form (still supported):
-
-```bash
-export OMAKURE_API_TOKEN="$(openssl rand -hex 32)"
-omakure api --capability scripts:read --capability runs:read \
-  --capability runs:write --capability config:read
-```
-
 Use when another process owns workers/scheduler, or you only need read/write
 management without draining the queue in this process.
 
@@ -298,8 +267,7 @@ elsewhere:
 
 ```bash
 # Terminal A — API
-export OMAKURE_API_TOKEN="$(openssl rand -hex 32)"
-omakure api --capability scripts:read --capability runs:read --capability runs:write
+omakure api --tokens-file secrets/tokens.toml
 
 # Terminal B — worker (same workspace / same SQLite)
 omakure queue worker
@@ -315,19 +283,14 @@ filesystems, or another host: the queue is not distributed.
 
 
 ```bash
-export OMAKURE_API_TOKEN="$(openssl rand -hex 32)"
-omakure node serve --workers 1 \
-  --capability scripts:read \
-  --capability runs:read \
-  --capability runs:write \
-  --capability config:read
+omakure node serve --workers 1 --tokens-file secrets/tokens.toml
 ```
 
 Container-friendly bind (inside the image default):
 
 ```bash
 omakure node serve --bind 0.0.0.0:7878 --allow-non-loopback --workers 1 \
-  --capability scripts:read --capability runs:read --capability runs:write
+  --tokens-file /run/secrets/omakure_tokens.toml
 ```
 
 Two rules cost a real debugging session on a provisioned machine; both are
@@ -403,11 +366,8 @@ chown 10001:10001 "$OMAKURE_WORKSPACE"
 docker compose up --build
 ```
 
-`compose.yaml` uses tokens-file auth by default and does not require
-`OMAKURE_API_TOKEN`. To use the legacy single-token mode instead, remove or
-comment the `OMAKURE_TOKENS_FILE` environment entry and tokens-file volume,
-uncomment the `OMAKURE_API_TOKEN` entry, then export a token of at least 32
-random bytes before starting Compose.
+`compose.yaml` authenticates with the mounted tokens file; the service does
+not start without it.
 
 Compose publishes **`127.0.0.1:7878`** on the host. The container process still
 listens on `0.0.0.0:7878` so the published port works. The image always runs as
@@ -515,11 +475,9 @@ Omakure's run queue and history are **SQLite files under `.history/`**.
 
 ## Security checklist
 
-- [ ] Prefer `--tokens-file` with Argon2id hashes; plaintext only from
+- [ ] `--tokens-file` holds Argon2id hashes only; plaintext only from
       `omakure token generate` (prefix `omk_live_`), never committed.
 - [ ] Per-token scopes are least-privilege; avoid `*` outside break-glass.
-- [ ] Legacy `OMAKURE_API_TOKEN` (if used) is ≥32 random bytes; not a known
-      weak default; gated with least-privilege `--capability`.
 - [ ] Tokens live in env/secrets mounts — not in script env files or git.
 - [ ] Host publish is loopback (`127.0.0.1:7878`) or behind a private network
       ACL / reverse proxy — never public internet.
@@ -528,8 +486,9 @@ Omakure's run queue and history are **SQLite files under `.history/`**.
 - [ ] Container runs as non-root; volume ownership matches.
 - [ ] Single replica / single host for the SQLite workspace.
 - [ ] Use `SIGHUP` token reload after rotation on Unix.
-- [ ] Keep `OMAKURE_API_TOKEN` out of scripts and script environment files;
-      rotate management tokens like any other secret.
+- [ ] Keep management tokens, including a client-side `OMAKURE_API_TOKEN`,
+      out of scripts and script environment files; rotate them like any
+      other secret.
 - [ ] Keep request bodies at the 1 MiB v1 limit and leave browser CORS
       disabled.
 - [ ] Treat Battery cache content as untrusted: HTTP may list, sync, inspect,
@@ -546,39 +505,44 @@ Verify locally after packaging changes:
 # 1. Build
 docker build -t omakure-node:local .
 
-# 2. Prepare a disposable workspace + token
-export OMAKURE_API_TOKEN="$(openssl rand -hex 32)"
+# 2. Prepare a disposable workspace + tokens file
 SMOKE_WS="$(mktemp -d)"
 # optional: copy a tiny script tree into "$SMOKE_WS"
+TOKEN_JSON="$(docker run --rm omakure-node:local --json token generate --id smoke \
+  --scope scripts:read --scope runs:read --scope runs:write --scope config:read)"
+SMOKE_TOKEN="$(jq -r '.data.token' <<<"$TOKEN_JSON")"
+printf 'version = 1\n\n%s\n' "$(jq -r '.data.tokens_file_entry' <<<"$TOKEN_JSON")" \
+  > "${SMOKE_WS}-tokens.toml"
+sudo chown 10001:10001 "${SMOKE_WS}-tokens.toml"
+sudo chmod 0600 "${SMOKE_WS}-tokens.toml"
 
 # 3. Run node service (API + one worker); map host loopback only.
 # Prepare fixed image-principal ownership; do not pass an arbitrary --user.
 sudo install -d -o 10001 -g 10001 -m 0750 "$SMOKE_WS"
 sudo install -d -o 10001 -g 10001 -m 0700 "${SMOKE_WS}-node-state"
 docker run --rm -d --name omakure-smoke \
-  -e OMAKURE_API_TOKEN \
   -e OMAKURE_SCRIPTS_DIR=/workspace \
+  -e OMAKURE_TOKENS_FILE=/run/secrets/omakure_tokens.toml \
   -v "$SMOKE_WS:/workspace" \
   -v "${SMOKE_WS}-node-state:/var/lib/omakure" \
+  -v "${SMOKE_WS}-tokens.toml:/run/secrets/omakure_tokens.toml:ro" \
   -p 127.0.0.1:7878:7878 \
   omakure-node:local \
-  node serve --bind 0.0.0.0:7878 --allow-non-loopback --workers 1 \
-    --capability scripts:read --capability runs:read --capability runs:write \
-    --capability config:read
+  node serve --bind 0.0.0.0:7878 --allow-non-loopback --workers 1
 
 # 4. Unauthenticated health
 curl -sf http://127.0.0.1:7878/v1/health
 
-# 5. Authenticated scripts / runs path (legacy token)
-curl -sf -H "Authorization: Bearer $OMAKURE_API_TOKEN" \
+# 5. Authenticated scripts / runs path
+curl -sf -H "Authorization: Bearer $SMOKE_TOKEN" \
   http://127.0.0.1:7878/v1/scripts
-curl -sf -H "Authorization: Bearer $OMAKURE_API_TOKEN" \
+curl -sf -H "Authorization: Bearer $SMOKE_TOKEN" \
   http://127.0.0.1:7878/v1/runs
 
 # 6. Cleanup
 docker stop omakure-smoke
 rm -rf "$SMOKE_WS"
-sudo rm -rf "${SMOKE_WS}-node-state"
+sudo rm -rf "${SMOKE_WS}-node-state" "${SMOKE_WS}-tokens.toml"
 ```
 
 Packaging contract tests (file assertions, no Docker daemon required):

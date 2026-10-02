@@ -1,14 +1,15 @@
 pub mod api;
 pub mod args;
 pub mod battery;
+pub mod command_metadata;
 pub mod config;
 pub mod describe;
 pub mod doctor;
+pub mod emit;
 pub mod env;
 pub mod help_ai;
 pub mod history;
 pub mod init;
-pub mod inventory;
 pub mod json;
 pub mod list;
 pub mod local_api;

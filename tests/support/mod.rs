@@ -1,7 +1,12 @@
-#![allow(dead_code)]
+mod bin;
+pub mod direct_client;
+pub(crate) mod frame;
+
+pub use bin::omakure_bin;
 
 use serde_json::Value;
 use std::collections::HashSet;
+use std::ffi::OsStr;
 use std::fs;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
@@ -31,12 +36,213 @@ pub fn unique_loopback_port() -> u16 {
     }
 }
 
-pub fn omakure_bin() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_omakure"))
-}
-
 pub fn omakure_command() -> Command {
     Command::new(omakure_bin())
+}
+
+pub fn workspace_command<const TIMEOUT_SECS: u64>(workspace: &Path, args: &[&str]) -> Output {
+    workspace_command_with_env::<TIMEOUT_SECS>(workspace, args, &[])
+}
+
+pub fn workspace_command_with_env<const TIMEOUT_SECS: u64>(
+    workspace: &Path,
+    args: &[&str],
+    envs: &[(&str, &str)],
+) -> Output {
+    let mut command = omakure_command();
+    command.arg("--scripts-dir").arg(workspace).args(args);
+    for (key, value) in envs {
+        command.env(key, value);
+    }
+    command_with_timeout(&mut command, Duration::from_secs(TIMEOUT_SECS))
+}
+
+pub fn run_node(workspace: &Path, args: &[String]) -> Output {
+    run_node_with_paths(
+        workspace,
+        args,
+        workspace.join(".node-state"),
+        workspace.join("node.toml"),
+    )
+}
+
+pub fn run_node_with_lossy_paths(workspace: &Path, args: &[String]) -> Output {
+    let state = workspace.join(".node-state").to_string_lossy().into_owned();
+    let config = workspace.join("node.toml").to_string_lossy().into_owned();
+    run_node_with_paths(workspace, args, state, config)
+}
+
+pub fn run_node_checked_signal(workspace: &Path, args: &[String]) -> Output {
+    let output = run_node(workspace, args);
+    assert!(
+        output.status.code().is_some(),
+        "node {args:?} was killed by a signal"
+    );
+    output
+}
+
+pub fn init_node(workspace: &Path) -> Value {
+    init_node_with(workspace, run_node, |_, output| assert_node_success(output))
+}
+
+pub fn init_node_checked_signal(workspace: &Path) -> Value {
+    init_node_with(
+        workspace,
+        run_node_checked_signal,
+        assert_node_success_named,
+    )
+}
+
+pub fn serve_fleet_node(workspace: &Path) -> HttpServer {
+    HttpServer::start_node_service(
+        workspace,
+        &["node:read", "node:write"],
+        &["--workers", "1", "--no-scheduler"],
+        &[],
+        Duration::from_secs(20),
+    )
+}
+
+pub fn trust_fleet_peer(
+    workspace: &Path,
+    peer_workspace: &Path,
+    peer_status: &Value,
+    role: &str,
+    capabilities: &[&str],
+    audit: (&str, &str),
+) {
+    let certificate = omakure::hex::encode(
+        &fs::read(peer_workspace.join(".node-state/transport.cert"))
+            .expect("read peer transport certificate"),
+    );
+    let (actor, reason) = audit;
+    let mut args = vec![
+        "trust".to_string(),
+        "--node-id".to_string(),
+        peer_status["identity"]["node_id"].as_str().unwrap().into(),
+        "--public-key".to_string(),
+        peer_status["identity"]["public_key"]
+            .as_str()
+            .unwrap()
+            .into(),
+        "--transport-certificate".to_string(),
+        certificate,
+        "--role".to_string(),
+        role.to_string(),
+        "--actor".to_string(),
+        actor.to_string(),
+        "--reason".to_string(),
+        reason.to_string(),
+        "--confirmed".to_string(),
+    ];
+    for capability in capabilities {
+        args.push("--capability".to_string());
+        args.push((*capability).to_string());
+    }
+    assert_eq!(
+        assert_node_success_named("trust", &run_node_checked_signal(workspace, &args))["state"],
+        "active"
+    );
+}
+
+fn init_node_with(
+    workspace: &Path,
+    run: fn(&Path, &[String]) -> Output,
+    assert: impl Fn(&str, &Output) -> Value,
+) -> Value {
+    assert("init", &run(workspace, &["init".to_string()]));
+    assert("status", &run(workspace, &["status".to_string()]))
+}
+
+pub fn wait_for_standing_session(service: &HttpServer) -> bool {
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while Instant::now() < deadline {
+        let status = service.get("/v1/node/status");
+        if status.status == 200 {
+            let transport = status.json()["data"]["transport"].clone();
+            let expected = transport["expected_peer_count"].as_u64();
+            if expected.is_some_and(|expected| {
+                expected > 0
+                    && transport["expected_connected_peer_count"].as_u64() == Some(expected)
+            }) {
+                return true;
+            }
+        }
+        thread::sleep(Duration::from_millis(250));
+    }
+    false
+}
+
+pub fn assert_throughout(duration: Duration, interval: Duration, mut check: impl FnMut()) {
+    let deadline = Instant::now() + duration;
+    loop {
+        check();
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            break;
+        }
+        thread::sleep(remaining.min(interval));
+    }
+}
+
+fn run_node_with_paths(
+    workspace: &Path,
+    args: &[String],
+    state: impl AsRef<OsStr>,
+    config: impl AsRef<OsStr>,
+) -> Output {
+    omakure_command()
+        .arg("--scripts-dir")
+        .arg(workspace)
+        .arg("--json")
+        .arg("node")
+        .arg("--node-state-dir")
+        .arg(state)
+        .arg("--node-config")
+        .arg(config)
+        .args(args)
+        .env("OMAKURE_NODE_TEST_MODE", "1")
+        .env("OMAKURE_API_TOKEN", api_token())
+        .output()
+        .expect("run node command")
+}
+
+pub fn assert_node_success(output: &Output) -> Value {
+    assert_node_success_with_label(output, None)
+}
+
+pub fn assert_node_success_named(label: &str, output: &Output) -> Value {
+    assert_node_success_with_label(output, Some(label))
+}
+
+fn assert_node_success_with_label(output: &Output, label: Option<&str>) -> Value {
+    let command_label = label.map_or_else(
+        || "node command".to_string(),
+        |label| format!("node {label}"),
+    );
+    assert!(
+        output.status.success(),
+        "{command_label} failed: stdout={:?} stderr={:?}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let envelope = json_envelope(&output.stdout);
+    let envelope_label = label.map_or_else(
+        || "envelope".to_string(),
+        |label| format!("node {label} envelope"),
+    );
+    assert_eq!(envelope["ok"], true, "{envelope_label}: {envelope}");
+    envelope["data"].clone()
+}
+
+pub fn assert_success(output: &Output) {
+    assert!(
+        output.status.success(),
+        "expected success, status: {:?}, stdout_len: {}, stderr_len: {}",
+        output.status.code(),
+        output.stdout.len(),
+        output.stderr.len()
+    );
 }
 
 pub struct TestWorkspace {
@@ -117,6 +323,11 @@ pub fn json_envelope(stdout: &[u8]) -> Value {
 
 pub fn assert_redacted(text: &str, secret: &str) {
     assert_no_secret_leak(text.as_bytes(), secret.as_bytes());
+}
+
+pub fn assert_no_plaintext(output: &Output, secret: &str) {
+    assert_no_secret_leak(&output.stdout, secret.as_bytes());
+    assert_no_secret_leak(&output.stderr, secret.as_bytes());
 }
 
 pub fn assert_no_secret_leak(haystack: &[u8], secret: &[u8]) {
@@ -249,6 +460,55 @@ impl Drop for ChildGuard {
     }
 }
 
+#[derive(serde::Deserialize)]
+struct TestCredential {
+    id: String,
+    token: String,
+    hash: String,
+}
+
+fn test_credential() -> &'static TestCredential {
+    static CREDENTIAL: OnceLock<TestCredential> = OnceLock::new();
+    CREDENTIAL.get_or_init(|| {
+        toml::from_str(include_str!("../fixtures/test_api_token.toml"))
+            .expect("parse test credential fixture")
+    })
+}
+
+/// Bearer token of the shared test credential in `tests/fixtures/test_api_token.toml`.
+pub fn api_token() -> &'static str {
+    &test_credential().token
+}
+
+/// Write `dir/tokens.toml` granting the shared test credential `scopes`.
+///
+/// Tokens files reject an empty scope list, so an empty `scopes` writes a scope
+/// that matches no route: the token authenticates and is permitted nothing.
+pub fn write_tokens_file(dir: &Path, scopes: &[&str]) -> PathBuf {
+    let credential = test_credential();
+    let scopes = if scopes.is_empty() { &["none"] } else { scopes };
+    let scopes = scopes
+        .iter()
+        .map(|scope| format!("{scope:?}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let path = dir.join("tokens.toml");
+    fs::write(
+        &path,
+        format!(
+            "version = 1
+[[tokens]]
+id = {:?}
+hash = {:?}
+scopes = [{scopes}]
+",
+            credential.id, credential.hash
+        ),
+    )
+    .expect("write tokens file");
+    path
+}
+
 pub struct HttpResponse {
     pub status: u16,
     pub body: String,
@@ -282,41 +542,43 @@ impl HttpResponse {
     }
 }
 
+/// A spawned `api` or `node serve` process authenticating [`api_token`] with
+/// the scopes it was started with.
 pub struct HttpServer {
     addr: SocketAddr,
     child: ChildGuard,
-    token: String,
+    _tokens_dir: tempfile::TempDir,
 }
 
 impl HttpServer {
-    pub fn start(workspace: &Path, token: &str, timeout: Duration) -> Self {
-        Self::start_with_args(workspace, token, &[], &[], timeout)
+    pub fn start(workspace: &Path, timeout: Duration) -> Self {
+        Self::start_with_args(workspace, &["*"], &[], &[], timeout)
     }
 
     pub fn start_with_args(
         workspace: &Path,
-        token: &str,
+        scopes: &[&str],
         extra_args: &[&str],
         extra_envs: &[(&str, &str)],
         timeout: Duration,
     ) -> Self {
-        Self::start_command("api", workspace, token, extra_args, extra_envs, timeout)
+        Self::start_command("api", workspace, scopes, extra_args, extra_envs, timeout)
     }
 
     pub fn start_node_service(
         workspace: &Path,
-        token: &str,
+        scopes: &[&str],
         extra_args: &[&str],
         extra_envs: &[(&str, &str)],
         timeout: Duration,
     ) -> Self {
-        Self::start_command("node", workspace, token, extra_args, extra_envs, timeout)
+        Self::start_command("node", workspace, scopes, extra_args, extra_envs, timeout)
     }
 
     fn start_command(
         command_name: &str,
         workspace: &Path,
-        token: &str,
+        scopes: &[&str],
         extra_args: &[&str],
         extra_envs: &[(&str, &str)],
         timeout: Duration,
@@ -339,6 +601,8 @@ impl HttpServer {
         while Instant::now() < deadline {
             let addr = SocketAddr::from(([127, 0, 0, 1], unique_loopback_port()));
             last_addr = Some(addr);
+            let tokens_dir = tempfile::TempDir::new().expect("create tokens dir");
+            let tokens_file = write_tokens_file(tokens_dir.path(), scopes);
             let mut command = omakure_command();
             command
                 .arg("--scripts-dir")
@@ -348,7 +612,7 @@ impl HttpServer {
                 .arg("--bind")
                 .arg(addr.to_string())
                 .args(extra_args)
-                .env("OMAKURE_API_TOKEN", token);
+                .env("OMAKURE_TOKENS_FILE", &tokens_file);
             if command_name == "node" {
                 command
                     .env("OMAKURE_NODE_TEST_MODE", "1")
@@ -363,7 +627,7 @@ impl HttpServer {
             let mut server = Self {
                 addr,
                 child,
-                token: token.to_string(),
+                _tokens_dir: tokens_dir,
             };
             // The whole remaining budget, not a slice of it. Retrying exists for
             // the bind race, and a child that lost that race is already dead —
@@ -482,7 +746,7 @@ impl HttpServer {
     }
 
     pub fn request(&self, method: &str, path: &str, body: Option<String>) -> HttpResponse {
-        self.request_with_auth(method, path, body, AuthMode::Bearer(&self.token))
+        self.request_with_auth(method, path, body, AuthMode::Bearer(api_token()))
     }
 
     pub fn request_with_auth(

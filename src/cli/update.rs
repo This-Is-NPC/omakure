@@ -1,5 +1,5 @@
 use crate::cli::args::UpdateArgs;
-use crate::util::ps_quote;
+use crate::util::exec::ps_quote;
 use serde_json::Value;
 use std::env;
 use std::error::Error;
@@ -13,16 +13,16 @@ use tempfile::TempDir;
 const DEFAULT_REPO: &str = "This-Is-NPC/omakure";
 
 pub fn run(_scripts_dir: PathBuf, args: UpdateArgs) -> Result<(), Box<dyn Error>> {
-    let repo = resolve_repo(args.repo);
+    let repo = resolve_repo(args.repo, env_value);
     validate_repo(&repo)?;
-    let version = match resolve_version(args.version) {
+    let version = match resolve_version(args.version, env_value) {
         Some(version) => normalize_version_tag(&version),
         None => fetch_latest_version(&repo)?,
     };
 
     validate_version(&version)?;
 
-    let current_version = env!("CARGO_PKG_VERSION");
+    let current_version = crate::app_meta::APP_VERSION;
     let target_version = version.trim_start_matches('v');
     let should_update = target_version != current_version;
 
@@ -87,14 +87,12 @@ impl Drop for UpdateStaging {
 
 #[cfg(windows)]
 fn update_staging_in(parent: &Path) -> io::Result<UpdateStaging> {
-    use rand::RngCore;
+    use crate::util::entropy;
+    use crate::util::hex;
     for _ in 0..16 {
         let mut bytes = [0u8; 16];
-        rand::rngs::OsRng.fill_bytes(&mut bytes);
-        let suffix = bytes
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>();
+        entropy::fill_bytes(&mut bytes);
+        let suffix = hex::encode(&bytes);
         let path = parent.join(format!(".omakure-update-{suffix}"));
         match create_private_windows_directory(&path) {
             Ok(()) => return Ok(UpdateStaging { path, keep: false }),
@@ -110,7 +108,7 @@ fn update_staging_in(parent: &Path) -> io::Result<UpdateStaging> {
 
 #[cfg(windows)]
 fn create_private_windows_directory(path: &Path) -> io::Result<()> {
-    use std::os::windows::ffi::OsStrExt;
+    use crate::util::windows::{wide_path, wide_str};
     use windows_sys::Win32::Foundation::LocalFree;
     use windows_sys::Win32::Security::Authorization::{
         ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
@@ -120,15 +118,8 @@ fn create_private_windows_directory(path: &Path) -> io::Result<()> {
 
     // Protected DACL: owner, SYSTEM and administrators only, inherited by files.
     // Apply at creation, not after exposing a directory with inherited access.
-    let sddl = "D:P(A;OICI;FA;;;OW)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)"
-        .encode_utf16()
-        .chain(Some(0))
-        .collect::<Vec<_>>();
-    let name = path
-        .as_os_str()
-        .encode_wide()
-        .chain(Some(0))
-        .collect::<Vec<_>>();
+    let sddl = wide_str("D:P(A;OICI;FA;;;OW)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)");
+    let name = wide_path(path);
     let mut descriptor = std::ptr::null_mut();
     // SAFETY: strings are NUL-terminated; Windows allocates the descriptor,
     // which remains live until CreateDirectoryW completes.
@@ -195,16 +186,28 @@ fn validate_version(version: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn resolve_repo(repo: Option<String>) -> String {
-    repo.or_else(|| env::var("OMAKURE_REPO").ok())
-        .or_else(|| env::var("OVERTURE_REPO").ok())
-        .or_else(|| env::var("CLOUD_MGMT_REPO").ok())
-        .or_else(|| env::var("REPO").ok())
+fn env_value(name: &str) -> Option<String> {
+    env::var(name).ok()
+}
+
+fn resolve_override(
+    explicit: Option<String>,
+    names: &[&str],
+    mut lookup: impl FnMut(&str) -> Option<String>,
+) -> Option<String> {
+    explicit.or_else(|| names.iter().find_map(|name| lookup(name)))
+}
+
+fn resolve_repo(repo: Option<String>, lookup: impl FnMut(&str) -> Option<String>) -> String {
+    resolve_override(repo, &["OMAKURE_REPO", "REPO"], lookup)
         .unwrap_or_else(|| DEFAULT_REPO.to_string())
 }
 
-fn resolve_version(version: Option<String>) -> Option<String> {
-    version.or_else(|| env::var("VERSION").ok())
+fn resolve_version(
+    version: Option<String>,
+    lookup: impl FnMut(&str) -> Option<String>,
+) -> Option<String> {
+    resolve_override(version, &["VERSION"], lookup)
 }
 
 pub(crate) fn normalize_version_tag(version: &str) -> String {
@@ -591,29 +594,55 @@ mod tests {
 
     #[test]
     fn test_resolve_repo_default() {
-        env::remove_var("OMAKURE_REPO");
-        env::remove_var("OVERTURE_REPO");
-        env::remove_var("CLOUD_MGMT_REPO");
-        env::remove_var("REPO");
-        assert_eq!(resolve_repo(None), DEFAULT_REPO);
+        assert_eq!(resolve_repo(None, |_| None), DEFAULT_REPO);
     }
 
     #[test]
     fn test_resolve_repo_explicit() {
-        assert_eq!(resolve_repo(Some("user/repo".to_string())), "user/repo");
+        assert_eq!(
+            resolve_repo(Some("user/repo".to_string()), |_| panic!(
+                "explicit repo must win"
+            )),
+            "user/repo"
+        );
+    }
+
+    #[test]
+    fn test_resolve_repo_env_precedence() {
+        let lookup = |name: &str| match name {
+            "OMAKURE_REPO" => Some("preferred/repo".to_string()),
+            "REPO" => Some("fallback/repo".to_string()),
+            _ => None,
+        };
+        assert_eq!(resolve_repo(None, lookup), "preferred/repo");
+        assert_eq!(
+            resolve_repo(None, |name| (name == "REPO")
+                .then(|| "fallback/repo".to_string())),
+            "fallback/repo"
+        );
     }
 
     #[test]
     fn test_resolve_version_none() {
-        env::remove_var("VERSION");
-        assert_eq!(resolve_version(None), None);
+        assert_eq!(resolve_version(None, |_| None), None);
     }
 
     #[test]
     fn test_resolve_version_explicit() {
         assert_eq!(
-            resolve_version(Some("1.0.0".to_string())),
+            resolve_version(Some("1.0.0".to_string()), |_| panic!(
+                "explicit version must win"
+            )),
             Some("1.0.0".to_string())
+        );
+    }
+
+    #[test]
+    fn test_resolve_version_from_env() {
+        assert_eq!(
+            resolve_version(None, |name| (name == "VERSION")
+                .then(|| "2.0.0".to_string())),
+            Some("2.0.0".to_string())
         );
     }
 
@@ -629,6 +658,28 @@ mod tests {
         }
     }
 
+    #[rstest]
+    #[case::repo("../untrusted", "v1.2.3", "owner/name pair")]
+    #[case::version(DEFAULT_REPO, "v../untrusted", "simple version tag")]
+    fn security_update_rejects_remote_path_inputs_before_workspace_access(
+        #[case] repo: &str,
+        #[case] version: &str,
+        #[case] error_fragment: &str,
+    ) {
+        let root = TempDir::new().unwrap();
+        let workspace = root.path().join("not-created");
+        let error = run(
+            workspace.clone(),
+            UpdateArgs {
+                repo: Some(repo.into()),
+                version: Some(version.into()),
+            },
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains(error_fragment));
+        assert!(!workspace.exists());
+    }
+
     #[test]
     fn security_update_same_version_never_creates_or_syncs_workspace() {
         let root = TempDir::new().unwrap();
@@ -637,7 +688,7 @@ mod tests {
             workspace.clone(),
             UpdateArgs {
                 repo: Some(DEFAULT_REPO.into()),
-                version: Some(env!("CARGO_PKG_VERSION").into()),
+                version: Some(crate::app_meta::APP_VERSION.into()),
             },
         )
         .unwrap();
@@ -703,27 +754,100 @@ mod tests {
         let binary = source.join("omakure");
         fs::write(&binary, b"release payload").unwrap();
         let archive = root.path().join("payload.tar.gz");
-        let pack = || {
-            assert!(Command::new("tar")
-                .arg("-czf")
-                .arg(&archive)
-                .arg("-C")
-                .arg(&source)
-                .arg("omakure")
-                .status()
-                .unwrap()
-                .success());
-        };
-        pack();
+        pack_release_archive(&source, &archive, &["omakure"]);
         let staging = update_staging_in(root.path()).unwrap();
         let extracted = extract_release_binary(&archive, staging.path(), "omakure").unwrap();
         assert_eq!(fs::read(extracted).unwrap(), b"release payload");
         fs::remove_file(&binary).unwrap();
         symlink("../outside", &binary).unwrap();
-        pack();
+        pack_release_archive(&source, &archive, &["omakure"]);
         let staging = update_staging_in(root.path()).unwrap();
         assert!(extract_release_binary(&archive, staging.path(), "omakure").is_err());
         assert!(!staging.path().join("omakure").exists());
+    }
+
+    #[cfg(unix)]
+    fn pack_release_archive(source: &Path, archive: &Path, members: &[&str]) {
+        assert!(
+            Command::new("tar")
+                .arg("-czf")
+                .arg(archive)
+                .arg("-C")
+                .arg(source)
+                .args(members)
+                .status()
+                .unwrap()
+                .success()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn security_update_rejects_extra_and_empty_tar_members() {
+        let root = TempDir::new().unwrap();
+        let source = root.path().join("source");
+        fs::create_dir(&source).unwrap();
+        fs::write(source.join("omakure"), b"release payload").unwrap();
+        fs::write(source.join("extra"), b"unexpected payload").unwrap();
+        let archive = root.path().join("payload.tar.gz");
+        pack_release_archive(&source, &archive, &["omakure", "extra"]);
+        let staging = update_staging_in(root.path()).unwrap();
+        assert!(extract_release_binary(&archive, staging.path(), "omakure").is_err());
+        assert!(!staging.path().join("omakure").exists());
+
+        fs::write(source.join("omakure"), b"").unwrap();
+        pack_release_archive(&source, &archive, &["omakure"]);
+        let staging = update_staging_in(root.path()).unwrap();
+        let error = extract_release_binary(&archive, staging.path(), "omakure").unwrap_err();
+        assert_eq!(error.to_string(), "Release binary is empty");
+    }
+
+    #[cfg(unix)]
+    fn assert_no_update_staging(parent: &Path) {
+        assert!(!fs::read_dir(parent).unwrap().any(|entry| {
+            entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .starts_with(".omakure-update-")
+        }));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn security_update_atomic_install_keeps_previous_open_binary() {
+        use std::io::Read;
+        let root = TempDir::new().unwrap();
+        let target = root.path().join("omakure");
+        let source = root.path().join("release");
+        fs::write(&target, b"old binary").unwrap();
+        fs::write(&source, b"new binary").unwrap();
+        let mut previous = fs::File::open(&target).unwrap();
+
+        install_binary_unix(&source, &target).unwrap();
+
+        let mut previous_bytes = Vec::new();
+        previous.read_to_end(&mut previous_bytes).unwrap();
+        assert_eq!(previous_bytes, b"old binary");
+        assert_eq!(fs::read(&target).unwrap(), b"new binary");
+        assert_no_update_staging(root.path());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn security_update_create_new_file_never_follows_staging_symlink() {
+        use std::os::unix::fs::symlink;
+        let root = TempDir::new().unwrap();
+        let victim = root.path().join("victim");
+        let staged = root.path().join("replacement");
+        fs::write(&victim, b"untouched").unwrap();
+        symlink(&victim, &staged).unwrap();
+
+        assert_eq!(
+            create_binary_file(&staged).unwrap_err().kind(),
+            io::ErrorKind::AlreadyExists
+        );
+        assert_eq!(fs::read(&victim).unwrap(), b"untouched");
     }
 
     #[cfg(unix)]
@@ -740,16 +864,14 @@ mod tests {
         symlink(&victim, root.path().join("omakure.new")).unwrap();
         install_binary_unix(&source, &target).unwrap();
         assert_eq!(fs::read_to_string(&victim).unwrap(), "untouched");
-        assert!(fs::symlink_metadata(root.path().join("omakure.new"))
-            .unwrap()
-            .file_type()
-            .is_symlink());
+        assert!(
+            fs::symlink_metadata(root.path().join("omakure.new"))
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
         assert_updated_binary_executes(&target);
-        assert!(!fs::read_dir(root.path()).unwrap().any(|entry| entry
-            .unwrap()
-            .file_name()
-            .to_string_lossy()
-            .starts_with(".omakure-update-")));
+        assert_no_update_staging(root.path());
     }
 
     #[cfg(unix)]
@@ -877,20 +999,24 @@ mod tests {
         // Missing target forces a real File.Replace failure. Use a PID outside
         // the normal process range without overflowing PowerShell's Int32.
         let script = windows_replace_script(staging.path(), &staged, &target, i32::MAX as u32);
-        assert!(!Command::new("powershell")
-            .args(["-NoProfile", "-Command", &script])
-            .status()
-            .unwrap()
-            .success());
+        assert!(
+            !Command::new("powershell")
+                .args(["-NoProfile", "-Command", &script])
+                .status()
+                .unwrap()
+                .success()
+        );
         assert_eq!(fs::read_to_string(&backup).unwrap(), "recovery marker");
         assert_eq!(fs::read_to_string(&staged).unwrap(), "new");
         fs::remove_file(&backup).unwrap();
         fs::write(&target, "old").unwrap();
-        assert!(Command::new("powershell")
-            .args(["-NoProfile", "-Command", &script])
-            .status()
-            .unwrap()
-            .success());
+        assert!(
+            Command::new("powershell")
+                .args(["-NoProfile", "-Command", &script])
+                .status()
+                .unwrap()
+                .success()
+        );
         assert_eq!(fs::read_to_string(&target).unwrap(), "new");
         assert!(!staging.path().exists());
     }
@@ -916,11 +1042,13 @@ mod tests {
              }}",
             ps_quote(&staging.path().display().to_string()),
         );
-        assert!(Command::new("powershell")
-            .args(["-NoProfile", "-Command", &script])
-            .status()
-            .unwrap()
-            .success());
+        assert!(
+            Command::new("powershell")
+                .args(["-NoProfile", "-Command", &script])
+                .status()
+                .unwrap()
+                .success()
+        );
         assert_eq!(
             fs::read_to_string(staging.path().join("marker")).unwrap(),
             "owned"
@@ -937,12 +1065,14 @@ mod tests {
         );
         assert!(script.contains("[IO.File]::Replace("));
         assert!(script.contains("'C:/owned''s staging/replacement'"));
-        assert!(script.contains(&ps_quote(
-            &Path::new("C:/owned's staging")
-                .join("backup")
-                .display()
-                .to_string()
-        )));
+        assert!(
+            script.contains(&ps_quote(
+                &Path::new("C:/owned's staging")
+                    .join("backup")
+                    .display()
+                    .to_string()
+            ))
+        );
         assert!(script.contains("Remove-Item -LiteralPath 'C:/owned''s staging'"));
         assert!(!script.contains("Move-Item"));
         assert!(!script.contains("finally"));

@@ -4,7 +4,7 @@
 //! Unlike the in-crate unit tests, this suite drives a node the way production
 //! does: it initializes real node state and real trust through the shipped CLI,
 //! then reopens that database through the public registry surface. It proves
-//! the schema version 7 migration lands on a production node, that the public
+//! the current registry opens and persists Health Plane state, that the public
 //! operations enforce the frozen contract, that state survives a restart, and
 //! that the public projection never carries a privacy class P1 field.
 //!
@@ -12,7 +12,19 @@
 //! application dispatcher, or any CLI/HTTP adapter: those are covered by the
 //! corresponding transport and adapter integration suites.
 
-mod support;
+#[path = "support/health_messages.rs"]
+mod health_messages;
+
+use health_messages::signal_payload;
+
+#[path = "support/health_ids.rs"]
+mod health_ids;
+#[path = "support/health_trust.rs"]
+mod health_trust;
+pub mod support;
+
+use health_ids::hex16;
+use health_trust::trust_peer;
 
 use omakure::health_plane::bounds::{PRESENCE_ONLINE_SECONDS, STORAGE_CEILING_BYTES};
 use omakure::health_plane::model::{HealthCode, HealthDecision, Presence};
@@ -20,16 +32,17 @@ use omakure::health_plane::{HealthClock, HealthPlane, HealthReply, InboundHealth
 use omakure::node::{NodeContext, NodePathOverrides, NodePlatform};
 use omakure::node_identity::NodeIdentity;
 use omakure::node_registry::{NodeRegistry, PeerState};
-use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
-use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
-use std::sync::atomic::{AtomicI64, Ordering};
+use serde_json::{Value, json};
+use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicI64, Ordering};
 use tempfile::TempDir;
 
-const TOKEN: &str = "health-plane-state-token-with-enough-entropy-0001";
 const BASE_NOW: i64 = 1_700_000_000;
+const SYNTHETIC_TRUST_AUDIT: (&str, &str) = (
+    "health-plane-state-tests",
+    "health plane state integration peer",
+);
 
 #[derive(Debug)]
 struct FixedClock(AtomicI64);
@@ -41,27 +54,12 @@ struct SharedClock(Arc<FixedClock>);
 
 impl HealthClock for SharedClock {
     fn unix_seconds(&self) -> i64 {
-        self.0 .0.load(Ordering::SeqCst)
+        self.0.0.load(Ordering::SeqCst)
     }
 
     fn monotonic_millis(&self) -> u64 {
         0
     }
-}
-
-/// The frozen node identifier construction, reused verbatim so the test can
-/// name a synthetic peer without touching the identity module.
-fn node_id_for_x_only_public_key(public_key: &[u8]) -> String {
-    let mut digest = Sha256::new();
-    digest.update(b"omakure/node-id/v1\0");
-    digest.update(public_key);
-    let hash: [u8; 32] = digest.finalize().into();
-    format!(
-        "omk1_{}",
-        hash.iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>()
-    )
 }
 
 struct Node {
@@ -76,8 +74,9 @@ impl Node {
     fn start() -> Self {
         let temp = TempDir::new().expect("temp workspace");
         let workspace = temp.path().to_path_buf();
-        assert_success(&run_node(&workspace, &["init".to_string()]));
-        let status = assert_success(&run_node(&workspace, &["status".to_string()]));
+        support::assert_node_success(&support::run_node(&workspace, &["init".to_string()]));
+        let status =
+            support::assert_node_success(&support::run_node(&workspace, &["status".to_string()]));
         let local_node_id = status["identity"]["node_id"]
             .as_str()
             .expect("local node id")
@@ -114,69 +113,8 @@ impl Node {
     }
 }
 
-fn run_node(workspace: &Path, args: &[String]) -> Output {
-    Command::new(support::omakure_bin())
-        .arg("--scripts-dir")
-        .arg(workspace)
-        .arg("--json")
-        .arg("node")
-        .arg("--node-state-dir")
-        .arg(workspace.join(".node-state"))
-        .arg("--node-config")
-        .arg(workspace.join("node.toml"))
-        .args(args)
-        .env("OMAKURE_NODE_TEST_MODE", "1")
-        .env("OMAKURE_API_TOKEN", TOKEN)
-        .output()
-        .expect("run node command")
-}
-
-fn assert_success(output: &Output) -> Value {
-    assert!(
-        output.status.success(),
-        "node command failed: stdout={:?} stderr={:?}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let envelope = support::json_envelope(&output.stdout);
-    assert_eq!(envelope["ok"], true, "envelope: {envelope}");
-    envelope["data"].clone()
-}
-
-fn peer_identity(seed: u8) -> (String, String) {
-    let key = k256::schnorr::SigningKey::from_slice(&[seed; 32]).expect("test scalar");
-    let xonly = key.verifying_key().to_bytes();
-    let public_key = xonly.iter().map(|byte| format!("{byte:02x}")).collect();
-    (node_id_for_x_only_public_key(&xonly), public_key)
-}
-
-fn trust_peer(node: &Node, seed: u8, role: &str, capabilities: &[&str]) -> String {
-    let (node_id, public_key) = peer_identity(seed);
-    let mut args = vec![
-        "trust".to_string(),
-        "--node-id".to_string(),
-        node_id.clone(),
-        "--public-key".to_string(),
-        public_key,
-        "--role".to_string(),
-        role.to_string(),
-        "--actor".to_string(),
-        "health-plane-state-tests".to_string(),
-        "--reason".to_string(),
-        "health plane state integration peer".to_string(),
-        "--confirmed".to_string(),
-    ];
-    for capability in capabilities {
-        args.push("--capability".to_string());
-        args.push((*capability).to_string());
-    }
-    let data = assert_success(&run_node(&node.workspace, &args));
-    assert_eq!(data["state"], "active");
-    node_id
-}
-
 fn revoke_peer(node: &Node, node_id: &str) {
-    assert_success(&run_node(
+    support::assert_node_success(&support::run_node(
         &node.workspace,
         &[
             "revoke".to_string(),
@@ -188,10 +126,6 @@ fn revoke_peer(node: &Node, node_id: &str) {
             "--confirmed".to_string(),
         ],
     ));
-}
-
-fn hex16(seed: u64) -> String {
-    format!("{seed:032x}")
 }
 
 fn profile_payload(target: &str, message_seed: u64, revision: u64) -> Value {
@@ -240,36 +174,8 @@ fn pulse_payload(target: &str, message_seed: u64, sequence: u64, emitted_at: i64
     })
 }
 
-fn signal_payload(
-    target: &str,
-    message_seed: u64,
-    sequence: u64,
-    signal_seed: u64,
-    occurred_at: i64,
-) -> Value {
-    json!({
-        "health_version": 1,
-        "message_id": hex16(message_seed),
-        "signal": {
-            "kind": "run-completed",
-            "occurred_at": occurred_at,
-            "run": {
-                "exit_code": 0,
-                "finished_at": occurred_at,
-                "run_id": hex16(signal_seed + 900_000),
-                "script": "deploy",
-                "state": "completed"
-            },
-            "sequence": sequence,
-            "signal_id": hex16(signal_seed),
-            "subject": Value::Null
-        },
-        "target": target,
-    })
-}
-
 fn ingest(
-    plane: &HealthPlane<'_>,
+    plane: &HealthPlane<'_, NodeRegistry>,
     sender: &str,
     kind: &str,
     created_at: i64,
@@ -288,19 +194,16 @@ fn ingest(
 }
 
 #[test]
-fn a_production_node_migrates_to_schema_seven_and_serves_bounded_health_state() {
+fn a_production_node_serves_bounded_health_state() {
     let node = Node::start();
     let performer = trust_peer(
-        &node,
+        &node.workspace,
         7,
         "performer",
         &["inventory-health", "notifications"],
+        SYNTHETIC_TRUST_AUDIT,
     );
     let registry = node.registry();
-    assert!(
-        registry.health_plane_enabled().expect("plane state"),
-        "the shipped node must migrate to the Health Plane schema"
-    );
 
     let plane = HealthPlane::with_clock(&registry, Box::new(SharedClock(Arc::clone(&node.clock))));
     let target = node.local_node_id.clone();
@@ -388,10 +291,11 @@ fn a_production_node_migrates_to_schema_seven_and_serves_bounded_health_state() 
 fn health_state_and_replay_protection_survive_a_restart() {
     let node = Node::start();
     let performer = trust_peer(
-        &node,
+        &node.workspace,
         8,
         "performer",
         &["inventory-health", "notifications"],
+        SYNTHETIC_TRUST_AUDIT,
     );
     let target = node.local_node_id.clone();
 
@@ -446,10 +350,11 @@ fn health_state_and_replay_protection_survive_a_restart() {
 fn revocation_stops_reporting_and_purges_derived_state_only() {
     let node = Node::start();
     let performer = trust_peer(
-        &node,
+        &node.workspace,
         9,
         "performer",
         &["inventory-health", "notifications"],
+        SYNTHETIC_TRUST_AUDIT,
     );
     let target = node.local_node_id.clone();
     let registry = node.registry();
@@ -491,7 +396,8 @@ fn revocation_stops_reporting_and_purges_derived_state_only() {
         .expect("authorization")
         .expect("retained identity");
     assert_eq!(authorization.state, PeerState::Revoked);
-    let peers = assert_success(&run_node(&node.workspace, &["peers".to_string()]));
+    let peers =
+        support::assert_node_success(&support::run_node(&node.workspace, &["peers".to_string()]));
     assert!(
         peers.to_string().contains("revoked"),
         "the revocation must remain visible to the operator: {peers}"
@@ -502,10 +408,11 @@ fn revocation_stops_reporting_and_purges_derived_state_only() {
 fn the_public_projection_never_carries_a_forbidden_field() {
     let node = Node::start();
     let performer = trust_peer(
-        &node,
+        &node.workspace,
         10,
         "performer",
         &["inventory-health", "notifications"],
+        SYNTHETIC_TRUST_AUDIT,
     );
     let target = node.local_node_id.clone();
     let registry = node.registry();
@@ -550,9 +457,11 @@ fn the_public_projection_never_carries_a_forbidden_field() {
 
     // The audit trail records the stable code and metadata, never the payload.
     let audit = plane.audit_events(16).expect("audit");
-    assert!(audit
-        .iter()
-        .any(|event| event.error_code == Some(HealthCode::UnknownField.code())));
+    assert!(
+        audit
+            .iter()
+            .any(|event| event.error_code == Some(HealthCode::UnknownField.code()))
+    );
     for event in &audit {
         let rendered = format!("{event:?}");
         assert!(!rendered.contains("workshop"), "audit leaked: {rendered}");

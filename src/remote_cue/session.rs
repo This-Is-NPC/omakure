@@ -388,7 +388,7 @@ impl<'a> CueSession<'a> {
         let mut nonce = [0u8; 16];
         entropy::fill_bytes(&mut nonce);
         // The shape is the frozen reference vector in
-        // `tests/remote_cue_contract.rs`: flat, with `error` present only on a
+        // `tests/remote_cue_suite/contract.rs`: flat, with `error` present only on a
         // refusal, so "accepted" is never expressed as a code of zero.
         let mut payload = serde_json::json!({
             "version": 1,

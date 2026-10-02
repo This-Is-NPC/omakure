@@ -125,15 +125,19 @@
       "reason": "test-harness"
     },
     {
-      "path": "tests/remote_cue_authorization.rs",
-      "reason": "test-harness"
-    },
-    {
-      "path": "tests/remote_cue_contract.rs",
-      "reason": "test-harness"
-    },
-    {
       "path": "tests/remote_cue_e2e.rs",
+      "reason": "test-harness"
+    },
+    {
+      "path": "tests/remote_cue_suite.rs",
+      "reason": "test-harness"
+    },
+    {
+      "path": "tests/remote_cue_suite/authorization.rs",
+      "reason": "test-harness"
+    },
+    {
+      "path": "tests/remote_cue_suite/contract.rs",
       "reason": "test-harness"
     },
     {

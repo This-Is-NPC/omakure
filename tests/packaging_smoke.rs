@@ -730,7 +730,7 @@ fn docs_index_preserves_canonical_manual_ownership() {
 }
 // These wrappers are Bash scripts with shebangs, so execute them only on Unix,
 // where `Command` can launch them directly. The cross-platform Rust freshness
-// contracts remain in `cli_reference_contract`: the Clap-rendered reference
+// contracts remain in `cli_contract_suite::reference`: the Clap-rendered reference
 // and CLI/HTTP parity checks run on every target.
 #[cfg(unix)]
 #[test]
@@ -1067,6 +1067,30 @@ fn native_integration_manifest_matches_every_rust_test_target_once() {
         actual, tests,
         "native-integration must list every tests/*.rs basename exactly once"
     );
+
+    for target in actual {
+        let directory = repo_root().join("tests").join(&target);
+        if !directory.is_dir() {
+            continue;
+        }
+        let wrapper = read(&format!("tests/{target}.rs"));
+        let declared = wrapper
+            .lines()
+            .filter_map(|line| line.strip_prefix("#[path = \""))
+            .filter_map(|line| line.strip_suffix("\"]"))
+            .map(str::to_owned)
+            .collect::<BTreeSet<_>>();
+        let sources = fs::read_dir(&directory)
+            .expect("read grouped test directory")
+            .map(|entry| entry.expect("grouped test entry").path())
+            .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("rs"))
+            .map(|path| format!("{target}/{}", path.file_name().unwrap().to_string_lossy()))
+            .collect::<BTreeSet<_>>();
+        assert_eq!(
+            declared, sources,
+            "grouped test target must include every source exactly once: {target}"
+        );
+    }
 }
 
 #[test]

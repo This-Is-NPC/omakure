@@ -6,9 +6,8 @@
 //! envelope path, and asserts the properties that make remote execution safe
 //! rather than merely possible.
 //!
-//! No production Cue surface exists yet. Messages are constructed here with the
-//! frozen direct-envelope construction, which proves the plane is carriable
-//! without any change to the frozen identity construction or to transport code.
+//! Messages use the direct-envelope construction shared by the production Cue
+//! path. The vectors pin Cue message behavior and identity compatibility.
 //!
 //! Several assertions below pin *shipped behaviour this contract must work
 //! against* rather than behaviour the contract introduces — the allow-all secret
@@ -52,7 +51,7 @@ fn x_only_public_key() -> [u8; 32] {
 }
 
 /// The frozen node-id derivation, mirroring the sibling Health Plane contract
-/// test. No production surface is added.
+/// test.
 fn conductor_node_id() -> String {
     let mut input = b"omakure/node-id/v1\0".to_vec();
     input.extend_from_slice(&x_only_public_key());

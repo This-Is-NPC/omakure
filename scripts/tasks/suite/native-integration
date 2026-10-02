@@ -35,9 +35,8 @@ targets=(
   node_service_e2e
   packaging_smoke
   policy_e2e
-  remote_cue_authorization
-  remote_cue_contract
   remote_cue_e2e
+  remote_cue_suite
   secret_cli_e2e
   shipped_config_templates
   spike_command_path_resolution

@@ -576,464 +576,484 @@ fn apply(
     )
 }
 
-#[test]
-#[ignore = "requires Docker and runs isolated authority plus two fresh targets"]
-fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
-    let mut compose_guard = ComposeGuard::new();
-    wait_for_status(&compose_guard);
-    let authority_status = status(&compose_guard, "signed-authority");
-    let target_a_status = status(&compose_guard, "signed-target-a");
-    let target_b_status = status(&compose_guard, "signed-target-b");
-    let (authority_id, authority_key) = identity(&authority_status);
-    let (target_a_id, target_a_key) = identity(&target_a_status);
-    let (target_b_id, _target_b_key) = identity(&target_b_status);
-    let files = compose_guard._files.path();
-    let authority_cert_path = files.join("authority.cert");
-    let target_a_cert_path = files.join("target-a.cert");
-    copy_certificate(&compose_guard, "signed-authority", &authority_cert_path);
-    copy_certificate(&compose_guard, "signed-target-a", &target_a_cert_path);
-    let authority_cert = fs::read(&authority_cert_path).expect("authority certificate");
-    let target_a_cert = fs::read(&target_a_cert_path).expect("target A certificate");
-    let private_key = [2_u8; 32];
-    let now = omakure::direct_transport::unix_seconds();
-    let target_a_bundle = bundle(
-        &private_key,
-        BundleCase {
-            bundle_id: [1; 16],
-            organization: "omakure",
-            audience_node_id: target_a_id,
-            subject_node_id: authority_id,
-            subject_public_key: authority_key,
-            subject_certificate: &authority_cert,
-            issued_at: now,
-            expires_at: now + 600,
-        },
-    );
-    let target_b_bundle = bundle(
-        &private_key,
-        BundleCase {
-            bundle_id: [2; 16],
-            organization: "omakure",
-            audience_node_id: target_b_id,
-            subject_node_id: authority_id,
-            subject_public_key: authority_key,
-            subject_certificate: &authority_cert,
-            issued_at: now,
-            expires_at: now + 600,
-        },
-    );
-    let authority_a_bundle = bundle(
-        &private_key,
-        BundleCase {
-            bundle_id: [3; 16],
-            organization: "omakure",
-            audience_node_id: authority_id,
-            subject_node_id: target_a_id,
-            subject_public_key: target_a_key,
-            subject_certificate: &target_a_cert,
-            issued_at: now,
-            expires_at: now + 600,
-        },
-    );
-    let target_b_second_manager_bundle = bundle(
-        &private_key,
-        BundleCase {
-            bundle_id: [4; 16],
-            organization: "omakure",
-            audience_node_id: target_b_id,
-            subject_node_id: target_a_id,
-            subject_public_key: target_a_key,
-            subject_certificate: &target_a_cert,
-            issued_at: now,
-            expires_at: now + 600,
-        },
-    );
-    let wrong_org_bundle = bundle(
-        &private_key,
-        BundleCase {
-            bundle_id: [5; 16],
-            organization: "other-org",
-            audience_node_id: target_a_id,
-            subject_node_id: authority_id,
-            subject_public_key: authority_key,
-            subject_certificate: &authority_cert,
-            issued_at: now,
-            expires_at: now + 600,
-        },
-    );
-    let expired_bundle = bundle(
-        &private_key,
-        BundleCase {
-            bundle_id: [6; 16],
-            organization: "omakure",
-            audience_node_id: target_a_id,
-            subject_node_id: authority_id,
-            subject_public_key: authority_key,
-            subject_certificate: &authority_cert,
-            issued_at: now.saturating_sub(2_000),
-            expires_at: now.saturating_sub(1_000),
-        },
-    );
-    fs::write(files.join("target-a.bundle"), &target_a_bundle).unwrap();
-    fs::write(files.join("target-b.bundle"), &target_b_bundle).unwrap();
-    fs::write(files.join("authority-a.bundle"), &authority_a_bundle).unwrap();
-    fs::write(
-        files.join("target-b-second-manager.bundle"),
-        &target_b_second_manager_bundle,
-    )
-    .unwrap();
+struct SignedBundleScenario {
+    guard: ComposeGuard,
+    authority_id: String,
+    authority_key: String,
+    target_a_id: String,
+    authority_cert: Vec<u8>,
+    private_key: [u8; 32],
+    now: u64,
+    target_a_bundle: Vec<u8>,
+    wrong_org_bundle: Vec<u8>,
+    expired_bundle: Vec<u8>,
+}
 
-    let before_target_a = status(&compose_guard, "signed-target-a")["data"]["trust"].clone();
-    for (name, bytes) in [
-        ("wrong-org.bundle", wrong_org_bundle),
-        ("expired.bundle", expired_bundle),
-    ] {
-        let path = files.join(name);
-        fs::write(&path, bytes).unwrap();
-        copy_to_container(
-            &compose_guard,
+impl SignedBundleScenario {
+    fn new() -> Self {
+        let compose_guard = ComposeGuard::new();
+        wait_for_status(&compose_guard);
+        let authority_status = status(&compose_guard, "signed-authority");
+        let target_a_status = status(&compose_guard, "signed-target-a");
+        let target_b_status = status(&compose_guard, "signed-target-b");
+        let (authority_id, authority_key) = identity(&authority_status);
+        let (target_a_id, target_a_key) = identity(&target_a_status);
+        let (target_b_id, _target_b_key) = identity(&target_b_status);
+        let files = compose_guard._files.path();
+        let authority_cert_path = files.join("authority.cert");
+        let target_a_cert_path = files.join("target-a.cert");
+        copy_certificate(&compose_guard, "signed-authority", &authority_cert_path);
+        copy_certificate(&compose_guard, "signed-target-a", &target_a_cert_path);
+        let authority_cert = fs::read(&authority_cert_path).expect("authority certificate");
+        let target_a_cert = fs::read(&target_a_cert_path).expect("target A certificate");
+        let private_key = [2_u8; 32];
+        let now = omakure::direct_transport::unix_seconds();
+        let target_a_bundle = bundle(
+            &private_key,
+            BundleCase {
+                bundle_id: [1; 16],
+                organization: "omakure",
+                audience_node_id: target_a_id,
+                subject_node_id: authority_id,
+                subject_public_key: authority_key,
+                subject_certificate: &authority_cert,
+                issued_at: now,
+                expires_at: now + 600,
+            },
+        );
+        let target_b_bundle = bundle(
+            &private_key,
+            BundleCase {
+                bundle_id: [2; 16],
+                organization: "omakure",
+                audience_node_id: target_b_id,
+                subject_node_id: authority_id,
+                subject_public_key: authority_key,
+                subject_certificate: &authority_cert,
+                issued_at: now,
+                expires_at: now + 600,
+            },
+        );
+        let authority_a_bundle = bundle(
+            &private_key,
+            BundleCase {
+                bundle_id: [3; 16],
+                organization: "omakure",
+                audience_node_id: authority_id,
+                subject_node_id: target_a_id,
+                subject_public_key: target_a_key,
+                subject_certificate: &target_a_cert,
+                issued_at: now,
+                expires_at: now + 600,
+            },
+        );
+        let target_b_second_manager_bundle = bundle(
+            &private_key,
+            BundleCase {
+                bundle_id: [4; 16],
+                organization: "omakure",
+                audience_node_id: target_b_id,
+                subject_node_id: target_a_id,
+                subject_public_key: target_a_key,
+                subject_certificate: &target_a_cert,
+                issued_at: now,
+                expires_at: now + 600,
+            },
+        );
+        let wrong_org_bundle = bundle(
+            &private_key,
+            BundleCase {
+                bundle_id: [5; 16],
+                organization: "other-org",
+                audience_node_id: target_a_id,
+                subject_node_id: authority_id,
+                subject_public_key: authority_key,
+                subject_certificate: &authority_cert,
+                issued_at: now,
+                expires_at: now + 600,
+            },
+        );
+        let expired_bundle = bundle(
+            &private_key,
+            BundleCase {
+                bundle_id: [6; 16],
+                organization: "omakure",
+                audience_node_id: target_a_id,
+                subject_node_id: authority_id,
+                subject_public_key: authority_key,
+                subject_certificate: &authority_cert,
+                issued_at: now.saturating_sub(2_000),
+                expires_at: now.saturating_sub(1_000),
+            },
+        );
+        fs::write(files.join("target-a.bundle"), &target_a_bundle).unwrap();
+        fs::write(files.join("target-b.bundle"), &target_b_bundle).unwrap();
+        fs::write(files.join("authority-a.bundle"), &authority_a_bundle).unwrap();
+        fs::write(
+            files.join("target-b-second-manager.bundle"),
+            &target_b_second_manager_bundle,
+        )
+        .unwrap();
+        Self {
+            guard: compose_guard,
+            authority_id: authority_id.to_string(),
+            authority_key: authority_key.to_string(),
+            target_a_id: target_a_id.to_string(),
+            authority_cert,
+            private_key,
+            now,
+            target_a_bundle,
+            wrong_org_bundle,
+            expired_bundle,
+        }
+    }
+
+    fn reject_invalid_target_a_bundles(&self) {
+        let files = self.guard._files.path();
+        let before_target_a = status(&self.guard, "signed-target-a")["data"]["trust"].clone();
+        for (name, bytes) in [
+            ("wrong-org.bundle", self.wrong_org_bundle.as_slice()),
+            ("expired.bundle", self.expired_bundle.as_slice()),
+        ] {
+            let path = files.join(name);
+            fs::write(&path, bytes).unwrap();
+            copy_to_container(
+                &self.guard,
+                "signed-target-a",
+                &path,
+                &format!("/tmp/{name}"),
+            );
+            assert!(
+                !apply(
+                    &self.guard,
+                    "signed-target-a",
+                    &format!("/tmp/{name}"),
+                    "/run/secrets/bootstrap-token/bootstrap.token",
+                    &[9; 16],
+                )
+                .status
+                .success()
+            );
+            assert_eq!(
+                status(&self.guard, "signed-target-a")["data"]["trust"],
+                before_target_a
+            );
+        }
+    }
+
+    fn enroll_target_a_and_authority(&self) {
+        let target_a = apply(
+            &self.guard,
             "signed-target-a",
-            &path,
-            &format!("/tmp/{name}"),
+            "/run/secrets/target-a.bundle",
+            "/run/secrets/bootstrap-token/bootstrap.token",
+            &[9; 16],
+        );
+        assert!(
+            target_a.status.success(),
+            "target A enrollment failed: stdout={} stderr={}",
+            String::from_utf8_lossy(&target_a.stdout),
+            String::from_utf8_lossy(&target_a.stderr)
+        );
+        assert!(
+            exec(
+                &self.guard,
+                "signed-target-a",
+                &[
+                    "/bin/sh",
+                    "-c",
+                    "test ! -e /run/secrets/bootstrap-token/bootstrap.token"
+                ],
+            )
+            .status
+            .success()
+        );
+        assert!(
+            apply(
+                &self.guard,
+                "signed-authority",
+                "/run/secrets/target-a.bundle",
+                "/run/secrets/bootstrap-token/bootstrap.token",
+                &[11; 16],
+            )
+            .status
+            .success()
+        );
+    }
+
+    fn reject_cross_audience_and_insecure_token(&self) {
+        let files = self.guard._files.path();
+        let cross = files.join("cross.bundle");
+        fs::write(&cross, &self.target_a_bundle).unwrap();
+        copy_to_container(&self.guard, "signed-target-b", &cross, "/tmp/cross.bundle");
+        assert!(
+            exec(
+                &self.guard,
+                "signed-target-b",
+                &[
+                    "/bin/sh",
+                    "-c",
+                    "chmod 0644 /run/secrets/bootstrap-token/bootstrap.token"
+                ],
+            )
+            .status
+            .success()
         );
         assert!(
             !apply(
-                &compose_guard,
+                &self.guard,
+                "signed-target-b",
+                "/tmp/cross.bundle",
+                "/run/secrets/bootstrap-token/bootstrap.token",
+                &[10; 16],
+            )
+            .status
+            .success()
+        );
+        assert_eq!(
+            status(&self.guard, "signed-target-b")["data"]["trust"]["active_peer_count"],
+            0
+        );
+        assert!(
+            exec(
+                &self.guard,
+                "signed-target-b",
+                &[
+                    "/bin/sh",
+                    "-c",
+                    "chmod 0600 /run/secrets/bootstrap-token/bootstrap.token"
+                ],
+            )
+            .status
+            .success()
+        );
+        assert!(
+            !apply(
+                &self.guard,
+                "signed-target-b",
+                "/tmp/cross.bundle",
+                "/run/secrets/bootstrap-token/bootstrap.token",
+                &[10; 16],
+            )
+            .status
+            .success()
+        );
+    }
+
+    fn race_target_b_managers(&self) {
+        let files = self.guard._files.path();
+        let second_manager_path = files.join("target-b-second-manager.bundle");
+        copy_to_container(
+            &self.guard,
+            "signed-target-b",
+            &second_manager_path,
+            "/tmp/target-b-second-manager.bundle",
+        );
+        let results = thread::scope(|scope| {
+            let first = scope.spawn(|| {
+                apply(
+                    &self.guard,
+                    "signed-target-b",
+                    "/run/secrets/target-b.bundle",
+                    "/run/secrets/bootstrap-token/bootstrap.token",
+                    &[10; 16],
+                )
+            });
+            let second = scope.spawn(|| {
+                apply(
+                    &self.guard,
+                    "signed-target-b",
+                    "/tmp/target-b-second-manager.bundle",
+                    "/run/secrets/bootstrap-token/bootstrap.token",
+                    &[10; 16],
+                )
+            });
+            [first.join().unwrap(), second.join().unwrap()]
+        });
+        assert_eq!(
+            results
+                .iter()
+                .filter(|output| output.status.success())
+                .count(),
+            1
+        );
+        assert_eq!(
+            status(&self.guard, "signed-target-b")["data"]["trust"]["active_peer_count"],
+            1
+        );
+        assert!(
+            exec(
+                &self.guard,
+                "signed-target-b",
+                &[
+                    "/bin/sh",
+                    "-c",
+                    "test ! -e /run/secrets/bootstrap-token/bootstrap.token"
+                ],
+            )
+            .status
+            .success()
+        );
+    }
+
+    fn assert_direct_probes(&self, target_failure: &str, authority_failure: &str) {
+        let authority_endpoint = format!("{}:7988", container_ip(&self.guard, "signed-authority"));
+        let probe = exec(
+            &self.guard,
+            "signed-target-a",
+            &[
+                "omakure",
+                "--json",
+                "node",
+                "direct-probe",
+                "--endpoint",
+                &authority_endpoint,
+                "--peer-node-id",
+                self.authority_id.as_str(),
+            ],
+        );
+        assert!(
+            probe.status.success(),
+            "{target_failure}: stdout={} stderr={}",
+            String::from_utf8_lossy(&probe.stdout),
+            String::from_utf8_lossy(&probe.stderr)
+        );
+        let target_a_endpoint = format!("{}:7988", container_ip(&self.guard, "signed-target-a"));
+        let reverse_probe = exec(
+            &self.guard,
+            "signed-authority",
+            &[
+                "omakure",
+                "--json",
+                "node",
+                "direct-probe",
+                "--endpoint",
+                &target_a_endpoint,
+                "--peer-node-id",
+                self.target_a_id.as_str(),
+            ],
+        );
+        assert!(
+            reverse_probe.status.success(),
+            "{authority_failure}: stdout={} stderr={}",
+            String::from_utf8_lossy(&reverse_probe.stdout),
+            String::from_utf8_lossy(&reverse_probe.stderr)
+        );
+    }
+
+    fn revoke_authority_and_restart(&mut self) {
+        let files = self.guard._files.path();
+        let target_a_config = files.join("target-a.toml");
+        let revoked_token = "target-a-revoked-authority-token-0123";
+        write_private_token(&files.join("target-a-revoked.bootstrap"), revoked_token);
+        let revoked_config = signed_config(
+            &omakure::hex::encode(&[8; 16]),
+            self.authority_key.as_str(),
+            revoked_token,
+            &[9; 16],
+        )
+        .replace("revoked = false", "revoked = true");
+        fs::write(&target_a_config, revoked_config).unwrap();
+        self.guard.compose_env.insert(
+            "OMAKURE_SIGNED_TARGET_A_TOKEN",
+            files.join("target-a-revoked.bootstrap"),
+        );
+        let token_refreshed = compose(
+            &self.guard,
+            &["run", "--rm", "--no-deps", "signed-target-a-token-init"],
+        );
+        assert!(token_refreshed.status.success(), "refresh token failed");
+        let refreshed = compose(
+            &self.guard,
+            &["run", "--rm", "--no-deps", "signed-target-a-config-init"],
+        );
+        assert!(
+            refreshed.status.success(),
+            "refresh revoked authority config failed"
+        );
+        let restarted = compose(&self.guard, &["restart", "signed-target-a"]);
+        assert!(
+            restarted.status.success(),
+            "restart after authority revocation failed"
+        );
+        wait_for_status(&self.guard);
+    }
+
+    fn reject_revoked_authority_bundle(&self) {
+        let files = self.guard._files.path();
+        let before = status(&self.guard, "signed-target-a")["data"]["trust"].clone();
+        let revoked_bundle = bundle(
+            &self.private_key,
+            BundleCase {
+                bundle_id: [7; 16],
+                organization: "omakure",
+                audience_node_id: self.target_a_id.as_str(),
+                subject_node_id: self.authority_id.as_str(),
+                subject_public_key: self.authority_key.as_str(),
+                subject_certificate: &self.authority_cert,
+                issued_at: self.now,
+                expires_at: self.now + 600,
+            },
+        );
+        let revoked_bundle_path = files.join("revoked.bundle");
+        fs::write(&revoked_bundle_path, revoked_bundle).unwrap();
+        copy_to_container(
+            &self.guard,
+            "signed-target-a",
+            &revoked_bundle_path,
+            "/tmp/revoked.bundle",
+        );
+        assert!(
+            !apply(
+                &self.guard,
                 "signed-target-a",
-                &format!("/tmp/{name}"),
+                "/tmp/revoked.bundle",
                 "/run/secrets/bootstrap-token/bootstrap.token",
                 &[9; 16],
             )
             .status
             .success()
         );
+        assert!(
+            exec(
+                &self.guard,
+                "signed-target-a",
+                &[
+                    "/bin/sh",
+                    "-c",
+                    "test -e /run/secrets/bootstrap-token/bootstrap.token"
+                ],
+            )
+            .status
+            .success()
+        );
         assert_eq!(
-            status(&compose_guard, "signed-target-a")["data"]["trust"],
-            before_target_a
+            status(&self.guard, "signed-target-a")["data"]["trust"],
+            before
         );
     }
-    let target_a = apply(
-        &compose_guard,
-        "signed-target-a",
-        "/run/secrets/target-a.bundle",
-        "/run/secrets/bootstrap-token/bootstrap.token",
-        &[9; 16],
-    );
-    assert!(
-        target_a.status.success(),
-        "target A enrollment failed: stdout={} stderr={}",
-        String::from_utf8_lossy(&target_a.stdout),
-        String::from_utf8_lossy(&target_a.stderr)
-    );
-    assert!(
-        exec(
-            &compose_guard,
-            "signed-target-a",
-            &[
-                "/bin/sh",
-                "-c",
-                "test ! -e /run/secrets/bootstrap-token/bootstrap.token"
-            ],
-        )
-        .status
-        .success()
-    );
-    assert!(
-        apply(
-            &compose_guard,
-            "signed-authority",
-            "/run/secrets/target-a.bundle",
-            "/run/secrets/bootstrap-token/bootstrap.token",
-            &[11; 16],
-        )
-        .status
-        .success()
-    );
 
-    let cross = files.join("cross.bundle");
-    fs::write(&cross, &target_a_bundle).unwrap();
-    copy_to_container(
-        &compose_guard,
-        "signed-target-b",
-        &cross,
-        "/tmp/cross.bundle",
-    );
-    assert!(
-        exec(
-            &compose_guard,
-            "signed-target-b",
-            &[
-                "/bin/sh",
-                "-c",
-                "chmod 0644 /run/secrets/bootstrap-token/bootstrap.token"
-            ],
-        )
-        .status
-        .success()
-    );
-    assert!(
-        !apply(
-            &compose_guard,
-            "signed-target-b",
-            "/tmp/cross.bundle",
-            "/run/secrets/bootstrap-token/bootstrap.token",
-            &[10; 16],
-        )
-        .status
-        .success()
-    );
-    assert_eq!(
-        status(&compose_guard, "signed-target-b")["data"]["trust"]["active_peer_count"],
-        0
-    );
-    assert!(
-        exec(
-            &compose_guard,
-            "signed-target-b",
-            &[
-                "/bin/sh",
-                "-c",
-                "chmod 0600 /run/secrets/bootstrap-token/bootstrap.token"
-            ],
-        )
-        .status
-        .success()
-    );
-    assert!(
-        !apply(
-            &compose_guard,
-            "signed-target-b",
-            "/tmp/cross.bundle",
-            "/run/secrets/bootstrap-token/bootstrap.token",
-            &[10; 16],
-        )
-        .status
-        .success()
-    );
+    fn finalize(self) {
+        self.guard.finalize();
+    }
+}
 
-    let second_manager_path = files.join("target-b-second-manager.bundle");
-    copy_to_container(
-        &compose_guard,
-        "signed-target-b",
-        &second_manager_path,
-        "/tmp/target-b-second-manager.bundle",
+#[test]
+#[ignore = "requires Docker and runs isolated authority plus two fresh targets"]
+fn docker_signed_bundle_enrollment_is_bound_replay_safe_and_restart_stable() {
+    let mut scenario = SignedBundleScenario::new();
+    scenario.reject_invalid_target_a_bundles();
+    scenario.enroll_target_a_and_authority();
+    scenario.reject_cross_audience_and_insecure_token();
+    scenario.race_target_b_managers();
+    scenario.assert_direct_probes("target probe failed", "authority probe failed");
+    scenario.revoke_authority_and_restart();
+    scenario.assert_direct_probes(
+        "post-restart target probe failed",
+        "post-restart authority probe failed",
     );
-    let results = thread::scope(|scope| {
-        let first = scope.spawn(|| {
-            apply(
-                &compose_guard,
-                "signed-target-b",
-                "/run/secrets/target-b.bundle",
-                "/run/secrets/bootstrap-token/bootstrap.token",
-                &[10; 16],
-            )
-        });
-        let second = scope.spawn(|| {
-            apply(
-                &compose_guard,
-                "signed-target-b",
-                "/tmp/target-b-second-manager.bundle",
-                "/run/secrets/bootstrap-token/bootstrap.token",
-                &[10; 16],
-            )
-        });
-        [first.join().unwrap(), second.join().unwrap()]
-    });
-    assert_eq!(
-        results
-            .iter()
-            .filter(|output| output.status.success())
-            .count(),
-        1
-    );
-    assert_eq!(
-        status(&compose_guard, "signed-target-b")["data"]["trust"]["active_peer_count"],
-        1
-    );
-    assert!(
-        exec(
-            &compose_guard,
-            "signed-target-b",
-            &[
-                "/bin/sh",
-                "-c",
-                "test ! -e /run/secrets/bootstrap-token/bootstrap.token"
-            ],
-        )
-        .status
-        .success()
-    );
-
-    let authority_endpoint = format!("{}:7988", container_ip(&compose_guard, "signed-authority"));
-    let probe = exec(
-        &compose_guard,
-        "signed-target-a",
-        &[
-            "omakure",
-            "--json",
-            "node",
-            "direct-probe",
-            "--endpoint",
-            &authority_endpoint,
-            "--peer-node-id",
-            authority_id,
-        ],
-    );
-    assert!(
-        probe.status.success(),
-        "target probe failed: stdout={} stderr={}",
-        String::from_utf8_lossy(&probe.stdout),
-        String::from_utf8_lossy(&probe.stderr)
-    );
-    let target_a_endpoint = format!("{}:7988", container_ip(&compose_guard, "signed-target-a"));
-    let reverse_probe = exec(
-        &compose_guard,
-        "signed-authority",
-        &[
-            "omakure",
-            "--json",
-            "node",
-            "direct-probe",
-            "--endpoint",
-            &target_a_endpoint,
-            "--peer-node-id",
-            target_a_id,
-        ],
-    );
-    assert!(
-        reverse_probe.status.success(),
-        "authority probe failed: stdout={} stderr={}",
-        String::from_utf8_lossy(&reverse_probe.stdout),
-        String::from_utf8_lossy(&reverse_probe.stderr)
-    );
-
-    let target_a_config = files.join("target-a.toml");
-    let revoked_token = "target-a-revoked-authority-token-0123";
-    write_private_token(&files.join("target-a-revoked.bootstrap"), revoked_token);
-    let revoked_config = signed_config(
-        &omakure::hex::encode(&[8; 16]),
-        authority_key,
-        revoked_token,
-        &[9; 16],
-    )
-    .replace("revoked = false", "revoked = true");
-    fs::write(&target_a_config, revoked_config).unwrap();
-    compose_guard.compose_env.insert(
-        "OMAKURE_SIGNED_TARGET_A_TOKEN",
-        files.join("target-a-revoked.bootstrap"),
-    );
-    let token_refreshed = compose(
-        &compose_guard,
-        &["run", "--rm", "--no-deps", "signed-target-a-token-init"],
-    );
-    assert!(token_refreshed.status.success(), "refresh token failed");
-    let refreshed = compose(
-        &compose_guard,
-        &["run", "--rm", "--no-deps", "signed-target-a-config-init"],
-    );
-    assert!(
-        refreshed.status.success(),
-        "refresh revoked authority config failed"
-    );
-    let restarted = compose(&compose_guard, &["restart", "signed-target-a"]);
-    assert!(
-        restarted.status.success(),
-        "restart after authority revocation failed"
-    );
-    wait_for_status(&compose_guard);
-    let authority_endpoint = format!("{}:7988", container_ip(&compose_guard, "signed-authority"));
-    let post_restart_probe = exec(
-        &compose_guard,
-        "signed-target-a",
-        &[
-            "omakure",
-            "--json",
-            "node",
-            "direct-probe",
-            "--endpoint",
-            &authority_endpoint,
-            "--peer-node-id",
-            authority_id,
-        ],
-    );
-    assert!(
-        post_restart_probe.status.success(),
-        "post-restart target probe failed: stdout={} stderr={}",
-        String::from_utf8_lossy(&post_restart_probe.stdout),
-        String::from_utf8_lossy(&post_restart_probe.stderr)
-    );
-    let target_a_endpoint = format!("{}:7988", container_ip(&compose_guard, "signed-target-a"));
-    let post_restart_reverse_probe = exec(
-        &compose_guard,
-        "signed-authority",
-        &[
-            "omakure",
-            "--json",
-            "node",
-            "direct-probe",
-            "--endpoint",
-            &target_a_endpoint,
-            "--peer-node-id",
-            target_a_id,
-        ],
-    );
-    assert!(
-        post_restart_reverse_probe.status.success(),
-        "post-restart authority probe failed: stdout={} stderr={}",
-        String::from_utf8_lossy(&post_restart_reverse_probe.stdout),
-        String::from_utf8_lossy(&post_restart_reverse_probe.stderr)
-    );
-    let before = status(&compose_guard, "signed-target-a")["data"]["trust"].clone();
-    let revoked_bundle = bundle(
-        &private_key,
-        BundleCase {
-            bundle_id: [7; 16],
-            organization: "omakure",
-            audience_node_id: target_a_id,
-            subject_node_id: authority_id,
-            subject_public_key: authority_key,
-            subject_certificate: &authority_cert,
-            issued_at: now,
-            expires_at: now + 600,
-        },
-    );
-    let revoked_bundle_path = files.join("revoked.bundle");
-    fs::write(&revoked_bundle_path, revoked_bundle).unwrap();
-    copy_to_container(
-        &compose_guard,
-        "signed-target-a",
-        &revoked_bundle_path,
-        "/tmp/revoked.bundle",
-    );
-    assert!(
-        !apply(
-            &compose_guard,
-            "signed-target-a",
-            "/tmp/revoked.bundle",
-            "/run/secrets/bootstrap-token/bootstrap.token",
-            &[9; 16],
-        )
-        .status
-        .success()
-    );
-    assert!(
-        exec(
-            &compose_guard,
-            "signed-target-a",
-            &[
-                "/bin/sh",
-                "-c",
-                "test -e /run/secrets/bootstrap-token/bootstrap.token"
-            ],
-        )
-        .status
-        .success()
-    );
-    assert_eq!(
-        status(&compose_guard, "signed-target-a")["data"]["trust"],
-        before
-    );
-    compose_guard.finalize();
+    scenario.reject_revoked_authority_bundle();
+    scenario.finalize();
 }
 
 // ---------------------------------------------------------------------------

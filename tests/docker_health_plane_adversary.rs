@@ -685,597 +685,703 @@ impl CaseLog {
     }
 }
 
+struct AdversaryScenario {
+    cases: CaseLog,
+    conductor_id: String,
+    adversary_id: String,
+    seeded_cursor: u64,
+    stream: TcpStream,
+    session: TransportSession,
+    identity: NodeIdentity,
+}
+
+impl AdversaryScenario {
+    fn new() -> Self {
+        let cases = CaseLog::default();
+        let state_dir = PathBuf::from(env("OMAKURE_HP_ADVERSARY_STATE"));
+        let conductor_id = env("OMAKURE_HP_CONDUCTOR_ID");
+        let adversary_id = env("OMAKURE_HP_ADVERSARY_ID");
+        let seeded_cursor: u64 = env("OMAKURE_HP_SEEDED_CURSOR")
+            .parse()
+            .expect("the seeded Signal cursor must be an integer");
+        let (stream, session, identity) = production_session(&state_dir);
+        Self {
+            cases,
+            conductor_id,
+            adversary_id,
+            seeded_cursor,
+            stream,
+            session,
+            identity,
+        }
+    }
+
+    fn case_01_wrong_target(&mut self) {
+        // 1. Wrong target: a syntactically valid third-party node ID is rejected
+        //    before any state is read or written, and never answered.
+        self.cases.mark(
+            1,
+            "Wrong target: a syntactically valid third-party node ID is rejected",
+        );
+        let mark = latest_audit_id();
+        assert_dropped(
+            exchange(
+                &mut self.stream,
+                &mut self.session,
+                &self.identity,
+                "health_profile",
+                profile_payload(&self.adversary_id, &message_id(0x01), 1),
+                unix_seconds(),
+                0x01,
+            ),
+            mark,
+            HealthCode::WrongTarget,
+            "a Profile addressed to a third party",
+        );
+    }
+
+    fn case_02_future_profile(&mut self) {
+        // 2. Future beyond the frozen 60-second skew.
+        self.cases
+            .mark(2, "Future beyond the frozen 60-second skew.");
+        assert_error(
+            exchange(
+                &mut self.stream,
+                &mut self.session,
+                &self.identity,
+                "health_profile",
+                profile_payload(&self.conductor_id, &message_id(0x02), 1),
+                unix_seconds() + MAX_FUTURE_SKEW_SECONDS as u64 + 5,
+                0x02,
+            ),
+            HealthCode::Future,
+            "a Profile beyond the frozen future skew",
+        );
+    }
+
+    fn case_03_stale_profile(&mut self) {
+        // 3. Stale beyond the frozen 120-second age.
+        self.cases
+            .mark(3, "Stale beyond the frozen 120-second age.");
+        assert_error(
+            exchange(
+                &mut self.stream,
+                &mut self.session,
+                &self.identity,
+                "health_profile",
+                profile_payload(&self.conductor_id, &message_id(0x03), 1),
+                unix_seconds() - MAX_AGE_SECONDS as u64 - 5,
+                0x03,
+            ),
+            HealthCode::Stale,
+            "a Profile beyond the frozen freshness window",
+        );
+    }
+
+    fn case_04_unknown_field(&mut self) {
+        // 4. An unknown field smuggled into the closed schema.
+        self.cases
+            .mark(4, "An unknown field smuggled into the closed schema.");
+        let mark = latest_audit_id();
+        let mut unknown = profile_payload(&self.conductor_id, &message_id(0x04), 1);
+        unknown["profile"]["hostname"] = json!("workshop.local");
+        assert_dropped(
+            exchange(
+                &mut self.stream,
+                &mut self.session,
+                &self.identity,
+                "health_profile",
+                unknown,
+                unix_seconds(),
+                0x04,
+            ),
+            mark,
+            HealthCode::UnknownField,
+            "a smuggled hostname field",
+        );
+    }
+
+    fn case_05_invalid_display_name(&mut self) {
+        // 5. A grammar violation that would smuggle a filesystem path.
+        self.cases.mark(
+            5,
+            "A grammar violation that would smuggle a filesystem path.",
+        );
+        let mark = latest_audit_id();
+        let mut malformed = profile_payload(&self.conductor_id, &message_id(0x05), 1);
+        malformed["profile"]["display_name"] = json!("/etc/shadow");
+        assert_dropped(
+            exchange(
+                &mut self.stream,
+                &mut self.session,
+                &self.identity,
+                "health_profile",
+                malformed,
+                unix_seconds(),
+                0x05,
+            ),
+            mark,
+            HealthCode::InvalidMessage,
+            "a display name carrying a filesystem path",
+        );
+    }
+
+    fn case_06_oversized_profile(&mut self) {
+        // 6. Oversized past the frozen per-kind canonical cap.
+        self.cases
+            .mark(6, "Oversized past the frozen per-kind canonical cap.");
+        let mark = latest_audit_id();
+        let mut oversized = profile_payload(&self.conductor_id, &message_id(0x06), 1);
+        oversized["profile"]["runtimes"] = json!(
+            (0..64)
+                .map(|index| json!({
+                    "available": true,
+                    "name": format!("runtime{index}"),
+                    "version": "9.9.9999999999999999999999"
+                }))
+                .collect::<Vec<Value>>()
+        );
+        assert_dropped(
+            exchange(
+                &mut self.stream,
+                &mut self.session,
+                &self.identity,
+                "health_profile",
+                oversized,
+                unix_seconds(),
+                0x06,
+            ),
+            mark,
+            HealthCode::MessageTooLarge,
+            "an oversized Profile",
+        );
+    }
+
+    fn case_07_forged_signature(&mut self) {
+        // 7. A forged signature over an otherwise perfect envelope.
+        self.cases
+            .mark(7, "A forged signature over an otherwise perfect envelope.");
+        let mark = latest_audit_id();
+        let mut forged = sign_health_envelope(
+            &self.identity,
+            "health_profile",
+            self.session.session_id(),
+            [0x07; 16],
+            profile_payload(&self.conductor_id, &message_id(0x07), 1),
+            unix_seconds(),
+        )
+        .expect("sign the envelope to forge")
+        .encoded();
+        let last = forged.len() - 1;
+        forged[last] ^= 0x01;
+        assert_dropped(
+            exchange_encoded(
+                &mut self.stream,
+                &mut self.session,
+                forged,
+                &message_id(0x07),
+            ),
+            mark,
+            HealthCode::InvalidMessage,
+            "a forged BIP-340 signature",
+        );
+    }
+
+    fn case_08_spoofed_sender(&mut self) {
+        // 8. A spoofed sender: the envelope claims to come from the Conductor
+        //    itself while riding the adversary's authenticated session.
+        self.cases.mark(
+            8,
+            "A spoofed sender: the envelope claims to come from the Conductor",
+        );
+        let mark = latest_audit_id();
+        let spoofed = spoofed_envelope(
+            &self.conductor_id,
+            "health_profile",
+            self.session.session_id(),
+            [0x08; 16],
+            profile_payload(&self.conductor_id, &message_id(0x08), 1),
+            unix_seconds(),
+        );
+        assert_dropped(
+            exchange_encoded(
+                &mut self.stream,
+                &mut self.session,
+                spoofed,
+                &message_id(0x08),
+            ),
+            mark,
+            HealthCode::InvalidMessage,
+            "an envelope spoofing the Conductor's own identity",
+        );
+    }
+
+    fn case_09_cross_session_envelope(&mut self) {
+        // 9. An envelope bound to a different session.
+        self.cases
+            .mark(9, "An envelope bound to a different session.");
+        let mark = latest_audit_id();
+        let other_session = [0x99_u8; 32];
+        let cross_session = sign_health_envelope(
+            &self.identity,
+            "health_profile",
+            &other_session,
+            [0x09; 16],
+            profile_payload(&self.conductor_id, &message_id(0x09), 1),
+            unix_seconds(),
+        )
+        .expect("sign the cross-session envelope")
+        .encoded();
+        assert_dropped(
+            exchange_encoded(
+                &mut self.stream,
+                &mut self.session,
+                cross_session,
+                &message_id(0x09),
+            ),
+            mark,
+            HealthCode::Replay,
+            "an envelope bound to a different session",
+        );
+    }
+
+    fn case_10_authorized_profile_and_replay(&mut self) -> u64 {
+        // 10. An authorized Profile is accepted, and the same `message_id` replayed
+        //     immediately afterwards is not.
+        self.cases.mark(
+            10,
+            "An authorized Profile is accepted, and the same `message_id` replayed",
+        );
+        let base_revision = unix_seconds();
+        assert_accepted(
+            exchange(
+                &mut self.stream,
+                &mut self.session,
+                &self.identity,
+                "health_profile",
+                profile_payload(&self.conductor_id, &message_id(0x10), base_revision),
+                unix_seconds(),
+                0x10,
+            ),
+            "an authorized Profile",
+        );
+        assert_error(
+            exchange(
+                &mut self.stream,
+                &mut self.session,
+                &self.identity,
+                "health_profile",
+                profile_payload(&self.conductor_id, &message_id(0x10), base_revision + 1),
+                unix_seconds(),
+                0x11,
+            ),
+            HealthCode::Replay,
+            "a replayed message_id",
+        );
+        base_revision
+    }
+
+    fn case_11_non_increasing_revision(&mut self, base_revision: u64) {
+        // 11. A Profile revision that does not strictly increase.
+        self.cases
+            .mark(11, "A Profile revision that does not strictly increase.");
+        assert_error(
+            exchange(
+                &mut self.stream,
+                &mut self.session,
+                &self.identity,
+                "health_profile",
+                profile_payload(&self.conductor_id, &message_id(0x12), base_revision - 1),
+                unix_seconds(),
+                0x12,
+            ),
+            HealthCode::Replay,
+            "a Profile revision that stepped backwards",
+        );
+    }
+
+    fn case_12_backward_clock_pulse(&mut self, base_revision: u64) {
+        // 12. An authorized Pulse is accepted, and a Pulse whose sequence stepped
+        //     backwards is not. This is the contracted effect of a backward
+        //     wall-clock step across a restart: `pulse.sequence` and
+        //     `pulse.emitted_at` are both derived from the wall clock, and the
+        //     frozen schema requires `emitted_at == created_at`, so a node whose
+        //     clock moved backwards emits a well-formed, still-fresh Pulse with a
+        //     non-increasing sequence. It fails closed as `health_replay` and
+        //     mutates nothing. The step used here is deliberately inside the frozen
+        //     120-second freshness window; a larger backward step is simply
+        //     rejected earlier as `health_stale`.
+        self.cases.mark(
+            12,
+            "An authorized Pulse is accepted, and a Pulse whose sequence stepped",
+        );
+        let base_sequence = unix_seconds();
+        assert_accepted(
+            exchange(
+                &mut self.stream,
+                &mut self.session,
+                &self.identity,
+                "health_pulse",
+                pulse_payload(
+                    &self.conductor_id,
+                    &message_id(0x13),
+                    base_sequence,
+                    base_revision,
+                    base_sequence,
+                ),
+                base_sequence,
+                0x13,
+            ),
+            "an authorized Pulse",
+        );
+        let stored_sequence = stored_pulse_sequence(&self.adversary_id);
+        // The frozen minimum accepted Pulse interval is checked at step 11, before
+        // the ordering rules at step 13. Waiting it out is what makes the next
+        // rejection prove the ordering rule rather than the rate rule. The wait is
+        // the frozen bound itself, not a guess.
+        std::thread::sleep(Duration::from_secs(MIN_PULSE_INTERVAL_SECONDS as u64 + 1));
+        let stepped_back = base_sequence - BACKWARD_CLOCK_STEP_SECONDS;
+        assert_error(
+            exchange(
+                &mut self.stream,
+                &mut self.session,
+                &self.identity,
+                "health_pulse",
+                pulse_payload(
+                    &self.conductor_id,
+                    &message_id(0x14),
+                    stepped_back,
+                    base_revision,
+                    stepped_back,
+                ),
+                stepped_back,
+                0x14,
+            ),
+            HealthCode::Replay,
+            "a Pulse whose wall-clock sequence stepped backwards",
+        );
+        assert_eq!(
+            stored_pulse_sequence(&self.adversary_id),
+            stored_sequence,
+            "a backward wall-clock Pulse must not move the stored sequence"
+        );
+    }
+
+    fn case_13_signal_past_reorder_window(&mut self) {
+        // 13. A Signal past the frozen reorder buffer is refused outright.
+        self.cases.mark(
+            13,
+            "A Signal past the frozen reorder buffer is refused outright.",
+        );
+        assert_error(
+            exchange(
+                &mut self.stream,
+                &mut self.session,
+                &self.identity,
+                "health_signal",
+                signal_payload(
+                    &self.conductor_id,
+                    &message_id(0x15),
+                    self.seeded_cursor + REORDER_BUFFER_ENTRIES + 1,
+                    0xa1,
+                    unix_seconds(),
+                ),
+                unix_seconds(),
+                0x15,
+            ),
+            HealthCode::Reordered,
+            "a Signal past the frozen reorder buffer",
+        );
+    }
+
+    fn case_14_signal_behind_gap(&mut self) {
+        // 14. A Signal inside the reorder buffer is held, and the acknowledged
+        //     cursor does not advance past the gap.
+        self.cases.mark(
+            14,
+            "A Signal inside the reorder buffer is held, and the acknowledged",
+        );
+        let cursor = assert_accepted(
+            exchange(
+                &mut self.stream,
+                &mut self.session,
+                &self.identity,
+                "health_signal",
+                signal_payload(
+                    &self.conductor_id,
+                    &message_id(0x16),
+                    self.seeded_cursor + 2,
+                    0xa2,
+                    unix_seconds(),
+                ),
+                unix_seconds(),
+                0x16,
+            ),
+            "a Signal held behind a gap",
+        );
+        assert_eq!(
+            cursor, self.seeded_cursor,
+            "the acknowledged cursor must not advance past a gap"
+        );
+    }
+
+    fn case_15_full_signal_inbox(&mut self) {
+        // 15. The frozen per-Performer inbox is full, so the next in-order Signal
+        //     is refused rather than stored.
+        self.cases.mark(
+            15,
+            "The frozen per-Performer inbox is full, so the next in-order Signal",
+        );
+        assert_eq!(
+            stored_signal_count(&self.adversary_id),
+            SIGNAL_INBOX_CAPACITY,
+            "the certification script must seed the inbox to its frozen capacity"
+        );
+        assert_error(
+            exchange(
+                &mut self.stream,
+                &mut self.session,
+                &self.identity,
+                "health_signal",
+                signal_payload(
+                    &self.conductor_id,
+                    &message_id(0x17),
+                    self.seeded_cursor + 1,
+                    0xa3,
+                    unix_seconds(),
+                ),
+                unix_seconds(),
+                0x17,
+            ),
+            HealthCode::QueueFull,
+            "a Signal arriving at a full inbox",
+        );
+        assert_eq!(
+            stored_signal_count(&self.adversary_id),
+            SIGNAL_INBOX_CAPACITY,
+            "a refused Signal must not be stored"
+        );
+    }
+
+    fn case_16_rate_flood(&mut self, base_revision: u64) {
+        // 16. Flood: past the frozen per-peer allowance and its burst.
+        self.cases.mark(
+            16,
+            "Flood: past the frozen per-peer allowance and its burst.",
+        );
+        let mut rate_limited = false;
+        for index in 0..FLOOD_CEILING {
+            let seed = 0x20_u8.wrapping_add(index as u8);
+            let reply = exchange(
+                &mut self.stream,
+                &mut self.session,
+                &self.identity,
+                "health_profile",
+                profile_payload(
+                    &self.conductor_id,
+                    &message_id(seed),
+                    base_revision + 10 + index as u64,
+                ),
+                unix_seconds(),
+                seed,
+            );
+            if let Some((kind, payload)) = reply.reply
+                && kind == "health_error"
+                && payload["error"]["code"] == json!(HealthCode::RateLimited.code())
+            {
+                rate_limited = true;
+                break;
+            }
+        }
+        assert!(
+            rate_limited,
+            "a flooding peer must hit a frozen Health Plane rate bound within {FLOOD_CEILING} messages"
+        );
+    }
+
+    fn case_17_missing_notification_capability(&mut self) {
+        // 17. Capability: the Conductor withdraws `notifications`, so this peer may
+        //     still report Profile and Pulse but its Signals are refused. Steps 8
+        //     and 9 of the frozen receive order run before the rate check, so the
+        //     flood above cannot mask this outcome.
+        self.cases.mark(
+            17,
+            "Capability: the Conductor withdraws `notifications`, so this peer may",
+        );
+        let mark = latest_audit_id();
+        conductor_admin(&[
+            "capabilities",
+            &self.adversary_id,
+            "--capability",
+            "inventory-health",
+            "--actor",
+            "health-certification",
+            "--reason",
+            "adversarial capability withdrawal",
+            "--confirmed",
+        ]);
+        assert_dropped(
+            exchange(
+                &mut self.stream,
+                &mut self.session,
+                &self.identity,
+                "health_signal",
+                signal_payload(
+                    &self.conductor_id,
+                    &message_id(0x50),
+                    self.seeded_cursor + 1,
+                    0xb1,
+                    unix_seconds(),
+                ),
+                unix_seconds(),
+                0x50,
+            ),
+            mark,
+            HealthCode::MissingCapability,
+            "a Signal from a peer without the frozen notifications capability",
+        );
+    }
+
+    fn case_18_wrong_role(&mut self, base_revision: u64) {
+        // 18. Role: a peer the Conductor trusts in the *conductor* role may not
+        //     report health at all, and learns nothing from the refusal. It rides
+        //     its own real production session, because the shipped `node trust`
+        //     refuses to re-register an existing peer and a role is therefore not
+        //     something an adversary can flip on a peer it already controls.
+        self.cases.mark(
+            18,
+            "Role: a peer the Conductor trusts in the *conductor* role may not",
+        );
+        let role_state = PathBuf::from(env("OMAKURE_HP_ROLE_STATE"));
+        let mark = latest_audit_id();
+        let (mut role_stream, mut role_session, role_identity) = production_session(&role_state);
+        assert_eq!(
+            role_identity.public_status().node_id,
+            env("OMAKURE_HP_ROLE_ID"),
+            "the wrong-role session must use the identity the Conductor trusts as a Conductor"
+        );
+        assert_dropped(
+            exchange(
+                &mut role_stream,
+                &mut role_session,
+                &role_identity,
+                "health_profile",
+                profile_payload(&self.conductor_id, &message_id(0x51), base_revision + 500),
+                unix_seconds(),
+                0x51,
+            ),
+            mark,
+            HealthCode::WrongRole,
+            "a peer trusted in the conductor role reporting health",
+        );
+        let _ = role_stream.shutdown(std::net::Shutdown::Both);
+    }
+
+    fn case_19_revoked_live_session(&mut self, base_revision: u64) {
+        // 19. Revocation on the live session: trust is re-read per message, so an
+        //     operator revocation excludes the peer immediately, without waiting
+        //     for the session to end.
+        self.cases.mark(
+            19,
+            "Revocation on the live session: trust is re-read per message, so an",
+        );
+        let mark = latest_audit_id();
+        conductor_admin(&[
+            "revoke",
+            &self.adversary_id,
+            "--actor",
+            "health-certification",
+            "--reason",
+            "adversarial certification",
+            "--confirmed",
+        ]);
+        assert_dropped(
+            exchange(
+                &mut self.stream,
+                &mut self.session,
+                &self.identity,
+                "health_profile",
+                profile_payload(&self.conductor_id, &message_id(0x52), base_revision + 600),
+                unix_seconds(),
+                0x52,
+            ),
+            mark,
+            HealthCode::Revoked,
+            "a revoked peer reporting health on an already established session",
+        );
+
+        let _ = self.stream.shutdown(std::net::Shutdown::Both);
+    }
+
+    fn case_20_final_audit(&mut self) {
+        // 20. Nothing an adversary sent produced an unrecognised outcome, and the
+        //     audit trail carries only the frozen redacted columns.
+        self.cases.mark(
+            20,
+            "Nothing an adversary sent produced an unrecognised outcome, and the",
+        );
+        let connection = conductor_registry();
+        let unknown_codes: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM health_audit
+                 WHERE error_code IS NOT NULL AND error_code NOT BETWEEN 1101 AND 1115",
+                [],
+                |row| row.get(0),
+            )
+            .expect("scan the audit trail for unstable codes");
+        assert_eq!(
+            unknown_codes, 0,
+            "the Conductor recorded a Health Plane error code outside the frozen 1101-1115 range"
+        );
+        // No adversarial case may be attributed to an honest Performer. The codes
+        // below are the ones an honest Performer can never legitimately produce:
+        // malformed, oversized, wrong target, wrong role, missing capability,
+        // revoked, queue full, unknown field, and corrupt state. Replay and rate
+        // limiting are deliberately excluded, because a legitimate reconnect inside
+        // the frozen minimum Pulse interval produces them by design.
+        let performer_id = env("OMAKURE_HP_PERFORMER_ID");
+        let performer_rejections: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM health_audit
+                 WHERE node_id = ?1
+                   AND error_code IN (1102, 1103, 1104, 1105, 1106, 1107, 1113, 1114, 1115)",
+                rusqlite::params![performer_id],
+                |row| row.get(0),
+            )
+            .expect("scan the audit trail for collateral rejections");
+        assert_eq!(
+            performer_rejections, 0,
+            "adversarial traffic caused an authorization or validity rejection to be \
+             attributed to an honest Performer"
+        );
+    }
+}
+
 #[test]
 #[ignore = "requires the live topology started by scripts/tasks/cert/health"]
 fn the_contracted_adversarial_matrix_is_rejected_over_production_noise() {
-    let mut cases = CaseLog::default();
-    let state_dir = PathBuf::from(env("OMAKURE_HP_ADVERSARY_STATE"));
-    let conductor_id = env("OMAKURE_HP_CONDUCTOR_ID");
-    let adversary_id = env("OMAKURE_HP_ADVERSARY_ID");
-    let seeded_cursor: u64 = env("OMAKURE_HP_SEEDED_CURSOR")
-        .parse()
-        .expect("the seeded Signal cursor must be an integer");
-
-    let (mut stream, mut session, identity) = production_session(&state_dir);
-
-    // 1. Wrong target: a syntactically valid third-party node ID is rejected
-    //    before any state is read or written, and never answered.
-    cases.mark(
-        1,
-        "Wrong target: a syntactically valid third-party node ID is rejected",
-    );
-    let mark = latest_audit_id();
-    assert_dropped(
-        exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_profile",
-            profile_payload(&adversary_id, &message_id(0x01), 1),
-            unix_seconds(),
-            0x01,
-        ),
-        mark,
-        HealthCode::WrongTarget,
-        "a Profile addressed to a third party",
-    );
-
-    // 2. Future beyond the frozen 60-second skew.
-    cases.mark(2, "Future beyond the frozen 60-second skew.");
-    assert_error(
-        exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_profile",
-            profile_payload(&conductor_id, &message_id(0x02), 1),
-            unix_seconds() + MAX_FUTURE_SKEW_SECONDS as u64 + 5,
-            0x02,
-        ),
-        HealthCode::Future,
-        "a Profile beyond the frozen future skew",
-    );
-
-    // 3. Stale beyond the frozen 120-second age.
-    cases.mark(3, "Stale beyond the frozen 120-second age.");
-    assert_error(
-        exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_profile",
-            profile_payload(&conductor_id, &message_id(0x03), 1),
-            unix_seconds() - MAX_AGE_SECONDS as u64 - 5,
-            0x03,
-        ),
-        HealthCode::Stale,
-        "a Profile beyond the frozen freshness window",
-    );
-
-    // 4. An unknown field smuggled into the closed schema.
-    cases.mark(4, "An unknown field smuggled into the closed schema.");
-    let mark = latest_audit_id();
-    let mut unknown = profile_payload(&conductor_id, &message_id(0x04), 1);
-    unknown["profile"]["hostname"] = json!("workshop.local");
-    assert_dropped(
-        exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_profile",
-            unknown,
-            unix_seconds(),
-            0x04,
-        ),
-        mark,
-        HealthCode::UnknownField,
-        "a smuggled hostname field",
-    );
-
-    // 5. A grammar violation that would smuggle a filesystem path.
-    cases.mark(
-        5,
-        "A grammar violation that would smuggle a filesystem path.",
-    );
-    let mark = latest_audit_id();
-    let mut malformed = profile_payload(&conductor_id, &message_id(0x05), 1);
-    malformed["profile"]["display_name"] = json!("/etc/shadow");
-    assert_dropped(
-        exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_profile",
-            malformed,
-            unix_seconds(),
-            0x05,
-        ),
-        mark,
-        HealthCode::InvalidMessage,
-        "a display name carrying a filesystem path",
-    );
-
-    // 6. Oversized past the frozen per-kind canonical cap.
-    cases.mark(6, "Oversized past the frozen per-kind canonical cap.");
-    let mark = latest_audit_id();
-    let mut oversized = profile_payload(&conductor_id, &message_id(0x06), 1);
-    oversized["profile"]["runtimes"] = json!(
-        (0..64)
-            .map(|index| json!({
-                "available": true,
-                "name": format!("runtime{index}"),
-                "version": "9.9.9999999999999999999999"
-            }))
-            .collect::<Vec<Value>>()
-    );
-    assert_dropped(
-        exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_profile",
-            oversized,
-            unix_seconds(),
-            0x06,
-        ),
-        mark,
-        HealthCode::MessageTooLarge,
-        "an oversized Profile",
-    );
-
-    // 7. A forged signature over an otherwise perfect envelope.
-    cases.mark(7, "A forged signature over an otherwise perfect envelope.");
-    let mark = latest_audit_id();
-    let mut forged = sign_health_envelope(
-        &identity,
-        "health_profile",
-        session.session_id(),
-        [0x07; 16],
-        profile_payload(&conductor_id, &message_id(0x07), 1),
-        unix_seconds(),
-    )
-    .expect("sign the envelope to forge")
-    .encoded();
-    let last = forged.len() - 1;
-    forged[last] ^= 0x01;
-    assert_dropped(
-        exchange_encoded(&mut stream, &mut session, forged, &message_id(0x07)),
-        mark,
-        HealthCode::InvalidMessage,
-        "a forged BIP-340 signature",
-    );
-
-    // 8. A spoofed sender: the envelope claims to come from the Conductor
-    //    itself while riding the adversary's authenticated session.
-    cases.mark(
-        8,
-        "A spoofed sender: the envelope claims to come from the Conductor",
-    );
-    let mark = latest_audit_id();
-    let spoofed = spoofed_envelope(
-        &conductor_id,
-        "health_profile",
-        session.session_id(),
-        [0x08; 16],
-        profile_payload(&conductor_id, &message_id(0x08), 1),
-        unix_seconds(),
-    );
-    assert_dropped(
-        exchange_encoded(&mut stream, &mut session, spoofed, &message_id(0x08)),
-        mark,
-        HealthCode::InvalidMessage,
-        "an envelope spoofing the Conductor's own identity",
-    );
-
-    // 9. An envelope bound to a different session.
-    cases.mark(9, "An envelope bound to a different session.");
-    let mark = latest_audit_id();
-    let other_session = [0x99_u8; 32];
-    let cross_session = sign_health_envelope(
-        &identity,
-        "health_profile",
-        &other_session,
-        [0x09; 16],
-        profile_payload(&conductor_id, &message_id(0x09), 1),
-        unix_seconds(),
-    )
-    .expect("sign the cross-session envelope")
-    .encoded();
-    assert_dropped(
-        exchange_encoded(&mut stream, &mut session, cross_session, &message_id(0x09)),
-        mark,
-        HealthCode::Replay,
-        "an envelope bound to a different session",
-    );
-
-    // 10. An authorized Profile is accepted, and the same `message_id` replayed
-    //     immediately afterwards is not.
-    cases.mark(
-        10,
-        "An authorized Profile is accepted, and the same `message_id` replayed",
-    );
-    let base_revision = unix_seconds();
-    assert_accepted(
-        exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_profile",
-            profile_payload(&conductor_id, &message_id(0x10), base_revision),
-            unix_seconds(),
-            0x10,
-        ),
-        "an authorized Profile",
-    );
-    assert_error(
-        exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_profile",
-            profile_payload(&conductor_id, &message_id(0x10), base_revision + 1),
-            unix_seconds(),
-            0x11,
-        ),
-        HealthCode::Replay,
-        "a replayed message_id",
-    );
-
-    // 11. A Profile revision that does not strictly increase.
-    cases.mark(11, "A Profile revision that does not strictly increase.");
-    assert_error(
-        exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_profile",
-            profile_payload(&conductor_id, &message_id(0x12), base_revision - 1),
-            unix_seconds(),
-            0x12,
-        ),
-        HealthCode::Replay,
-        "a Profile revision that stepped backwards",
-    );
-
-    // 12. An authorized Pulse is accepted, and a Pulse whose sequence stepped
-    //     backwards is not. This is the contracted effect of a backward
-    //     wall-clock step across a restart: `pulse.sequence` and
-    //     `pulse.emitted_at` are both derived from the wall clock, and the
-    //     frozen schema requires `emitted_at == created_at`, so a node whose
-    //     clock moved backwards emits a well-formed, still-fresh Pulse with a
-    //     non-increasing sequence. It fails closed as `health_replay` and
-    //     mutates nothing. The step used here is deliberately inside the frozen
-    //     120-second freshness window; a larger backward step is simply
-    //     rejected earlier as `health_stale`.
-    cases.mark(
-        12,
-        "An authorized Pulse is accepted, and a Pulse whose sequence stepped",
-    );
-    let base_sequence = unix_seconds();
-    assert_accepted(
-        exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_pulse",
-            pulse_payload(
-                &conductor_id,
-                &message_id(0x13),
-                base_sequence,
-                base_revision,
-                base_sequence,
-            ),
-            base_sequence,
-            0x13,
-        ),
-        "an authorized Pulse",
-    );
-    let stored_sequence = stored_pulse_sequence(&adversary_id);
-    // The frozen minimum accepted Pulse interval is checked at step 11, before
-    // the ordering rules at step 13. Waiting it out is what makes the next
-    // rejection prove the ordering rule rather than the rate rule. The wait is
-    // the frozen bound itself, not a guess.
-    std::thread::sleep(Duration::from_secs(MIN_PULSE_INTERVAL_SECONDS as u64 + 1));
-    let stepped_back = base_sequence - BACKWARD_CLOCK_STEP_SECONDS;
-    assert_error(
-        exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_pulse",
-            pulse_payload(
-                &conductor_id,
-                &message_id(0x14),
-                stepped_back,
-                base_revision,
-                stepped_back,
-            ),
-            stepped_back,
-            0x14,
-        ),
-        HealthCode::Replay,
-        "a Pulse whose wall-clock sequence stepped backwards",
-    );
-    assert_eq!(
-        stored_pulse_sequence(&adversary_id),
-        stored_sequence,
-        "a backward wall-clock Pulse must not move the stored sequence"
-    );
-
-    // 13. A Signal past the frozen reorder buffer is refused outright.
-    cases.mark(
-        13,
-        "A Signal past the frozen reorder buffer is refused outright.",
-    );
-    assert_error(
-        exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_signal",
-            signal_payload(
-                &conductor_id,
-                &message_id(0x15),
-                seeded_cursor + REORDER_BUFFER_ENTRIES + 1,
-                0xa1,
-                unix_seconds(),
-            ),
-            unix_seconds(),
-            0x15,
-        ),
-        HealthCode::Reordered,
-        "a Signal past the frozen reorder buffer",
-    );
-
-    // 14. A Signal inside the reorder buffer is held, and the acknowledged
-    //     cursor does not advance past the gap.
-    cases.mark(
-        14,
-        "A Signal inside the reorder buffer is held, and the acknowledged",
-    );
-    let cursor = assert_accepted(
-        exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_signal",
-            signal_payload(
-                &conductor_id,
-                &message_id(0x16),
-                seeded_cursor + 2,
-                0xa2,
-                unix_seconds(),
-            ),
-            unix_seconds(),
-            0x16,
-        ),
-        "a Signal held behind a gap",
-    );
-    assert_eq!(
-        cursor, seeded_cursor,
-        "the acknowledged cursor must not advance past a gap"
-    );
-
-    // 15. The frozen per-Performer inbox is full, so the next in-order Signal
-    //     is refused rather than stored.
-    cases.mark(
-        15,
-        "The frozen per-Performer inbox is full, so the next in-order Signal",
-    );
-    assert_eq!(
-        stored_signal_count(&adversary_id),
-        SIGNAL_INBOX_CAPACITY,
-        "the certification script must seed the inbox to its frozen capacity"
-    );
-    assert_error(
-        exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_signal",
-            signal_payload(
-                &conductor_id,
-                &message_id(0x17),
-                seeded_cursor + 1,
-                0xa3,
-                unix_seconds(),
-            ),
-            unix_seconds(),
-            0x17,
-        ),
-        HealthCode::QueueFull,
-        "a Signal arriving at a full inbox",
-    );
-    assert_eq!(
-        stored_signal_count(&adversary_id),
-        SIGNAL_INBOX_CAPACITY,
-        "a refused Signal must not be stored"
-    );
-
-    // 16. Flood: past the frozen per-peer allowance and its burst.
-    cases.mark(
-        16,
-        "Flood: past the frozen per-peer allowance and its burst.",
-    );
-    let mut rate_limited = false;
-    for index in 0..FLOOD_CEILING {
-        let seed = 0x20_u8.wrapping_add(index as u8);
-        let reply = exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_profile",
-            profile_payload(
-                &conductor_id,
-                &message_id(seed),
-                base_revision + 10 + index as u64,
-            ),
-            unix_seconds(),
-            seed,
-        );
-        if let Some((kind, payload)) = reply.reply
-            && kind == "health_error"
-            && payload["error"]["code"] == json!(HealthCode::RateLimited.code())
-        {
-            rate_limited = true;
-            break;
-        }
-    }
-    assert!(
-        rate_limited,
-        "a flooding peer must hit a frozen Health Plane rate bound within {FLOOD_CEILING} messages"
-    );
-
-    // 17. Capability: the Conductor withdraws `notifications`, so this peer may
-    //     still report Profile and Pulse but its Signals are refused. Steps 8
-    //     and 9 of the frozen receive order run before the rate check, so the
-    //     flood above cannot mask this outcome.
-    cases.mark(
-        17,
-        "Capability: the Conductor withdraws `notifications`, so this peer may",
-    );
-    let mark = latest_audit_id();
-    conductor_admin(&[
-        "capabilities",
-        &adversary_id,
-        "--capability",
-        "inventory-health",
-        "--actor",
-        "health-certification",
-        "--reason",
-        "adversarial capability withdrawal",
-        "--confirmed",
-    ]);
-    assert_dropped(
-        exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_signal",
-            signal_payload(
-                &conductor_id,
-                &message_id(0x50),
-                seeded_cursor + 1,
-                0xb1,
-                unix_seconds(),
-            ),
-            unix_seconds(),
-            0x50,
-        ),
-        mark,
-        HealthCode::MissingCapability,
-        "a Signal from a peer without the frozen notifications capability",
-    );
-
-    // 18. Role: a peer the Conductor trusts in the *conductor* role may not
-    //     report health at all, and learns nothing from the refusal. It rides
-    //     its own real production session, because the shipped `node trust`
-    //     refuses to re-register an existing peer and a role is therefore not
-    //     something an adversary can flip on a peer it already controls.
-    cases.mark(
-        18,
-        "Role: a peer the Conductor trusts in the *conductor* role may not",
-    );
-    let role_state = PathBuf::from(env("OMAKURE_HP_ROLE_STATE"));
-    let mark = latest_audit_id();
-    let (mut role_stream, mut role_session, role_identity) = production_session(&role_state);
-    assert_eq!(
-        role_identity.public_status().node_id,
-        env("OMAKURE_HP_ROLE_ID"),
-        "the wrong-role session must use the identity the Conductor trusts as a Conductor"
-    );
-    assert_dropped(
-        exchange(
-            &mut role_stream,
-            &mut role_session,
-            &role_identity,
-            "health_profile",
-            profile_payload(&conductor_id, &message_id(0x51), base_revision + 500),
-            unix_seconds(),
-            0x51,
-        ),
-        mark,
-        HealthCode::WrongRole,
-        "a peer trusted in the conductor role reporting health",
-    );
-    let _ = role_stream.shutdown(std::net::Shutdown::Both);
-
-    // 19. Revocation on the live session: trust is re-read per message, so an
-    //     operator revocation excludes the peer immediately, without waiting
-    //     for the session to end.
-    cases.mark(
-        19,
-        "Revocation on the live session: trust is re-read per message, so an",
-    );
-    let mark = latest_audit_id();
-    conductor_admin(&[
-        "revoke",
-        &adversary_id,
-        "--actor",
-        "health-certification",
-        "--reason",
-        "adversarial certification",
-        "--confirmed",
-    ]);
-    assert_dropped(
-        exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_profile",
-            profile_payload(&conductor_id, &message_id(0x52), base_revision + 600),
-            unix_seconds(),
-            0x52,
-        ),
-        mark,
-        HealthCode::Revoked,
-        "a revoked peer reporting health on an already established session",
-    );
-
-    let _ = stream.shutdown(std::net::Shutdown::Both);
-
-    // 20. Nothing an adversary sent produced an unrecognised outcome, and the
-    //     audit trail carries only the frozen redacted columns.
-    cases.mark(
-        20,
-        "Nothing an adversary sent produced an unrecognised outcome, and the",
-    );
-    let connection = conductor_registry();
-    let unknown_codes: i64 = connection
-        .query_row(
-            "SELECT COUNT(*) FROM health_audit
-             WHERE error_code IS NOT NULL AND error_code NOT BETWEEN 1101 AND 1115",
-            [],
-            |row| row.get(0),
-        )
-        .expect("scan the audit trail for unstable codes");
-    assert_eq!(
-        unknown_codes, 0,
-        "the Conductor recorded a Health Plane error code outside the frozen 1101-1115 range"
-    );
-    // No adversarial case may be attributed to an honest Performer. The codes
-    // below are the ones an honest Performer can never legitimately produce:
-    // malformed, oversized, wrong target, wrong role, missing capability,
-    // revoked, queue full, unknown field, and corrupt state. Replay and rate
-    // limiting are deliberately excluded, because a legitimate reconnect inside
-    // the frozen minimum Pulse interval produces them by design.
-    let performer_id = env("OMAKURE_HP_PERFORMER_ID");
-    let performer_rejections: i64 = connection
-        .query_row(
-            "SELECT COUNT(*) FROM health_audit
-             WHERE node_id = ?1
-               AND error_code IN (1102, 1103, 1104, 1105, 1106, 1107, 1113, 1114, 1115)",
-            rusqlite::params![performer_id],
-            |row| row.get(0),
-        )
-        .expect("scan the audit trail for collateral rejections");
-    assert_eq!(
-        performer_rejections, 0,
-        "adversarial traffic caused an authorization or validity rejection to be \
-         attributed to an honest Performer"
-    );
-
-    cases.assert_complete();
+    let mut scenario = AdversaryScenario::new();
+    scenario.case_01_wrong_target();
+    scenario.case_02_future_profile();
+    scenario.case_03_stale_profile();
+    scenario.case_04_unknown_field();
+    scenario.case_05_invalid_display_name();
+    scenario.case_06_oversized_profile();
+    scenario.case_07_forged_signature();
+    scenario.case_08_spoofed_sender();
+    scenario.case_09_cross_session_envelope();
+    let base_revision = scenario.case_10_authorized_profile_and_replay();
+    scenario.case_11_non_increasing_revision(base_revision);
+    scenario.case_12_backward_clock_pulse(base_revision);
+    scenario.case_13_signal_past_reorder_window();
+    scenario.case_14_signal_behind_gap();
+    scenario.case_15_full_signal_inbox();
+    scenario.case_16_rate_flood(base_revision);
+    scenario.case_17_missing_notification_capability();
+    scenario.case_18_wrong_role(base_revision);
+    scenario.case_19_revoked_live_session(base_revision);
+    scenario.case_20_final_audit();
+    scenario.cases.assert_complete();
 }
 
 // ---------------------------------------------------------------------------

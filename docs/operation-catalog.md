@@ -12,6 +12,8 @@ Catalog version: `1.0.0`; schema version: `1`.
 | `op.battery-remove` | `battery-remove` | `domain` | `control-execute` | `mutate` | `non-idempotent` | `battery remove` | `DELETE /v1/batteries/:battery_id` |
 | `op.battery-scripts` | `battery-scripts` | `domain` | `control-observe` | `read` | `immutable` | `battery scripts` | `GET /v1/batteries/:battery_id/scripts` |
 | `op.battery-sync` | `battery-sync` | `domain` | `control-execute` | `execute` | `non-idempotent` | `battery sync` | `POST /v1/batteries/:battery_id/sync` |
+| `op.battery-workflow-start` | `battery-workflow-start` | `local-lifecycle` | `local-only` | `execute` | `non-idempotent` | `battery workflow start` | — |
+| `op.battery-workflow-status` | `battery-workflow-status` | `domain` | `local-only` | `read` | `immutable` | `battery workflow status` | — |
 | `op.cli-api` | `cli-api` | `local-lifecycle` | `local-only` | `lifecycle` | `non-idempotent` | `api` | — |
 | `op.cli-completion` | `cli-completion` | `domain` | `local-only` | `read` | `immutable` | `completion` | — |
 | `op.cli-help-ai` | `cli-help-ai` | `domain` | `local-only` | `read` | `immutable` | `help-ai` | — |
@@ -78,4 +80,4 @@ Catalog version: `1.0.0`; schema version: `1`.
 | `op.scripts` | `scripts` | `domain` | `control-observe` | `read` | `immutable` | `scripts` | `GET /v1/scripts` |
 | `op.search` | `search` | `domain` | `control-observe` | `read` | `immutable` | `search` | `GET /v1/search` |
 
-Total operations: 72.
+Total operations: 74.

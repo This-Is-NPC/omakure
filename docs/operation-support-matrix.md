@@ -12,6 +12,8 @@ Catalog version: `1.0.0`; schema version: `1`.
 | `op.battery-remove` | supported — Supported by the headless Rust runtime and adapter contract. | supported — Supported by the headless Rust runtime; platform-specific integration remains static. | supported — Supported by the headless Rust runtime and adapter contract. |
 | `op.battery-scripts` | supported — Supported by the headless Rust runtime and adapter contract. | supported — Supported by the headless Rust runtime; platform-specific integration remains static. | supported — Supported by the headless Rust runtime and adapter contract. |
 | `op.battery-sync` | supported — Supported by the headless Rust runtime and adapter contract. | supported — Supported by the headless Rust runtime; platform-specific integration remains static. | supported — Supported by the headless Rust runtime and adapter contract. |
+| `op.battery-workflow-start` | supported — Installed Battery scripts and the local queue worker are supported. | supported — Installed Battery scripts and the local queue worker are supported. | unsupported — Battery script installation is Unix-only. |
+| `op.battery-workflow-status` | supported — Local workflow state is readable. | supported — Local workflow state is readable. | supported — Local workflow state is readable. |
 | `op.cli-api` | supported — Supported by the headless Rust runtime and adapter contract. | supported — Supported by the headless Rust runtime; platform-specific integration remains static. | supported — Supported by the headless Rust runtime and adapter contract. |
 | `op.cli-completion` | supported — Supported by the headless Rust runtime and adapter contract. | supported — Supported by the headless Rust runtime; platform-specific integration remains static. | supported — Supported by the headless Rust runtime and adapter contract. |
 | `op.cli-help-ai` | supported — Supported by the headless Rust runtime and adapter contract. | supported — Supported by the headless Rust runtime; platform-specific integration remains static. | supported — Supported by the headless Rust runtime and adapter contract. |
@@ -78,4 +80,4 @@ Catalog version: `1.0.0`; schema version: `1`.
 | `op.scripts` | supported — Supported by the headless Rust runtime and adapter contract. | supported — Supported by the headless Rust runtime; platform-specific integration remains static. | supported — Supported by the headless Rust runtime and adapter contract. |
 | `op.search` | supported — Supported by the headless Rust runtime and adapter contract. | supported — Supported by the headless Rust runtime; platform-specific integration remains static. | supported — Supported by the headless Rust runtime and adapter contract. |
 
-Total operations: 72.
+Total operations: 74.

@@ -152,6 +152,10 @@ const NESTED_COVERAGE: &[CommandCoverage] = &[
         coverage: Coverage::Covered("tests/cli_surface_e2e.rs"),
     },
     CommandCoverage {
+        command: "battery workflow",
+        coverage: Coverage::Covered("tests/cli_battery.rs + src/cli/args/tests/mod.rs"),
+    },
+    CommandCoverage {
         command: "env activate",
         coverage: Coverage::Covered("tests/secret_cli_e2e.rs"),
     },
@@ -331,6 +335,7 @@ fn command_surface_inventory_maps_all_current_commands() {
         "battery remove",
         "battery scripts",
         "battery sync",
+        "battery workflow",
         "env activate",
         "env create",
         "env deactivate",

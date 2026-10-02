@@ -155,6 +155,42 @@ fn test_parse_battery_remove_cache() {
 }
 
 #[test]
+fn test_parse_battery_workflow_start() {
+    let cli = parse(&["--json", "battery", "workflow", "start", "local", "deploy"]).unwrap();
+    assert!(cli.json);
+    match cli.command.unwrap() {
+        Commands::Battery(args) => match args.command {
+            BatteryCommand::Workflow(workflow) => match workflow.command {
+                BatteryWorkflowCommand::Start(start) => {
+                    assert_eq!(start.battery_name, "local");
+                    assert_eq!(start.workflow_name, "deploy");
+                }
+                _ => panic!("expected Battery workflow start"),
+            },
+            _ => panic!("expected Battery workflow"),
+        },
+        _ => panic!("expected Battery"),
+    }
+}
+
+#[test]
+fn test_parse_battery_workflow_status() {
+    let cli = parse(&["battery", "workflow", "status", "workflow-123"]).unwrap();
+    match cli.command.unwrap() {
+        Commands::Battery(args) => match args.command {
+            BatteryCommand::Workflow(workflow) => match workflow.command {
+                BatteryWorkflowCommand::Status(status) => {
+                    assert_eq!(status.workflow_run_id, "workflow-123");
+                }
+                _ => panic!("expected Battery workflow status"),
+            },
+            _ => panic!("expected Battery workflow"),
+        },
+        _ => panic!("expected Battery"),
+    }
+}
+
+#[test]
 fn test_parse_queue_worker() {
     let cli = parse(&["queue", "worker", "--concurrency", "4"]).unwrap();
     match cli.command.unwrap() {

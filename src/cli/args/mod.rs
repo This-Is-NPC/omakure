@@ -14,7 +14,8 @@ mod setup;
 pub use api::{ApiArgs, TokenArgs, TokenCommand, TokenGenerateArgs};
 pub use battery::{
     BatteryAddArgs, BatteryArgs, BatteryCommand, BatteryInstallArgs, BatteryNameArgs,
-    BatteryRemoveArgs,
+    BatteryRemoveArgs, BatteryWorkflowArgs, BatteryWorkflowCommand, BatteryWorkflowStartArgs,
+    BatteryWorkflowStatusArgs,
 };
 pub use env::{EnvArgs, EnvCommand, EnvCreateArgs, EnvNameArgs, EnvRemoveArgs, EnvSetArgs};
 pub use history::{

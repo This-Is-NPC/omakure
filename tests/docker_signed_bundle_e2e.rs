@@ -246,6 +246,7 @@ mod cleanup_tests {
             .get_args()
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect();
+        #[cfg(not(windows))]
         assert_eq!(
             args,
             [
@@ -260,6 +261,21 @@ mod cleanup_tests {
                 "ps",
             ]
         );
+        #[cfg(windows)]
+        {
+            assert_eq!(command.get_program(), "docker");
+            assert_eq!(
+                args,
+                [
+                    "compose",
+                    "-f",
+                    super::COMPOSE_FILE,
+                    "-p",
+                    super::PROJECT.as_str(),
+                    "ps"
+                ]
+            );
+        }
         let compose_file = include_str!("../ci/compose/compose.signed-bundle.e2e.yaml");
         assert_eq!(guard.compose_env.len(), 19);
         assert_eq!(command.get_envs().count(), guard.compose_env.len());

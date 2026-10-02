@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 
 const COMPOSE_OPERATION_TIMEOUT: &str = "120s";
 const COMPOSE_BUILD_TIMEOUT: &str = "1800s";
+#[cfg(not(windows))]
 pub const BOUNDED_RUNNER: &str = "scripts/tasks/atomic/run-bounded";
 
 pub fn compose_project_name(label: &str) -> String {
@@ -11,11 +12,19 @@ pub fn compose_project_name(label: &str) -> String {
 }
 
 fn bounded_command_within(program: &str, budget: &str) -> Command {
-    let mut command = Command::new("bash");
-    command
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .args([BOUNDED_RUNNER, budget, program]);
-    command
+    #[cfg(windows)]
+    {
+        let _ = budget;
+        Command::new(program)
+    }
+    #[cfg(not(windows))]
+    {
+        let mut command = Command::new("bash");
+        command
+            .current_dir(env!("CARGO_MANIFEST_DIR"))
+            .args([BOUNDED_RUNNER, budget, program]);
+        command
+    }
 }
 
 pub fn bounded_command(program: &str) -> Command {
@@ -145,6 +154,7 @@ mod tests {
             .get_args()
             .map(|arg| arg.to_string_lossy())
             .collect();
+        #[cfg(not(windows))]
         assert_eq!(
             args,
             [
@@ -159,6 +169,11 @@ mod tests {
                 "-d"
             ]
         );
+        #[cfg(windows)]
+        {
+            assert_eq!(command.get_program(), "docker");
+            assert_eq!(args, ["compose", "-p", "project", "up", "--build", "-d"]);
+        }
         assert!(
             command
                 .get_envs()

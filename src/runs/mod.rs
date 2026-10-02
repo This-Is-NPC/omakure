@@ -12,6 +12,7 @@ mod query;
 mod state;
 mod store;
 mod trace;
+mod workflow;
 
 pub use enqueue::{
     ALLOW_ALL_SECRET_REFS_POLICY, EnqueueOptions, enqueue, enqueue_cue, enqueue_scheduled,
@@ -30,6 +31,12 @@ pub(crate) use store::RunStore;
 #[cfg(test)]
 pub(crate) use trace::query_traces;
 pub use trace::{TraceLevel, TraceRow, insert_trace};
+#[cfg(all(test, unix))]
+pub use workflow::WorkflowState;
+pub use workflow::{
+    WorkflowRun, WorkflowSnapshot, WorkflowStepSnapshot, advance_workflow_for_run, get_workflow,
+    recover_workflows, start_workflow,
+};
 
 /// Internal heartbeat lease duration in milliseconds (60 s).
 ///

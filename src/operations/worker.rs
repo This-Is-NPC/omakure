@@ -127,33 +127,24 @@ fn worker_loop_inner(
     // problems than an unresolved row, and failing to start over it would take
     // out the queue as well.
     let _ = recover_abandoned_remote_runs(&workspace);
+    let mut workflow_recovery_failed = false;
 
     loop {
         if cancel_flag.load(Ordering::SeqCst) {
             return;
         }
-        let store = match RunStore::open(&workspace) {
-            Ok(store) => store,
-            Err(_) => {
+        let row = match claim_after_workflow_recovery(
+            &workspace,
+            &worker_id,
+            &filters,
+            &mut workflow_recovery_failed,
+        ) {
+            Ok(Some(row)) => row,
+            Ok(None) if once => return,
+            _ => {
                 thread::sleep(Duration::from_millis(WORKER_IDLE_POLL_MS));
                 continue;
             }
-        };
-        let claimed = match store.claim_next(&worker_id, &filters) {
-            Ok(opt) => opt,
-            Err(_) => {
-                drop(store);
-                thread::sleep(Duration::from_millis(WORKER_IDLE_POLL_MS));
-                continue;
-            }
-        };
-        drop(store);
-        let Some(row) = claimed else {
-            if once {
-                return;
-            }
-            thread::sleep(Duration::from_millis(WORKER_IDLE_POLL_MS));
-            continue;
         };
         execute_and_finalize(
             &workspace,
@@ -165,6 +156,24 @@ fn worker_loop_inner(
             return;
         }
     }
+}
+
+fn claim_after_workflow_recovery(
+    workspace: &Workspace,
+    worker_id: &str,
+    filters: &ClaimFilters,
+    recovery_failed: &mut bool,
+) -> Result<Option<RunRow>, RunsError> {
+    let store = RunStore::open(workspace)?;
+    match store.recover_workflows() {
+        Ok(_) => *recovery_failed = false,
+        Err(error) if !*recovery_failed => {
+            eprintln!("omakure: workflow recovery remains pending: {error}");
+            *recovery_failed = true;
+        }
+        Err(_) => {}
+    }
+    store.claim_next(worker_id, filters)
 }
 
 /// Execute one claimed row through the shared executor and write the
@@ -204,36 +213,12 @@ fn execute_and_finalize_inner(
     // (`docs/internal/env-injection-spec.md` §1): the active managed env. Reserved
     // vars (layer 4) are pushed after this inside `execute_with_heartbeat`
     // and remain non-overridable.
-    let run_env_name = RunStore::open(workspace)
-        .ok()
-        .and_then(|store| store.get_run_env(&row.run_id).ok().flatten());
-    let extra_env = match run_env_name.as_deref() {
-        Some(name) => {
-            let path = match crate::operations::envs::env_file_path(workspace, name) {
-                Ok(path) => path,
-                Err(err) => {
-                    fail_without_execution(
-                        workspace,
-                        row,
-                        format!("queued env resolution failed: {}", err.message),
-                    );
-                    return;
-                }
-            };
-            match crate::adapters::environments::resolve_run_env(workspace.envs_dir(), Some(&path))
-            {
-                Ok(env) => env,
-                Err(err) => {
-                    fail_without_execution(
-                        workspace,
-                        row,
-                        format!("queued env resolution failed: {err}"),
-                    );
-                    return;
-                }
-            }
+    let extra_env = match resolve_worker_env(workspace, &row.run_id) {
+        Ok(env) => env,
+        Err(error) => {
+            fail_without_execution(workspace, row, error);
+            return;
         }
-        None => crate::adapters::environments::resolve_active_env(workspace.envs_dir()),
     };
     let result = crate::run_executor::execute_with_heartbeat_guarded(
         workspace,
@@ -246,23 +231,46 @@ fn execute_and_finalize_inner(
         Ok(store) => store,
         Err(_) => return,
     };
-    match result.terminal {
-        ExecutionTerminal::Completed => {
-            let _ = store.complete(&row.run_id, result.completion);
-        }
+    let transition = match result.terminal {
+        ExecutionTerminal::Completed => store.complete(&row.run_id, result.completion),
         ExecutionTerminal::Failed | ExecutionTerminal::Errored => {
-            let _ = store.fail(&row.run_id, result.completion);
+            store.fail(&row.run_id, result.completion)
         }
-        ExecutionTerminal::TimedOut => {
-            let _ = store.time_out(&row.run_id, result.completion);
-        }
+        ExecutionTerminal::TimedOut => store.time_out(&row.run_id, result.completion),
         ExecutionTerminal::Cancelled => {
             // The cancel transition was already written by the
             // heartbeat-detection path (or is being written now). Either
             // way, record the captured stdout/stderr on the cancelled
             // row.
-            let _ = store.record_cancelled_output(&row.run_id, result.completion);
+            store.record_cancelled_output(&row.run_id, result.completion)
         }
+    };
+    if transition.is_ok() {
+        advance_workflow_after_run(&store, &row.run_id);
+    }
+}
+
+fn resolve_worker_env(
+    workspace: &Workspace,
+    run_id: &str,
+) -> Result<Vec<(String, String)>, String> {
+    let run_env_name = RunStore::open(workspace)
+        .ok()
+        .and_then(|store| store.get_run_env(run_id).ok().flatten());
+    let Some(name) = run_env_name else {
+        return Ok(crate::adapters::environments::resolve_active_env(
+            workspace.envs_dir(),
+        ));
+    };
+    let path = crate::operations::envs::env_file_path(workspace, &name)
+        .map_err(|err| format!("queued env resolution failed: {}", err.message))?;
+    crate::adapters::environments::resolve_run_env(workspace.envs_dir(), Some(&path))
+        .map_err(|err| format!("queued env resolution failed: {err}"))
+}
+
+fn advance_workflow_after_run(store: &RunStore, run_id: &str) {
+    if let Err(error) = store.advance_workflow_for_run(run_id) {
+        eprintln!("omakure: workflow advancement remains pending for run {run_id}: {error}");
     }
 }
 
@@ -346,16 +354,21 @@ fn fail_without_execution(workspace: &Workspace, row: &RunRow, error: String) {
     let Ok(store) = RunStore::open(workspace) else {
         return;
     };
-    let _ = store.fail(
-        &row.run_id,
-        RunCompletion {
-            stdout: String::new(),
-            stderr: String::new(),
-            exit_code: None,
-            success: false,
-            error: Some(error),
-        },
-    );
+    if store
+        .fail(
+            &row.run_id,
+            RunCompletion {
+                stdout: String::new(),
+                stderr: String::new(),
+                exit_code: None,
+                success: false,
+                error: Some(error),
+            },
+        )
+        .is_ok()
+    {
+        advance_workflow_after_run(&store, &row.run_id);
+    }
 }
 
 #[cfg(all(test, unix))]
@@ -427,5 +440,62 @@ mod recovery_tests {
         std::fs::remove_file(history).unwrap();
         std::fs::rename(&backup, history).unwrap();
         recover_abandoned_remote_runs(&workspace).unwrap();
+    }
+}
+
+#[cfg(all(test, unix))]
+mod workflow_tests {
+    use super::*;
+    use crate::runs::{RunState, WorkflowSnapshot, WorkflowState, WorkflowStepSnapshot};
+    use crate::test_support::{workspace_in, write_bash_script};
+
+    #[test]
+    fn completing_a_workflow_run_queues_only_the_next_step() {
+        let temp = tempfile::tempdir().unwrap();
+        let workspace = workspace_in(&temp);
+        let first = write_bash_script(&workspace, "first.sh", "true");
+        let second = write_bash_script(&workspace, "second.sh", "true");
+        let steps = [first, second]
+            .into_iter()
+            .enumerate()
+            .map(|(index, path)| WorkflowStepSnapshot {
+                name: format!("step-{index}"),
+                content_hash: crate::remote_cue::content_hash(&path).unwrap(),
+                script_path: path.to_string_lossy().into_owned(),
+            })
+            .collect();
+        let started = RunStore::open(&workspace)
+            .unwrap()
+            .start_workflow(
+                WorkflowSnapshot {
+                    battery_id: "local".into(),
+                    battery_version: "1.0.0".into(),
+                    battery_commit: "commit".into(),
+                    workflow_name: "sequential".into(),
+                    steps,
+                },
+                "human",
+            )
+            .unwrap();
+
+        worker_loop(
+            workspace.clone_for_executor(),
+            "worker:workflow".into(),
+            Arc::new(AtomicBool::new(false)),
+            None,
+            None,
+            true,
+        );
+
+        let workflow = RunStore::open(&workspace)
+            .unwrap()
+            .get_workflow(&started.workflow_id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(workflow.state, WorkflowState::Running);
+        assert_eq!(workflow.current_step, 1);
+        assert_eq!(workflow.steps[0].state, Some(RunState::Completed));
+        assert_eq!(workflow.steps[1].state, Some(RunState::Queued));
+        assert!(workflow.steps[1].run_id.is_some());
     }
 }

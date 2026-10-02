@@ -148,6 +148,7 @@ pub enum RunTrigger {
     Manual,
     Scheduled,
     Cue,
+    Workflow,
 }
 
 impl RunTrigger {
@@ -156,6 +157,7 @@ impl RunTrigger {
             RunTrigger::Manual => "Manual",
             RunTrigger::Scheduled => "Scheduled",
             RunTrigger::Cue => "Cue",
+            RunTrigger::Workflow => "Workflow",
         }
     }
 }
@@ -174,8 +176,9 @@ impl FromStr for RunTrigger {
             "Manual" => Ok(RunTrigger::Manual),
             "Scheduled" => Ok(RunTrigger::Scheduled),
             "Cue" => Ok(RunTrigger::Cue),
+            "Workflow" => Ok(RunTrigger::Workflow),
             other => Err(format!(
-                "invalid run trigger '{}': expected Manual, Scheduled or Cue",
+                "invalid run trigger '{}': expected Manual, Scheduled, Cue or Workflow",
                 other
             )),
         }

@@ -762,6 +762,44 @@ supported = false
 reason = "Battery repository installation and cache operations are Unix-only."
 
 [[operations]]
+operation_id = "op.battery-workflow-start"
+entry_id = "battery-workflow-start"
+plane = "local-lifecycle"
+remote_eligibility = "local-only"
+effect = "execute"
+mutability = "non-idempotent"
+cli = ["battery workflow start"]
+http = []
+[operations.platforms.linux]
+supported = true
+reason = "Installed Battery scripts and the local queue worker are supported."
+[operations.platforms.macos]
+supported = true
+reason = "Installed Battery scripts and the local queue worker are supported."
+[operations.platforms.windows]
+supported = false
+reason = "Battery script installation is Unix-only."
+
+[[operations]]
+operation_id = "op.battery-workflow-status"
+entry_id = "battery-workflow-status"
+plane = "domain"
+remote_eligibility = "local-only"
+effect = "read"
+mutability = "immutable"
+cli = ["battery workflow status"]
+http = []
+[operations.platforms.linux]
+supported = true
+reason = "Local workflow state is readable."
+[operations.platforms.macos]
+supported = true
+reason = "Local workflow state is readable."
+[operations.platforms.windows]
+supported = true
+reason = "Local workflow state is readable."
+
+[[operations]]
 operation_id = "op.node-discovery"
 entry_id = "node-discovery"
 plane = "domain"

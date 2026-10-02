@@ -41,6 +41,7 @@ Manage reusable Battery automation repositories
 - [`battery remove`](#omakure-battery-remove)
 - [`battery scripts`](#omakure-battery-scripts)
 - [`battery sync`](#omakure-battery-sync)
+- [`battery workflow`](#omakure-battery-workflow)
 
 ## `omakure battery add`
 
@@ -137,6 +138,50 @@ Fetch and validate a Battery checkout
 - `--json` — Emit machine-readable JSON output for AI-facing subcommands (values: `false`, `true`)
 - `--scripts-dir SCRIPTS_DIR` — Scripts directory override
 - `NAME` — Battery name **(required)**
+
+## `omakure battery workflow`
+
+Start and inspect installed Battery workflows
+
+- **ID:** `battery workflow`
+- **Visibility:** visible
+
+### Options
+
+- `--json` — Emit machine-readable JSON output for AI-facing subcommands (values: `false`, `true`)
+- `--scripts-dir SCRIPTS_DIR` — Scripts directory override
+
+### Subcommands
+
+- [`battery workflow start`](#omakure-battery-workflow-start)
+- [`battery workflow status`](#omakure-battery-workflow-status)
+
+## `omakure battery workflow start`
+
+Start a workflow using installed scripts from one Battery
+
+- **ID:** `battery workflow start`
+- **Visibility:** visible
+
+### Options
+
+- `--json` — Emit machine-readable JSON output for AI-facing subcommands (values: `false`, `true`)
+- `--scripts-dir SCRIPTS_DIR` — Scripts directory override
+- `BATTERY` — Registered Battery name **(required)**
+- `WORKFLOW` — Workflow id from the Battery manifest **(required)**
+
+## `omakure battery workflow status`
+
+Inspect a durable workflow and its step results
+
+- **ID:** `battery workflow status`
+- **Visibility:** visible
+
+### Options
+
+- `--json` — Emit machine-readable JSON output for AI-facing subcommands (values: `false`, `true`)
+- `--scripts-dir SCRIPTS_DIR` — Scripts directory override
+- `WORKFLOW_RUN_ID` — Workflow run id returned by `battery workflow start` **(required)**
 
 ## `omakure completion`
 

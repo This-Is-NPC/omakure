@@ -255,6 +255,7 @@ fn last_terminal_run(store: &RunStore) -> Option<RunFact> {
             runs::RunTrigger::Scheduled => "scheduled".to_string(),
             runs::RunTrigger::Manual => "manual".to_string(),
             runs::RunTrigger::Cue => "cue".to_string(),
+            runs::RunTrigger::Workflow => "queue".to_string(),
         }),
     })
 }

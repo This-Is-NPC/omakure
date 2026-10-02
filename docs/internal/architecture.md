@@ -156,7 +156,7 @@ src/
 │   ├── history.rs           run and trace queries
 │   ├── serve/              standalone cron scheduler and lifecycle
 │   ├── env.rs               managed environment commands
-│   ├── battery.rs           Battery repository commands
+│   ├── battery.rs           Battery repository and local workflow commands
 │   ├── help_ai.rs           clap-derived machine surface
 │   ├── node.rs              node, trust, enrollment, health, and baseline commands
 │   ├── json.rs              stable envelope and error codes
@@ -171,11 +171,12 @@ src/
 │   ├── scripts.rs           safe tree/content operations
 │   ├── search.rs            indexed script search
 │   ├── battery/             sync, inspect, install, and provenance
+│   ├── workflow.rs          installed Battery workflow validation and start/status
 │   ├── node/                node status, trust, enrollment, and discovery
 │   ├── health/             fleet-status, Signal-feed, and local fact projections
 │   ├── cue.rs               Cue service dispatch validation and outcomes
 │   ├── baseline/            baseline delivery, install, status, and rollback
-│   └── worker.rs            queue worker lifecycle, Cue recovery, preflight, and finalization
+│   └── worker.rs            queue worker lifecycle, recovery, preflight, and finalization
 ├── adapters/                platform filesystem, process, environment, and checks
 │   ├── environments/        managed environment files, parsing, and adapter errors
 │   ├── git.rs               isolated Git process execution and bounded probes
@@ -188,7 +189,7 @@ src/
 ├── inventory/               pure Clap-tree inventory conversion, CLI reference rendering, and HTTP routes
 ├── cli_http_parity/         CLI/HTTP parity manifest and observable comparator
 ├── operation_catalog/       versioned metadata, validation, rendering, and tests
-├── runs/                    SQLite state machine, opaque run store, and traces
+├── runs/                    SQLite run/workflow state machines, opaque store, and traces
 ├── run_executor/           shared child lifecycle and redaction
 ├── search_index.rs          SQLite full-text index
 ├── runtime.rs               Script-kind detection and command construction
@@ -240,6 +241,10 @@ script-content reads.
   Core queries map typed run errors at the operation boundary. The state
   machine allows `queued`, `running`, `completed`, `failed`, `cancelled`,
   `timed_out`, and `dead_letter` with a closed transition graph.
+- Battery workflows resolve all installed steps before start. `runs/` stores
+  their ordered snapshot and links each step to one queued run. The worker
+  advances only a completed step and reconciles terminal steps after restart.
+  The executor checks each queued workflow step against its pinned content hash.
 - Direct runs, queue workers, and scheduled runs all use
   `run_executor::execute_with_heartbeat`, including cancellation, timeout,
   reserved environment variables, and output redaction.

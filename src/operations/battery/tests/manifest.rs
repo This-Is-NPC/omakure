@@ -21,6 +21,7 @@ tags = ["azure"]
     assert_eq!(manifest.battery.name, "azure");
     assert_eq!(manifest.scripts[0].id, "azure.list");
     assert_eq!(manifest.scripts[0].path, PathBuf::from("scripts/list.sh"));
+    assert!(manifest.workflows.is_empty());
 }
 
 #[test]
@@ -48,6 +49,112 @@ path = "scripts/other.sh"
 
     let err = validate_manifest(cache, &manifest).unwrap_err();
     assert_eq!(err.code, OperationErrorCode::ManifestInvalid);
+}
+
+#[test]
+fn manifest_accepts_workflow_with_ordered_script_references() {
+    let dir = TempDir::new().unwrap();
+    let cache = dir.path();
+    write_manifest_and_script(cache);
+    fs::write(cache.join("scripts/other.sh"), valid_schema_script()).unwrap();
+    init_cache_git(cache);
+    let manifest = parse_manifest(
+        r#"
+[battery]
+name = "azure"
+version = "0.1.0"
+
+[[scripts]]
+id = "azure.list"
+path = "scripts/list.sh"
+
+[[scripts]]
+id = "azure.other"
+path = "scripts/other.sh"
+
+[[workflows]]
+id = "azure.repeat-list"
+description = "Run the list script twice"
+scripts = ["azure.list", "azure.other", "azure.list"]
+"#,
+    )
+    .unwrap();
+
+    validate_manifest(cache, &manifest).unwrap();
+    assert_eq!(manifest.workflows[0].id, "azure.repeat-list");
+    assert_eq!(
+        manifest.workflows[0].scripts,
+        ["azure.list", "azure.other", "azure.list"]
+    );
+}
+
+#[test]
+fn manifest_rejects_invalid_workflow_ids_steps_and_references() {
+    let dir = TempDir::new().unwrap();
+    let cache = dir.path();
+    write_manifest_and_script(cache);
+    init_cache_git(cache);
+    let cases = [
+        ("", "[\"azure.list\", \"azure.list\"]", "id is required"),
+        ("one", "[\"azure.list\"]", "at least two steps"),
+        (
+            "missing",
+            "[\"azure.list\", \"azure.unknown\"]",
+            "unknown script id",
+        ),
+    ];
+    for (id, scripts, expected) in cases {
+        let manifest = parse_manifest(&format!(
+            r#"
+[battery]
+name = "azure"
+version = "0.1.0"
+
+[[scripts]]
+id = "azure.list"
+path = "scripts/list.sh"
+
+[[workflows]]
+id = "{id}"
+scripts = {scripts}
+"#
+        ))
+        .unwrap();
+        let err = validate_manifest(cache, &manifest).unwrap_err();
+        assert_eq!(err.code, OperationErrorCode::ManifestInvalid);
+        assert!(err.message.contains(expected), "{}", err.message);
+    }
+}
+
+#[test]
+fn manifest_rejects_duplicate_workflow_ids() {
+    let dir = TempDir::new().unwrap();
+    let cache = dir.path();
+    write_manifest_and_script(cache);
+    init_cache_git(cache);
+    let manifest = parse_manifest(
+        r#"
+[battery]
+name = "azure"
+version = "0.1.0"
+
+[[scripts]]
+id = "azure.list"
+path = "scripts/list.sh"
+
+[[workflows]]
+id = "azure.deploy"
+scripts = ["azure.list", "azure.list"]
+
+[[workflows]]
+id = "azure.deploy"
+scripts = ["azure.list", "azure.list"]
+"#,
+    )
+    .unwrap();
+    let err = validate_manifest(cache, &manifest).unwrap_err();
+    assert_eq!(err.code, OperationErrorCode::ManifestInvalid);
+    assert!(err.message.contains("duplicate battery workflow id"));
 }
 
 #[test]

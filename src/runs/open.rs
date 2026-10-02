@@ -114,6 +114,30 @@ pub fn init_schema(conn: &Connection) -> Result<(), RunsError> {
             content_hash TEXT NOT NULL,
             FOREIGN KEY(run_id) REFERENCES runs(run_id) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS workflow_runs (
+            workflow_id TEXT PRIMARY KEY,
+            battery_id TEXT NOT NULL,
+            battery_version TEXT NOT NULL,
+            battery_commit TEXT NOT NULL,
+            workflow_name TEXT NOT NULL,
+            actor TEXT NOT NULL,
+            state TEXT NOT NULL CHECK(state IN ('running', 'completed', 'failed', 'cancelled')),
+            current_step INTEGER NOT NULL,
+            created_at INTEGER NOT NULL,
+            finished_at INTEGER
+        );
+        CREATE TABLE IF NOT EXISTS workflow_steps (
+            workflow_id TEXT NOT NULL,
+            step_index INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            script_path TEXT NOT NULL,
+            content_hash TEXT NOT NULL,
+            run_id TEXT UNIQUE,
+            PRIMARY KEY(workflow_id, step_index),
+            FOREIGN KEY(workflow_id) REFERENCES workflow_runs(workflow_id) ON DELETE CASCADE,
+            FOREIGN KEY(run_id) REFERENCES runs(run_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_workflow_runs_state ON workflow_runs(state);
         CREATE INDEX IF NOT EXISTS idx_runs_started_at ON runs(started_at DESC);
         CREATE INDEX IF NOT EXISTS idx_runs_script_path ON runs(script_path);
         CREATE INDEX IF NOT EXISTS idx_runs_actor ON runs(actor);

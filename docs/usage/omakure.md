@@ -1,5 +1,5 @@
 # `omakure`
-- **Version:** 0.4.6
+- **Version:** 0.4.7
 
 Omakure - CLI for running and scheduling automation scripts.
 
@@ -485,6 +485,55 @@ Unregister one Battery
 - **`--remove-cache`** — Also delete the cached clone
 
   **Default:** `false`
+- **`--scripts-dir <SCRIPTS_DIR>`** — Scripts directory override
+- **`--json`** — Emit machine-readable JSON output for AI-facing subcommands.
+
+  When set, supported subcommands print exactly one JSON envelope `{ ok, data, error, schema_version }` on stdout instead of their human-readable form. Subcommands that do not support JSON ignore this flag.
+
+  **Default:** `false`
+
+## `omakure battery workflow`
+
+- **Usage:** `omakure battery workflow [--scripts-dir <SCRIPTS_DIR>] [--json] <SUBCOMMAND>`
+
+Start and inspect installed Battery workflows
+
+### Global Flags
+- **`--scripts-dir <SCRIPTS_DIR>`** — Scripts directory override
+- **`--json`** — Emit machine-readable JSON output for AI-facing subcommands.
+
+  When set, supported subcommands print exactly one JSON envelope `{ ok, data, error, schema_version }` on stdout instead of their human-readable form. Subcommands that do not support JSON ignore this flag.
+
+  **Default:** `false`
+
+## `omakure battery workflow start`
+
+- **Usage:** `omakure battery workflow start [--scripts-dir <SCRIPTS_DIR>] [--json] <BATTERY> <WORKFLOW>`
+
+Start a workflow using installed scripts from one Battery
+
+### Arguments
+- **`<BATTERY>`** — Registered Battery name
+- **`<WORKFLOW>`** — Workflow id from the Battery manifest
+
+### Flags
+- **`--scripts-dir <SCRIPTS_DIR>`** — Scripts directory override
+- **`--json`** — Emit machine-readable JSON output for AI-facing subcommands.
+
+  When set, supported subcommands print exactly one JSON envelope `{ ok, data, error, schema_version }` on stdout instead of their human-readable form. Subcommands that do not support JSON ignore this flag.
+
+  **Default:** `false`
+
+## `omakure battery workflow status`
+
+- **Usage:** `omakure battery workflow status [--scripts-dir <SCRIPTS_DIR>] [--json] <WORKFLOW_RUN_ID>`
+
+Inspect a durable workflow and its step results
+
+### Arguments
+- **`<WORKFLOW_RUN_ID>`** — Workflow run id returned by `battery workflow start`
+
+### Flags
 - **`--scripts-dir <SCRIPTS_DIR>`** — Scripts directory override
 - **`--json`** — Emit machine-readable JSON output for AI-facing subcommands.
 

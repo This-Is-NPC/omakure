@@ -48,6 +48,8 @@ pub const OPERATION_ID_BASELINE: &[(&str, &str)] = &[
     ("battery-add", "op.battery-add"),
     ("battery-sync", "op.battery-sync"),
     ("battery-install", "op.battery-install"),
+    ("battery-workflow-start", "op.battery-workflow-start"),
+    ("battery-workflow-status", "op.battery-workflow-status"),
     ("node-discovery", "op.node-discovery"),
     ("node-cue", "op.node-cue"),
     ("node-enroll-request", "op.node-enroll-request"),

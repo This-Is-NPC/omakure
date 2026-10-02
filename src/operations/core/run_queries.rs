@@ -58,9 +58,11 @@ pub fn cancel_run(workspace: &Workspace, request: CancelRunRequest) -> Operation
     store
         .get_run_required(&request.run_id)
         .map_err(map_required_run_error)?;
-    store
+    let row = store
         .cancel(&request.run_id, request.reason)
-        .map_err(map_transition_error)
+        .map_err(map_transition_error)?;
+    reconcile_workflow_terminal(&store, &row)?;
+    Ok(row)
 }
 
 pub fn dead_letter_run(
@@ -71,9 +73,20 @@ pub fn dead_letter_run(
     store
         .get_run_required(&request.run_id)
         .map_err(map_required_run_error)?;
-    store
+    let row = store
         .dead_letter(&request.run_id, request.reason)
-        .map_err(map_transition_error)
+        .map_err(map_transition_error)?;
+    reconcile_workflow_terminal(&store, &row)?;
+    Ok(row)
+}
+
+fn reconcile_workflow_terminal(store: &RunStore, row: &RunRow) -> OperationResult<()> {
+    if row.trigger == crate::runs::RunTrigger::Workflow {
+        store
+            .advance_workflow_for_run(&row.run_id)
+            .map_err(io_error_runs)?;
+    }
+    Ok(())
 }
 
 pub(super) fn resolve_states(

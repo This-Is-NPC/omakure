@@ -5,12 +5,16 @@ use super::path_safety::{
     confined_existing_path, reject_reserved_install_path, reject_symlink_components,
     reject_unsafe_relative_path,
 };
+use super::registry::cache_path_for_battery;
 use crate::domain::{extract_schema_block, parse_schema};
 use crate::runtime::{ScriptKind, script_kind};
+use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 use std::fs;
 use std::fs::File;
+use std::io;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
@@ -21,6 +25,8 @@ pub struct BatteryManifest {
     pub battery: BatteryManifestHeader,
     #[serde(default)]
     pub scripts: Vec<BatteryManifestScript>,
+    #[serde(default)]
+    pub workflows: Vec<BatteryManifestWorkflow>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -37,6 +43,13 @@ pub struct BatteryManifestScript {
     pub description: Option<String>,
     #[serde(default)]
     pub tags: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BatteryManifestWorkflow {
+    pub id: String,
+    pub description: Option<String>,
+    pub scripts: Vec<String>,
 }
 
 pub fn parse_manifest(contents: &str) -> OperationResult<BatteryManifest> {
@@ -68,8 +81,16 @@ pub fn validate_manifest(cache_path: &Path, manifest: &BatteryManifest) -> Opera
             "battery manifest name is required",
         ));
     }
+    let script_ids = validate_manifest_scripts(cache_path, &manifest.scripts)?;
+    validate_manifest_workflows(&manifest.workflows, &script_ids)
+}
+
+fn validate_manifest_scripts<'a>(
+    cache_path: &Path,
+    scripts: &'a [BatteryManifestScript],
+) -> OperationResult<HashSet<&'a str>> {
     let mut ids = HashSet::new();
-    for script in &manifest.scripts {
+    for script in scripts {
         if !ids.insert(script.id.as_str()) {
             return Err(OperationError::new(
                 OperationErrorCode::ManifestInvalid,
@@ -77,6 +98,56 @@ pub fn validate_manifest(cache_path: &Path, manifest: &BatteryManifest) -> Opera
             ));
         }
         validate_script_entry(cache_path, script)?;
+    }
+    Ok(ids)
+}
+
+fn validate_manifest_workflows(
+    workflows: &[BatteryManifestWorkflow],
+    script_ids: &HashSet<&str>,
+) -> OperationResult<()> {
+    let mut workflow_ids = HashSet::new();
+    for workflow in workflows {
+        if !workflow_ids.insert(workflow.id.as_str()) {
+            return Err(OperationError::new(
+                OperationErrorCode::ManifestInvalid,
+                format!("duplicate battery workflow id: {}", workflow.id),
+            ));
+        }
+        validate_workflow_entry(workflow, script_ids)?;
+    }
+    Ok(())
+}
+
+fn validate_workflow_entry(
+    workflow: &BatteryManifestWorkflow,
+    script_ids: &HashSet<&str>,
+) -> OperationResult<()> {
+    if workflow.id.trim().is_empty() {
+        return Err(OperationError::new(
+            OperationErrorCode::ManifestInvalid,
+            "battery workflow id is required",
+        ));
+    }
+    if workflow.scripts.len() < 2 {
+        return Err(OperationError::new(
+            OperationErrorCode::ManifestInvalid,
+            format!(
+                "battery workflow '{}' requires at least two steps",
+                workflow.id
+            ),
+        ));
+    }
+    for script_id in &workflow.scripts {
+        if !script_ids.contains(script_id.as_str()) {
+            return Err(OperationError::new(
+                OperationErrorCode::ManifestInvalid,
+                format!(
+                    "battery workflow '{}' references unknown script id: {}",
+                    workflow.id, script_id
+                ),
+            ));
+        }
     }
     Ok(())
 }
@@ -104,6 +175,54 @@ pub fn validate_script_entry(
     script: &BatteryManifestScript,
 ) -> OperationResult<PathBuf> {
     open_validated_script_entry(cache_path, script).map(|(path, _)| path)
+}
+
+pub fn installed_script_matches_manifest(
+    workspace: &Workspace,
+    battery_name: &str,
+    script: &BatteryManifestScript,
+) -> OperationResult<Option<String>> {
+    let cache_path = cache_path_for_battery(workspace, battery_name)?;
+    let (_, mut source) = open_validated_script_entry(&cache_path, script)?;
+    let scripts_root = workspace.scripts_root();
+    reject_symlink_components(scripts_root, &script.path, true)?;
+    let mut installed = open_existing_file_no_follow(&scripts_root.join(&script.path))?;
+    let mut source_buffer = [0_u8; 8192];
+    let mut installed_buffer = [0_u8; 8192];
+    let mut source_hash = Sha256::new();
+    loop {
+        let count = source.read(&mut source_buffer).map_err(|err| {
+            OperationError::new(
+                OperationErrorCode::IoFailed,
+                format!("failed to read Battery source script: {err}"),
+            )
+        })?;
+        if count == 0 {
+            return installed
+                .read(&mut installed_buffer[..1])
+                .map(|n| (n == 0).then(|| crate::util::hex::encode(&source_hash.finalize())))
+                .map_err(|err| {
+                    OperationError::new(
+                        OperationErrorCode::IoFailed,
+                        format!("failed to read installed Battery script: {err}"),
+                    )
+                });
+        }
+        match installed.read_exact(&mut installed_buffer[..count]) {
+            Ok(()) => {}
+            Err(err) if err.kind() == io::ErrorKind::UnexpectedEof => return Ok(None),
+            Err(err) => {
+                return Err(OperationError::new(
+                    OperationErrorCode::IoFailed,
+                    format!("failed to read installed Battery script: {err}"),
+                ));
+            }
+        }
+        if source_buffer[..count] != installed_buffer[..count] {
+            return Ok(None);
+        }
+        source_hash.update(&source_buffer[..count]);
+    }
 }
 
 pub(super) fn open_validated_script_entry(

@@ -701,6 +701,28 @@ cli_behavior = "CLI install is local and Unix-capable; HTTP is authenticated ope
 http_behavior = "HTTP adds route authentication and lifecycle limits."
 
 [[entries]]
+entry_id = "battery-workflow-start"
+class = "cli-only"
+operation_family = "battery"
+docs_anchor = "battery-workflow-start"
+cli_ids = ["battery workflow start"]
+rationale = "Starts an installed Battery workflow in the selected local workspace."
+[entries.adapter_only]
+auth = "No HTTP route exposes local workflow activation."
+lifecycle = "The local queue worker executes the durable workflow steps."
+
+[[entries]]
+entry_id = "battery-workflow-status"
+class = "cli-only"
+operation_family = "battery"
+docs_anchor = "battery-workflow-status"
+cli_ids = ["battery workflow status"]
+rationale = "Reads local workflow state from the selected workspace."
+[entries.adapter_only]
+auth = "No HTTP route exposes local workflow status."
+lifecycle = "The invoking CLI process reads the durable workflow state."
+
+[[entries]]
 entry_id = "node-discovery"
 class = "semantic-mismatch"
 operation_family = "node"

@@ -12,6 +12,7 @@ pub mod scripts;
 pub mod search;
 mod service_delivery;
 pub(crate) mod worker;
+pub mod workflow;
 
 use serde::Serialize;
 use std::fmt;

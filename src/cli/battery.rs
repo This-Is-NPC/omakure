@@ -1,4 +1,4 @@
-use crate::cli::args::{BatteryArgs, BatteryCommand};
+use crate::cli::args::{BatteryArgs, BatteryCommand, BatteryWorkflowArgs, BatteryWorkflowCommand};
 use crate::cli::emit::emit_native_operation_error;
 use crate::cli::json;
 use crate::operations::OperationError;
@@ -7,6 +7,8 @@ use crate::operations::battery::{
     SyncBatteryRequest, add_battery, inspect_battery, install_battery_script, list_batteries,
     list_battery_scripts, remove_battery, sync_battery,
 };
+use crate::operations::workflow::{start_installed_workflow, workflow_status};
+use crate::runs::WorkflowRun;
 use crate::workspace::Workspace;
 use std::error::Error;
 use std::path::PathBuf;
@@ -107,6 +109,55 @@ pub fn run(
             },
             |response| println!("Removed Battery {}", response.name),
         ),
+        BatteryCommand::Workflow(args) => run_workflow(&workspace, args, json_output),
+    }
+}
+
+fn run_workflow(
+    workspace: &Workspace,
+    args: BatteryWorkflowArgs,
+    json_output: bool,
+) -> Result<(), Box<dyn Error>> {
+    match args.command {
+        BatteryWorkflowCommand::Start(args) => render(
+            json_output,
+            || start_installed_workflow(workspace, &args.battery_name, &args.workflow_name),
+            |workflow| println!("Started workflow {}", workflow.workflow_id),
+        ),
+        BatteryWorkflowCommand::Status(args) => render(
+            json_output,
+            || workflow_status(workspace, &args.workflow_run_id),
+            print_workflow_status,
+        ),
+    }
+}
+
+fn print_workflow_status(workflow: WorkflowRun) {
+    println!(
+        "Workflow {}: {}",
+        workflow.workflow_id,
+        workflow.state.as_str()
+    );
+    println!(
+        "Battery {} version {} commit {} ({})",
+        workflow.battery_id,
+        workflow.battery_version,
+        workflow.battery_commit,
+        workflow.workflow_name
+    );
+    for step in workflow.steps {
+        println!(
+            "  {}: {}{}",
+            step.name,
+            step.state.map(|state| state.as_str()).unwrap_or("pending"),
+            step.run_id
+                .as_deref()
+                .map(|run_id| format!(" (run {run_id})"))
+                .unwrap_or_default()
+        );
+        if let Some(error) = step.error {
+            println!("    error: {error}");
+        }
     }
 }
 

@@ -5,7 +5,7 @@ fn checked_catalog_is_exhaustive_and_rendering_is_deterministic() {
     let catalog = checked_catalog().unwrap();
     let parity = cli_http_parity::checked_manifest().unwrap();
     catalog.validate(&parity).unwrap();
-    assert_eq!(catalog.operations.len(), 72);
+    assert_eq!(catalog.operations.len(), 74);
     assert_eq!(render_markdown(&catalog), render_markdown(&catalog));
     assert_eq!(
         catalog
@@ -13,7 +13,7 @@ fn checked_catalog_is_exhaustive_and_rendering_is_deterministic() {
             .iter()
             .map(|operation| operation.cli.len())
             .sum::<usize>(),
-        65
+        67
     );
     assert_eq!(
         catalog
@@ -23,7 +23,7 @@ fn checked_catalog_is_exhaustive_and_rendering_is_deterministic() {
             .sum::<usize>(),
         53
     );
-    assert_eq!(OPERATION_ID_BASELINE.len(), 72);
+    assert_eq!(OPERATION_ID_BASELINE.len(), 74);
 }
 #[test]
 fn trace_and_battery_platform_metadata_match_runtime_guards() {
@@ -150,7 +150,7 @@ fn current_catalog_and_support_matrix_are_fresh() {
         .unwrap_or_else(|error| panic!("failed to read {}: {error}", matrix_path.display()));
     check_support_matrix_freshness(&catalog, &matrix).unwrap();
     assert!(check_support_matrix_freshness(&catalog, "stale").is_err());
-    assert!(matrix.contains("Total operations: 72."));
+    assert!(matrix.contains("Total operations: 74."));
 }
 #[test]
 fn generated_freshness_accepts_crlf_without_masking_drift() {

@@ -102,6 +102,20 @@ pub fn enqueue(
                 source,
             }
         })?;
+    let row = enqueue_in_transaction(&transaction, script_path, args, opts)?;
+    transaction.commit().map_err(|source| RunsError::Sqlite {
+        operation: "Commit enqueue failed",
+        source,
+    })?;
+    Ok(row)
+}
+
+pub(super) fn enqueue_in_transaction(
+    conn: &Connection,
+    script_path: &str,
+    args: &[String],
+    opts: EnqueueOptions,
+) -> Result<RunRow, RunsError> {
     let now = unix_millis();
     let row = RunRow {
         run_id: opts.run_id.unwrap_or_else(generate_run_id),
@@ -133,25 +147,21 @@ pub fn enqueue(
         parent_run_id: opts.parent_run_id,
         omakure_version: opts.omakure_version,
     };
-    insert_run(&transaction, &row)?;
+    insert_run(conn, &row)?;
     if let Some(env_name) = opts.env_name.as_deref() {
-        set_run_env(&transaction, &row.run_id, env_name)?;
+        set_run_env(conn, &row.run_id, env_name)?;
     }
     match opts.allowed_secret_refs.as_deref() {
-        Some(refs) => set_run_secret_refs(&transaction, &row.run_id, refs)?,
+        Some(refs) => set_run_secret_refs(conn, &row.run_id, refs)?,
         None => set_run_secret_refs(
-            &transaction,
+            conn,
             &row.run_id,
             &[ALLOW_ALL_SECRET_REFS_POLICY.to_string()],
         )?,
     }
     if let Some(hash) = opts.script_content_hash.as_deref() {
-        set_run_script_hash(&transaction, &row.run_id, hash)?;
+        set_run_script_hash(conn, &row.run_id, hash)?;
     }
-    transaction.commit().map_err(|source| RunsError::Sqlite {
-        operation: "Commit enqueue failed",
-        source,
-    })?;
     Ok(row)
 }
 

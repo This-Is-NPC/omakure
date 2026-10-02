@@ -99,11 +99,11 @@ fn two_inventory_builds_are_equal() {
 #[test]
 fn live_cli_inventory_satisfies_parity_and_catalog() {
     let cli_ids = current_cli_ids();
-    assert_eq!(cli_ids.len(), 65);
+    assert_eq!(cli_ids.len(), 67);
 
     let parity =
         crate::cli_http_parity::validate_current(&cli_ids).expect("valid live parity inventory");
-    assert_eq!(parity.entries.len(), 72);
+    assert_eq!(parity.entries.len(), 74);
 
     let catalog = crate::operation_catalog::validate_current(&cli_ids)
         .expect("valid operation catalog for live CLI inventory");

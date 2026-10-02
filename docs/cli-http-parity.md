@@ -8,7 +8,7 @@ Manifest schema version: **1**.
 |---|---:|
 | exact | 35 |
 | semantic-mismatch | 9 |
-| cli-only | 20 |
+| cli-only | 22 |
 | http-only | 8 |
 
 | Entry | Class | Operation family | CLI IDs | HTTP IDs | Behavior case |
@@ -28,6 +28,12 @@ Manifest schema version: **1**.
 | <a id="battery-sync"></a>`battery-sync` | semantic-mismatch | `battery` | battery sync | POST /v1/batteries/:battery_id/sync | mismatch.battery-sync |
 
 > `battery-https-policy`: CLI — CLI can use configured source transports; HTTP sync is HTTPS-only; HTTP — HTTP enforces HTTPS transport policy..
+
+| <a id="battery-workflow-start"></a>`battery-workflow-start` | cli-only | `battery` | battery workflow start |  | — |
+> Rationale: Starts an installed Battery workflow in the selected local workspace.
+
+| <a id="battery-workflow-status"></a>`battery-workflow-status` | cli-only | `battery` | battery workflow status |  | — |
+> Rationale: Reads local workflow state from the selected workspace.
 
 | <a id="cli-api"></a>`cli-api` | cli-only | `api` | api |  | — |
 > Rationale: CLI-only local lifecycle or trust operation.

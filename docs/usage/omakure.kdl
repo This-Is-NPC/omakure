@@ -3,7 +3,7 @@
 
 name omakure
 bin omakure
-version "0.4.6"
+version "0.4.7"
 about "Omakure - CLI for running and scheduling automation scripts"
 long_about #"""
 Omakure - CLI for running and scheduling automation scripts.
@@ -489,6 +489,48 @@ When set, supported subcommands print exactly one JSON envelope `{ ok, data, err
 """#
         }
         arg <NAME> help="Battery name"
+        complete scripts_dir type=path
+    }
+    cmd workflow display_order=7 subcommand_required=#true arg_required_else_help=#true disable_version_flag=#true args_override_self=#false help="Start and inspect installed Battery workflows" unknown_flags=error {
+        flag --scripts-dir help="Scripts directory override" global=#true {
+            arg <SCRIPTS_DIR>
+        }
+        flag --json help="Emit machine-readable JSON output for AI-facing subcommands" global=#true default="false" {
+            long_help #"""
+Emit machine-readable JSON output for AI-facing subcommands.
+
+When set, supported subcommands print exactly one JSON envelope `{ ok, data, error, schema_version }` on stdout instead of their human-readable form. Subcommands that do not support JSON ignore this flag.
+"""#
+        }
+        cmd start display_order=0 disable_version_flag=#true args_override_self=#false help="Start a workflow using installed scripts from one Battery" unknown_flags=error {
+            flag --scripts-dir help="Scripts directory override" global=#true {
+                arg <SCRIPTS_DIR>
+            }
+            flag --json help="Emit machine-readable JSON output for AI-facing subcommands" global=#true default="false" {
+                long_help #"""
+Emit machine-readable JSON output for AI-facing subcommands.
+
+When set, supported subcommands print exactly one JSON envelope `{ ok, data, error, schema_version }` on stdout instead of their human-readable form. Subcommands that do not support JSON ignore this flag.
+"""#
+            }
+            arg <BATTERY> help="Registered Battery name"
+            arg <WORKFLOW> help="Workflow id from the Battery manifest"
+            complete scripts_dir type=path
+        }
+        cmd status display_order=1 disable_version_flag=#true args_override_self=#false help="Inspect a durable workflow and its step results" unknown_flags=error {
+            flag --scripts-dir help="Scripts directory override" global=#true {
+                arg <SCRIPTS_DIR>
+            }
+            flag --json help="Emit machine-readable JSON output for AI-facing subcommands" global=#true default="false" {
+                long_help #"""
+Emit machine-readable JSON output for AI-facing subcommands.
+
+When set, supported subcommands print exactly one JSON envelope `{ ok, data, error, schema_version }` on stdout instead of their human-readable form. Subcommands that do not support JSON ignore this flag.
+"""#
+            }
+            arg <WORKFLOW_RUN_ID> help="Workflow run id returned by `battery workflow start`"
+            complete scripts_dir type=path
+        }
         complete scripts_dir type=path
     }
     complete scripts_dir type=path

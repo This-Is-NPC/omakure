@@ -132,11 +132,25 @@ id = "azure.rg-list-all"
 path = "scripts/azure/rg-list-all.sh"
 description = "List Azure resource groups"
 tags = ["azure", "resource-groups", "read-only"]
+
+[[scripts]]
+id = "azure.report"
+path = "scripts/azure/report.sh"
+description = "Generate a resource group report"
+
+[[workflows]]
+id = "azure.daily-check"
+description = "Run the inventory and report scripts in order"
+scripts = ["azure.rg-list-all", "azure.report"]
 ```
 
 Script entries must point at `.bash`, `.sh`, `.ps1`, `.py`, or `.lua` files that
 contain a valid Omakure schema block. Paths are always relative to the Battery
-checkout.
+checkout. A workflow is an ordered list of at least two script IDs declared in
+the same Battery manifest. Workflow IDs must be unique within that Battery;
+every referenced script must exist in its `[[scripts]]` entries. A script may
+appear more than once in a workflow. The definition is inert until explicitly
+activated in a local workspace: syncing or installing a Battery does not run it.
 
 ## Safety Contract
 
@@ -187,6 +201,29 @@ Rules:
   previously exist.
 - A forced overwrite replaces the existing target only after the selected
   Battery script has passed validation.
+
+## Local Workflows
+
+After syncing a Battery, install every script named by its workflow. Start the
+workflow explicitly in the selected workspace:
+
+```bash
+omakure battery workflow start azure azure.daily-check
+omakure battery workflow status <workflow-run-id>
+omakure --json battery workflow status <workflow-run-id>
+```
+
+Starting validates the installed scripts and their Battery provenance, then
+records the ordered steps and script hashes in the workspace run database. A
+local queue worker executes one step at a time. A successful step queues the
+next; failure or cancellation stops the workflow. The status command shows the
+workflow ID, Battery manifest version and commit, linked run IDs, step states,
+and recorded errors.
+After a restart, the worker reconciles a completed step and continues without
+running it again. If a script changes while a workflow is waiting, that step
+fails before execution. Syncing or installing a Battery never starts a
+workflow. This first local contract has no step arguments, secret fields,
+scheduling, retries, or remote dispatch.
 
 ## Remove Contract
 

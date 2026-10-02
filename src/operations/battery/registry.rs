@@ -1,5 +1,5 @@
 use super::super::{OperationError, OperationErrorCode, OperationResult};
-use super::files::replace_file_atomically;
+use super::files::{open_existing_file_no_follow, replace_file_atomically};
 use super::git_url::{
     normalize_git_url, strip_windows_verbatim_owned, validate_git_ref, validate_git_url,
 };
@@ -15,6 +15,7 @@ use super::types::{
 };
 use crate::workspace::Workspace;
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 pub const REGISTRY_VERSION: u32 = 1;
@@ -276,7 +277,47 @@ pub fn installing_battery(
     None
 }
 
-#[cfg(unix)]
+pub fn installed_script_provenance(
+    workspace: &Workspace,
+    battery_name: &str,
+    script_id: &str,
+) -> OperationResult<Option<InstalledScriptProvenance>> {
+    validate_battery_name(battery_name)?;
+    let installed_root = installed_root_for_workspace(workspace)?;
+    let relative = PathBuf::from(battery_name).join(format!(
+        "{}.json",
+        crate::util::hex::encode(script_id.as_bytes())
+    ));
+    reject_symlink_components(&installed_root, &relative, false)?;
+    let path = installed_root.join(&relative);
+    if !path.exists() {
+        return Ok(None);
+    }
+    reject_symlink_components(&installed_root, &relative, true)?;
+    let mut contents = String::new();
+    open_existing_file_no_follow(&path)?
+        .read_to_string(&mut contents)
+        .map_err(|err| {
+            OperationError::new(
+                OperationErrorCode::IoFailed,
+                format!("failed to read battery install provenance: {err}"),
+            )
+        })?;
+    let provenance: InstalledScriptProvenance = serde_json::from_str(&contents).map_err(|err| {
+        OperationError::new(
+            OperationErrorCode::RegistryInvalid,
+            format!("battery install provenance is invalid: {err}"),
+        )
+    })?;
+    if provenance.battery_name != battery_name || provenance.script_id != script_id {
+        return Err(OperationError::new(
+            OperationErrorCode::RegistryInvalid,
+            "battery install provenance does not match the requested script",
+        ));
+    }
+    Ok(Some(provenance))
+}
+
 pub(super) fn installed_root_for_workspace(workspace: &Workspace) -> OperationResult<PathBuf> {
     let paths = BatteryPaths::for_workspace(workspace);
     safe_battery_metadata_dir(workspace, &paths.installed_root, "installed")

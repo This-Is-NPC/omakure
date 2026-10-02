@@ -28,6 +28,42 @@ pub enum BatteryCommand {
 
     /// Unregister one Battery
     Remove(BatteryRemoveArgs),
+
+    /// Start and inspect installed Battery workflows
+    Workflow(BatteryWorkflowArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct BatteryWorkflowArgs {
+    #[command(subcommand)]
+    pub command: BatteryWorkflowCommand,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum BatteryWorkflowCommand {
+    /// Start a workflow using installed scripts from one Battery
+    Start(BatteryWorkflowStartArgs),
+
+    /// Inspect a durable workflow and its step results
+    Status(BatteryWorkflowStatusArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct BatteryWorkflowStartArgs {
+    /// Registered Battery name
+    #[arg(value_name = "BATTERY")]
+    pub battery_name: String,
+
+    /// Workflow id from the Battery manifest
+    #[arg(value_name = "WORKFLOW")]
+    pub workflow_name: String,
+}
+
+#[derive(Args, Debug)]
+pub struct BatteryWorkflowStatusArgs {
+    /// Workflow run id returned by `battery workflow start`
+    #[arg(value_name = "WORKFLOW_RUN_ID")]
+    pub workflow_run_id: String,
 }
 
 #[derive(Args, Debug)]

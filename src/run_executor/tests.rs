@@ -103,6 +103,49 @@ fn a_cue_run_refuses_a_script_that_changed_after_it_was_authorized() {
     let _ = fs::remove_dir_all(ws.root());
 }
 
+#[test]
+#[cfg(unix)]
+fn queued_workflow_step_refuses_changed_script_without_side_effect() {
+    let ws = scratch_workspace("workflow_swapped_script");
+    let script = crate::test_support::write_bash_script(&ws, "prepare.sh", "echo approved");
+    let approved_hash = crate::remote_cue::content_hash(&script).unwrap();
+    let conn = runs::open(&ws).unwrap();
+    let queued = runs::enqueue(
+        &conn,
+        script.to_str().unwrap(),
+        &[],
+        EnqueueOptions {
+            actor: "local".into(),
+            omakure_version: "test".into(),
+            trigger: RunTrigger::Workflow,
+            script_content_hash: Some(approved_hash),
+            allowed_secret_refs: Some(Vec::new()),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let marker = ws.root().join("unauthorized-side-effect");
+    crate::test_support::write_bash_script(
+        &ws,
+        "prepare.sh",
+        &format!("touch '{}'", marker.display()),
+    );
+    let claimed = runs::claim_next(&conn, "worker", &runs::ClaimFilters::default())
+        .unwrap()
+        .unwrap();
+    assert_eq!(claimed.run_id, queued.run_id);
+    drop(conn);
+
+    let result = execute_with_heartbeat(&ws, &claimed, vec![], None);
+    assert_eq!(result.terminal, ExecutionTerminal::Failed);
+    assert_eq!(
+        result.completion.error.as_deref(),
+        Some("the script changed after this run was authorized; it was not executed")
+    );
+    assert!(!marker.exists());
+    fs::remove_dir_all(ws.root()).unwrap();
+}
+
 /// The `run_secret_refs` lesson: "no record" must not read as "no
 /// constraint". A Cue-origin row without a recorded hash is a row whose
 /// authorization cannot be checked, and running it would make the whole

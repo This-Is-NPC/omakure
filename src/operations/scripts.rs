@@ -197,7 +197,7 @@ fn open_script_file(
     #[cfg(unix)] root: &Path,
     #[cfg(not(unix))] _root: &Path,
 ) -> OperationResult<std::fs::File> {
-    let file = open_no_follow(path)?;
+    let file = crate::adapters::fs::open_existing_file_read(path).map_err(io_error)?;
     #[cfg(unix)]
     {
         let canonical_root = root.canonicalize().map_err(|err| {
@@ -219,21 +219,6 @@ fn open_script_file(
         }
     }
     Ok(file)
-}
-
-#[cfg(unix)]
-fn open_no_follow(path: &Path) -> OperationResult<std::fs::File> {
-    use std::os::unix::fs::OpenOptionsExt;
-    std::fs::OpenOptions::new()
-        .read(true)
-        .custom_flags(0o400000)
-        .open(path)
-        .map_err(io_error)
-}
-
-#[cfg(not(unix))]
-fn open_no_follow(path: &Path) -> OperationResult<std::fs::File> {
-    std::fs::File::open(path).map_err(io_error)
 }
 
 fn is_hidden_metadata_component(component: Component<'_>) -> bool {
@@ -468,6 +453,22 @@ mod tests {
 
         let err = open_script_file(&outside_path, workspace.scripts_root()).unwrap_err();
         assert_eq!(err.code, OperationErrorCode::UnsafePath);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn open_script_file_rejects_final_symlink_without_following_it() {
+        use std::os::unix::fs::symlink;
+
+        let dir = TempDir::new().unwrap();
+        let workspace = workspace_in(&dir);
+        let target = workspace.scripts_root().join("target.sh");
+        let link = workspace.scripts_root().join("link.sh");
+        std::fs::write(&target, "#!/bin/sh\n").unwrap();
+        symlink(&target, &link).unwrap();
+
+        let err = open_script_file(&link, workspace.scripts_root()).unwrap_err();
+        assert_eq!(err.code, OperationErrorCode::IoFailed);
     }
 
     #[test]

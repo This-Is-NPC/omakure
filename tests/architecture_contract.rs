@@ -22,6 +22,7 @@ enum Rule {
     HealthRegistry,
     HealthProcess,
     BatteryFilesystem,
+    ScriptFilesystem,
     NodeFilesystem,
     OperationInput,
     SearchStorage,
@@ -49,6 +50,14 @@ struct ContractVisitor {
 }
 
 impl ContractVisitor {
+    fn filesystem_rule(&self) -> Option<&'static str> {
+        match self.rule {
+            Rule::BatteryFilesystem => Some("ARCH-BATTERY-FS"),
+            Rule::ScriptFilesystem => Some("ARCH-SCRIPTS-FS"),
+            _ => None,
+        }
+    }
+
     fn record(&mut self, rule: &'static str, _detail: &'static str) {
         self.findings.push(Finding {
             rule,
@@ -243,7 +252,7 @@ impl<'ast> Visit<'ast> for ContractVisitor {
                 "runtime process execution belongs in adapters/system_checks",
             );
         }
-        if self.rule == Rule::BatteryFilesystem
+        if let Some(rule) = self.filesystem_rule()
             && let syn::Expr::Path(ExprPath { path, .. }) = node.func.as_ref()
         {
             let segments = Self::path_segments(path);
@@ -253,11 +262,14 @@ impl<'ast> Visit<'ast> for ContractVisitor {
                     Some("open" | "openat" | "renameat" | "linkat" | "unlinkat")
                 )
             {
-                self.record(
-                    "ARCH-BATTERY-FS",
-                    "raw filesystem calls belong in adapters/fs",
-                );
+                self.record(rule, "raw filesystem calls belong in adapters/fs");
             }
+        }
+        if self.rule == Rule::ScriptFilesystem
+            && let syn::Expr::Path(ExprPath { path, .. }) = node.func.as_ref()
+            && Self::path_segments(path).ends_with(&["File".into(), "open".into()])
+        {
+            self.record("ARCH-SCRIPTS-FS", "script file opens belong in adapters/fs");
         }
         if self.rule == Rule::GitProcess
             && let syn::Expr::Path(ExprPath { path, .. }) = node.func.as_ref()
@@ -308,11 +320,8 @@ impl<'ast> Visit<'ast> for ContractVisitor {
     }
 
     fn visit_expr_unsafe(&mut self, node: &'ast syn::ExprUnsafe) {
-        if self.rule == Rule::BatteryFilesystem {
-            self.record(
-                "ARCH-BATTERY-FS",
-                "unsafe filesystem calls belong in adapters/fs",
-            );
+        if let Some(rule) = self.filesystem_rule() {
+            self.record(rule, "unsafe filesystem calls belong in adapters/fs");
         }
         if self.rule == Rule::NodeFilesystem {
             self.record("ARCH-NODE-FS", "platform syscalls belong in adapters/fs");
@@ -328,11 +337,13 @@ impl<'ast> Visit<'ast> for ContractVisitor {
     }
 
     fn visit_expr_method_call(&mut self, node: &'ast ExprMethodCall) {
-        if self.rule == Rule::BatteryFilesystem && node.method == "custom_flags" {
-            self.record(
-                "ARCH-BATTERY-FS",
-                "platform filesystem flags belong in adapters/fs",
-            );
+        if let Some(rule) = self.filesystem_rule()
+            && node.method == "custom_flags"
+        {
+            self.record(rule, "platform filesystem flags belong in adapters/fs");
+        }
+        if self.rule == Rule::ScriptFilesystem && node.method == "open" {
+            self.record("ARCH-SCRIPTS-FS", "script file opens belong in adapters/fs");
         }
         if self.rule == Rule::GitProcess
             && matches!(
@@ -898,7 +909,7 @@ fn node_filesystem_syscalls_stay_in_adapters() {
 }
 
 #[test]
-fn battery_filesystem_syscalls_stay_in_adapters() {
+fn operation_filesystem_syscalls_stay_in_adapters() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     for path in source_files(&root.join("src/operations/battery")) {
         let display = path.strip_prefix(root).unwrap().display().to_string();
@@ -910,17 +921,45 @@ fn battery_filesystem_syscalls_stay_in_adapters() {
             contract.findings
         );
     }
-    for source in [
-        "fn install() { unsafe { libc::open(std::ptr::null(), 0); } }",
-        "fn install() { libc::renameat(0, std::ptr::null(), 0, std::ptr::null()); }",
-        "fn install() { std::fs::OpenOptions::new().custom_flags(0).open(\"script\"); }",
+    let script_path = root.join("src/operations/scripts.rs");
+    let script_source = fs::read_to_string(&script_path).expect("read script operation source");
+    let script_contract = parse_contract(
+        Rule::ScriptFilesystem,
+        "src/operations/scripts.rs",
+        &script_source,
+    );
+    assert!(
+        script_contract.findings.is_empty(),
+        "script filesystem boundary violations: {:?}",
+        script_contract.findings
+    );
+    for (rule, code) in [
+        (Rule::BatteryFilesystem, "ARCH-BATTERY-FS"),
+        (Rule::ScriptFilesystem, "ARCH-SCRIPTS-FS"),
     ] {
-        let contract = parse_contract(Rule::BatteryFilesystem, "fixture:battery.rs", source);
+        for source in [
+            "fn install() { unsafe { libc::open(std::ptr::null(), 0); } }",
+            "fn install() { libc::renameat(0, std::ptr::null(), 0, std::ptr::null()); }",
+            "fn install() { std::fs::OpenOptions::new().custom_flags(0).open(\"script\"); }",
+        ] {
+            let contract = parse_contract(rule, "fixture:filesystem.rs", source);
+            assert!(
+                contract.findings.iter().any(|finding| finding.rule == code),
+                "{code} failed to reject {source}"
+            );
+        }
+    }
+    for source in [
+        "fn read() { std::fs::File::open(\"script\"); }",
+        "fn read() { std::fs::OpenOptions::new().read(true).open(\"script\"); }",
+    ] {
+        let contract = parse_contract(Rule::ScriptFilesystem, "fixture:scripts.rs", source);
         assert!(
             contract
                 .findings
                 .iter()
-                .any(|finding| finding.rule == "ARCH-BATTERY-FS")
+                .any(|finding| finding.rule == "ARCH-SCRIPTS-FS"),
+            "ARCH-SCRIPTS-FS failed to reject {source}"
         );
     }
 }

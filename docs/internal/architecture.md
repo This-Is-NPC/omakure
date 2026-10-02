@@ -226,7 +226,8 @@ Node filesystem policy stays in `src/node/fs_unix.rs` and
 `src/node/fs_windows.rs`: those modules choose ownership, permissions, path
 identity, and ACL rules and map failures to `NodeError`. The platform calls and
 unsafe bindings live in `src/adapters/fs/`. This keeps the node's platform
-policy together while sharing one filesystem I/O boundary with Battery.
+policy together while sharing one filesystem I/O boundary with Battery and
+script-content reads.
 
 ## Boundaries and invariants
 

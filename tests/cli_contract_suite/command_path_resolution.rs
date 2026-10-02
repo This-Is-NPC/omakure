@@ -1,39 +1,10 @@
-//! Spike (task 1751): de-risk the venv-via-PATH thesis before any env-injection
-//! code is built.
+//! Interpreter command path contract.
 //!
-//! # The risk
-//!
-//! The env-injection design assumes that setting `PATH` in the child environment
-//! makes `std::process::Command::new("python3")` resolve to the venv's `python3`.
-//! If Rust std resolved the *program name* against the **parent** process `PATH`
-//! (ignoring the child's `.env("PATH", ...)` override), injection would prefill
-//! the environment but silently keep running the **system** interpreter — the
-//! worst kind of failure: no error, wrong imports.
-//!
-//! # Empirical finding (Linux, rustc 1.94.1)
-//!
-//! `.env("PATH", ...)` **DOES** affect program-name resolution on this platform:
-//! a shim `python3` placed on a `PATH`-prepended temp dir is the binary that
-//! actually executes, and a `PATH` that omits every real interpreter directory
-//! makes the spawn fail with `NotFound` — proving the **child** `PATH` (not the
-//! parent's) drives the lookup. See `env_path_redirects_program_name_resolution`.
-//!
-//! # Locked decision (for downstream task 1755)
-//!
-//! Regardless of the spike outcome, downstream interpreter spawning MUST resolve
-//! the interpreter to an **ABSOLUTE path** via a which-style lookup against the
-//! merged/injected `PATH`, then `Command::new(abs_path)`.
-//!
-//! Rationale:
-//! - The name-resolution-honors-child-`PATH` behavior is a std implementation
-//!   detail, is **not** contractually guaranteed, and differs across platforms
-//!   (notably Windows). Relying on it is fragile.
-//! - Absolute-path resolution is explicit and deterministic: it removes the
-//!   silent-wrong-interpreter footgun entirely and makes the resolved path
-//!   observable/loggable.
-//!
-//! `absolute_path_resolution_is_deterministic` proves the robust alternative
-//! runs the shim deterministically.
+//! An injected child `PATH` can select a different interpreter for a bare
+//! program name. The runtime resolves the interpreter to an absolute path
+//! against the injected `PATH`, so the selected program is explicit and
+//! consistent across platforms. These Unix tests characterize name lookup
+//! and the absolute-path selection rule.
 
 #[cfg(unix)]
 use std::fs;
@@ -63,8 +34,8 @@ fn write_python3_shim(dir: &Path) -> PathBuf {
 }
 
 /// Minimal which-style lookup: return the first executable file named `program`
-/// found by scanning the colon-separated `path` string left-to-right. This is a
-/// spike-local stand-in for the resolver task 1755 will implement in `runtime`.
+/// found by scanning the colon-separated `path` string left-to-right. This is
+/// used to characterize interpreter selection.
 #[cfg(unix)]
 fn which_in_path(program: &str, path: &str) -> Option<PathBuf> {
     for dir in path.split(':').filter(|d| !d.is_empty()) {
@@ -79,7 +50,7 @@ fn which_in_path(program: &str, path: &str) -> Option<PathBuf> {
     None
 }
 
-/// EMPIRICAL SPIKE: does `.env("PATH", ...)` change how `Command::new("python3")`
+/// Check whether `.env("PATH", ...)` changes how `Command::new("python3")`
 /// resolves the program name?
 ///
 /// Two sub-assertions, both against `Command::new("python3")` (program *name*,
@@ -123,7 +94,7 @@ fn env_path_redirects_program_name_resolution() {
     );
 }
 
-/// LOCKED STRATEGY: resolve the interpreter to an absolute path via which-style
+/// Resolve the interpreter to an absolute path via which-style
 /// lookup against the merged/injected `PATH`, then `Command::new(abs_path)`.
 /// This must run the shim deterministically without relying on any name-lookup
 /// behavior of `Command`.
@@ -133,8 +104,7 @@ fn absolute_path_resolution_is_deterministic() {
     let shim_dir = generated_executable_tempdir().unwrap();
     let shim = write_python3_shim(shim_dir.path());
 
-    // Simulate the injected/merged PATH the way task 1755 will: venv/shim dir
-    // prepended to the inherited PATH.
+    // Prepend the shim directory to the inherited PATH.
     let inherited = std::env::var("PATH").unwrap_or_default();
     let merged = format!("{}:{}", shim_dir.path().display(), inherited);
 

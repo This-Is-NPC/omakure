@@ -67,14 +67,11 @@ fn lua_host_binary() -> Result<PathBuf, ScriptError> {
 /// Build a command while honoring an injected environment when choosing the
 /// interpreter binary.
 ///
-/// Per the locked spike decision (`tests/spike_command_path_resolution.rs`,
-/// task 1751): if `env` carries a `PATH` entry (e.g. a venv-prepended PATH
-/// produced by env injection), the interpreter name is resolved to an
-/// ABSOLUTE path via a which-style lookup against that injected PATH, then
-/// spawned as `Command::new(abs_path)`. This removes the silent
-/// wrong-interpreter footgun: relying on `Command::new("python3")` name
-/// resolution honoring the child `PATH` is a std implementation detail that
-/// differs across platforms.
+/// When `env` contains `PATH`, resolve the interpreter name to an absolute
+/// path against that value before spawning. The command then executes the
+/// interpreter selected by the injected environment on each platform.
+/// `tests/cli_contract_suite/command_path_resolution.rs` checks the
+/// command-resolution behavior.
 ///
 /// The mechanism is language-agnostic — it merely resolves the interpreter
 /// program against the (possibly venv-prepended) PATH — so the same code path

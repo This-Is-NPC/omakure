@@ -12,8 +12,8 @@ targets=(
   baseline_push_e2e
   behavioral_adapter_parity
   cli_battery
+  cli_contract_suite
   cli_no_subcommand
-  cli_reference_contract
   cli_run_exit_e2e
   cli_surface_e2e
   direct_transport_contract
@@ -39,7 +39,6 @@ targets=(
   remote_cue_suite
   secret_cli_e2e
   shipped_config_templates
-  spike_command_path_resolution
   support_harness
 )
 

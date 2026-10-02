@@ -33,11 +33,19 @@
       "reason": "test-harness"
     },
     {
-      "path": "tests/cli_no_subcommand.rs",
+      "path": "tests/cli_contract_suite.rs",
       "reason": "test-harness"
     },
     {
-      "path": "tests/cli_reference_contract.rs",
+      "path": "tests/cli_contract_suite/command_path_resolution.rs",
+      "reason": "test-harness"
+    },
+    {
+      "path": "tests/cli_contract_suite/reference.rs",
+      "reason": "test-harness"
+    },
+    {
+      "path": "tests/cli_no_subcommand.rs",
       "reason": "test-harness"
     },
     {
@@ -146,10 +154,6 @@
     },
     {
       "path": "tests/shipped_config_templates.rs",
-      "reason": "test-harness"
-    },
-    {
-      "path": "tests/spike_command_path_resolution.rs",
       "reason": "test-harness"
     },
     {

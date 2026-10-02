@@ -18,9 +18,12 @@ use health_messages::signal_payload;
 
 #[path = "support/health_ids.rs"]
 mod health_ids;
+#[path = "support/health_trust.rs"]
+mod health_trust;
 pub mod support;
 
 use health_ids::{hex16, peer_identity};
+use health_trust::trust_peer;
 
 use omakure::direct_health::{HealthOutcome, HealthSession};
 use omakure::direct_transport::{envelope_kind_hint, envelope_view, sign_health_envelope};
@@ -49,6 +52,11 @@ use tempfile::TempDir;
 const BASE_NOW: i64 = 1_700_000_000;
 /// The canonical byte length the suite declares for every ingested message.
 const CANONICAL_LEN: usize = 900;
+// These free-text audit values must never appear in a Health Signal.
+const SYNTHETIC_TRUST_AUDIT: (&str, &str) = (
+    "/home/operator/keys/id_ed25519",
+    "secret://vault/enrollment AWS_SECRET_ACCESS_KEY=abc123",
+);
 
 // ---------------------------------------------------------------------------
 // A real node, driven the way production drives it.
@@ -143,33 +151,6 @@ impl Node {
 
 fn open_plane<'a>(node: &Node, registry: &'a NodeRegistry) -> HealthPlane<'a, NodeRegistry> {
     HealthPlane::with_clock(registry, Box::new(SharedClock(Arc::clone(&node.clock))))
-}
-
-fn trust_peer(node: &Node, seed: u8, role: &str, capabilities: &[&str]) -> String {
-    let (node_id, public_key) = peer_identity(seed);
-    let mut args = vec![
-        "trust".to_string(),
-        "--node-id".to_string(),
-        node_id.clone(),
-        "--public-key".to_string(),
-        public_key,
-        "--role".to_string(),
-        role.to_string(),
-        "--actor".to_string(),
-        // Deliberately hostile evidence: the actor and reason are privacy
-        // class P1 free text, and no Signal may ever carry them.
-        "/home/operator/keys/id_ed25519".to_string(),
-        "--reason".to_string(),
-        "secret://vault/enrollment AWS_SECRET_ACCESS_KEY=abc123".to_string(),
-        "--confirmed".to_string(),
-    ];
-    for capability in capabilities {
-        args.push("--capability".to_string());
-        args.push((*capability).to_string());
-    }
-    let data = support::assert_node_success(&support::run_node(&node.workspace, &args));
-    assert_eq!(data["state"], "active");
-    node_id
 }
 
 /// Trust one *real* node from another, using its live identity rather than a
@@ -345,10 +326,11 @@ fn assert_no_leakage(label: &str, encoded: &str) {
 fn one_terminal_run_stays_exactly_one_signal_across_duplicates_and_restarts() {
     let node = Node::start();
     let performer = trust_peer(
-        &node,
+        &node.workspace,
         21,
         "performer",
         &["inventory-health", "notifications"],
+        SYNTHETIC_TRUST_AUDIT,
     );
     let registry = node.registry();
     let plane = open_plane(&node, &registry);
@@ -404,10 +386,11 @@ fn one_terminal_run_stays_exactly_one_signal_across_duplicates_and_restarts() {
 fn enrollment_and_revocation_each_produce_exactly_one_local_lifecycle_signal() {
     let node = Node::start();
     let performer = trust_peer(
-        &node,
+        &node.workspace,
         22,
         "performer",
         &["inventory-health", "notifications"],
+        SYNTHETIC_TRUST_AUDIT,
     );
     let registry = node.registry();
     let plane = open_plane(&node, &registry);
@@ -462,10 +445,11 @@ fn enrollment_and_revocation_each_produce_exactly_one_local_lifecycle_signal() {
 fn revocation_blocks_later_remote_signals_and_keeps_the_local_revocation_signal() {
     let node = Node::start();
     let performer = trust_peer(
-        &node,
+        &node.workspace,
         23,
         "performer",
         &["inventory-health", "notifications"],
+        SYNTHETIC_TRUST_AUDIT,
     );
     let registry = node.registry();
     let plane = open_plane(&node, &registry);
@@ -526,13 +510,26 @@ fn revocation_blocks_later_remote_signals_and_keeps_the_local_revocation_signal(
 fn contracted_signal_rejections_are_audited_and_mutate_neither_health_nor_trust() {
     let node = Node::start();
     let performer = trust_peer(
-        &node,
+        &node.workspace,
         24,
         "performer",
         &["inventory-health", "notifications"],
+        SYNTHETIC_TRUST_AUDIT,
     );
-    let no_notifications = trust_peer(&node, 25, "performer", &["inventory-health"]);
-    let conductor = trust_peer(&node, 26, "conductor", &["notifications"]);
+    let no_notifications = trust_peer(
+        &node.workspace,
+        25,
+        "performer",
+        &["inventory-health"],
+        SYNTHETIC_TRUST_AUDIT,
+    );
+    let conductor = trust_peer(
+        &node.workspace,
+        26,
+        "conductor",
+        &["notifications"],
+        SYNTHETIC_TRUST_AUDIT,
+    );
     let (stranger, _) = peer_identity(27);
     let registry = node.registry();
     let plane = open_plane(&node, &registry);
@@ -737,10 +734,11 @@ fn contracted_signal_rejections_are_audited_and_mutate_neither_health_nor_trust(
 fn cursor_gaps_hold_and_expire_inside_the_frozen_reorder_bounds() {
     let node = Node::start();
     let performer = trust_peer(
-        &node,
+        &node.workspace,
         28,
         "performer",
         &["inventory-health", "notifications"],
+        SYNTHETIC_TRUST_AUDIT,
     );
     let registry = node.registry();
     let plane = open_plane(&node, &registry);
@@ -794,10 +792,11 @@ fn cursor_gaps_hold_and_expire_inside_the_frozen_reorder_bounds() {
 fn inbox_capacity_retention_and_storage_stay_inside_every_frozen_bound() {
     let node = Node::start();
     let performer = trust_peer(
-        &node,
+        &node.workspace,
         29,
         "performer",
         &["inventory-health", "notifications"],
+        SYNTHETIC_TRUST_AUDIT,
     );
     let registry = node.registry();
     let plane = open_plane(&node, &registry);
@@ -863,7 +862,13 @@ fn inbox_capacity_retention_and_storage_stay_inside_every_frozen_bound() {
 fn an_acknowledgement_retires_exactly_the_outbox_signal_it_names() {
     let node = Node::start();
     // This node is the Performer: its peer is the Conductor it reports to.
-    let conductor = trust_peer(&node, 30, "conductor", &["notifications"]);
+    let conductor = trust_peer(
+        &node.workspace,
+        30,
+        "conductor",
+        &["notifications"],
+        SYNTHETIC_TRUST_AUDIT,
+    );
     let registry = node.registry();
     let plane = open_plane(&node, &registry);
 
@@ -940,7 +945,13 @@ fn an_acknowledgement_retires_exactly_the_outbox_signal_it_names() {
 #[test]
 fn outbox_overflow_drops_the_oldest_signal_and_the_queue_survives_a_restart() {
     let node = Node::start();
-    let conductor = trust_peer(&node, 32, "conductor", &["notifications"]);
+    let conductor = trust_peer(
+        &node.workspace,
+        32,
+        "conductor",
+        &["notifications"],
+        SYNTHETIC_TRUST_AUDIT,
+    );
     let registry = node.registry();
     let plane = open_plane(&node, &registry);
 
@@ -1292,10 +1303,11 @@ fn an_exhausted_signal_is_resent_on_the_next_session_and_stays_one_at_the_conduc
 fn the_signal_read_surface_is_bounded_newest_first_and_carries_no_private_field() {
     let node = Node::start();
     let performer = trust_peer(
-        &node,
+        &node.workspace,
         31,
         "performer",
         &["inventory-health", "notifications"],
+        SYNTHETIC_TRUST_AUDIT,
     );
     let registry = node.registry();
     let plane = open_plane(&node, &registry);

@@ -4,7 +4,7 @@
 //! Unlike the in-crate unit tests, this suite drives a node the way production
 //! does: it initializes real node state and real trust through the shipped CLI,
 //! then reopens that database through the public registry surface. It proves
-//! the schema version 7 migration lands on a production node, that the public
+//! the current registry opens and persists Health Plane state, that the public
 //! operations enforce the frozen contract, that state survives a restart, and
 //! that the public projection never carries a privacy class P1 field.
 //!
@@ -19,9 +19,12 @@ use health_messages::signal_payload;
 
 #[path = "support/health_ids.rs"]
 mod health_ids;
+#[path = "support/health_trust.rs"]
+mod health_trust;
 pub mod support;
 
-use health_ids::{hex16, peer_identity};
+use health_ids::hex16;
+use health_trust::trust_peer;
 
 use omakure::health_plane::bounds::{PRESENCE_ONLINE_SECONDS, STORAGE_CEILING_BYTES};
 use omakure::health_plane::model::{HealthCode, HealthDecision, Presence};
@@ -36,6 +39,10 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use tempfile::TempDir;
 
 const BASE_NOW: i64 = 1_700_000_000;
+const SYNTHETIC_TRUST_AUDIT: (&str, &str) = (
+    "health-plane-state-tests",
+    "health plane state integration peer",
+);
 
 #[derive(Debug)]
 struct FixedClock(AtomicI64);
@@ -104,31 +111,6 @@ impl Node {
     fn set_now(&self, seconds: i64) {
         self.clock.0.store(seconds, Ordering::SeqCst);
     }
-}
-
-fn trust_peer(node: &Node, seed: u8, role: &str, capabilities: &[&str]) -> String {
-    let (node_id, public_key) = peer_identity(seed);
-    let mut args = vec![
-        "trust".to_string(),
-        "--node-id".to_string(),
-        node_id.clone(),
-        "--public-key".to_string(),
-        public_key,
-        "--role".to_string(),
-        role.to_string(),
-        "--actor".to_string(),
-        "health-plane-state-tests".to_string(),
-        "--reason".to_string(),
-        "health plane state integration peer".to_string(),
-        "--confirmed".to_string(),
-    ];
-    for capability in capabilities {
-        args.push("--capability".to_string());
-        args.push((*capability).to_string());
-    }
-    let data = support::assert_node_success(&support::run_node(&node.workspace, &args));
-    assert_eq!(data["state"], "active");
-    node_id
 }
 
 fn revoke_peer(node: &Node, node_id: &str) {
@@ -215,10 +197,11 @@ fn ingest(
 fn a_production_node_serves_bounded_health_state() {
     let node = Node::start();
     let performer = trust_peer(
-        &node,
+        &node.workspace,
         7,
         "performer",
         &["inventory-health", "notifications"],
+        SYNTHETIC_TRUST_AUDIT,
     );
     let registry = node.registry();
 
@@ -308,10 +291,11 @@ fn a_production_node_serves_bounded_health_state() {
 fn health_state_and_replay_protection_survive_a_restart() {
     let node = Node::start();
     let performer = trust_peer(
-        &node,
+        &node.workspace,
         8,
         "performer",
         &["inventory-health", "notifications"],
+        SYNTHETIC_TRUST_AUDIT,
     );
     let target = node.local_node_id.clone();
 
@@ -366,10 +350,11 @@ fn health_state_and_replay_protection_survive_a_restart() {
 fn revocation_stops_reporting_and_purges_derived_state_only() {
     let node = Node::start();
     let performer = trust_peer(
-        &node,
+        &node.workspace,
         9,
         "performer",
         &["inventory-health", "notifications"],
+        SYNTHETIC_TRUST_AUDIT,
     );
     let target = node.local_node_id.clone();
     let registry = node.registry();
@@ -423,10 +408,11 @@ fn revocation_stops_reporting_and_purges_derived_state_only() {
 fn the_public_projection_never_carries_a_forbidden_field() {
     let node = Node::start();
     let performer = trust_peer(
-        &node,
+        &node.workspace,
         10,
         "performer",
         &["inventory-health", "notifications"],
+        SYNTHETIC_TRUST_AUDIT,
     );
     let target = node.local_node_id.clone();
     let registry = node.registry();

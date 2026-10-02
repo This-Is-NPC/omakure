@@ -112,14 +112,14 @@ pub struct RemoveBatteryResponse {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub(super) struct InstalledScriptProvenance {
-    pub(super) battery_name: String,
-    pub(super) script_id: String,
-    pub(super) git_url: String,
-    pub(super) requested_ref: String,
-    pub(super) resolved_commit: String,
-    pub(super) source_path: PathBuf,
-    pub(super) installed_path: PathBuf,
+pub struct InstalledScriptProvenance {
+    pub battery_name: String,
+    pub script_id: String,
+    pub git_url: String,
+    pub requested_ref: String,
+    pub resolved_commit: String,
+    pub source_path: PathBuf,
+    pub installed_path: PathBuf,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

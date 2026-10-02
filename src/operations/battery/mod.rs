@@ -17,20 +17,22 @@ pub use git_url::{
 pub use install::install_battery_script;
 pub(crate) use install::{InstallState, install_verified_script};
 pub use manifest::{
-    BatteryManifest, BatteryManifestHeader, BatteryManifestScript, MANIFEST_FILE, load_manifest,
-    parse_manifest, validate_manifest, validate_script_entry,
+    BatteryManifest, BatteryManifestHeader, BatteryManifestScript, BatteryManifestWorkflow,
+    MANIFEST_FILE, installed_script_matches_manifest, load_manifest, parse_manifest,
+    validate_manifest, validate_script_entry,
 };
 pub use path_safety::{confined_existing_path, reject_unsafe_relative_path};
 pub use registry::{
-    BatteryPaths, REGISTRY_VERSION, add_battery, inspect_battery, installing_battery,
-    list_batteries, list_battery_scripts, read_registry, remove_battery, write_registry,
+    BatteryPaths, REGISTRY_VERSION, add_battery, inspect_battery, installed_script_provenance,
+    installing_battery, list_batteries, list_battery_scripts, read_registry, remove_battery,
+    write_registry,
 };
 pub use sync::{sync_battery, sync_battery_https_only_with_access};
 pub use types::{
     AddBatteryRequest, BatteryAuth, BatteryAuthMethod, BatteryCacheStatus, BatteryInspectResponse,
     BatteryRegistry, BatteryScriptSummary, BatterySummary, InspectBatteryRequest,
-    InstallBatteryScriptRequest, InstallBatteryScriptResponse, RemoveBatteryRequest,
-    RemoveBatteryResponse, SyncBatteryRequest,
+    InstallBatteryScriptRequest, InstallBatteryScriptResponse, InstalledScriptProvenance,
+    RemoveBatteryRequest, RemoveBatteryResponse, SyncBatteryRequest,
 };
 
 #[cfg(test)]

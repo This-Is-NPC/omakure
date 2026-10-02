@@ -40,6 +40,86 @@ fn install_battery_script_refuses_overwrite_without_force_and_writes_provenance(
     assert!(response.installed_path.exists());
     assert!(response.provenance_path.exists());
     assert_eq!(conflict.code, OperationErrorCode::Conflict);
+    let provenance = installed_script_provenance(&ws, "azure", "azure.list")
+        .unwrap()
+        .unwrap();
+    assert_eq!(provenance.battery_name, "azure");
+    assert_eq!(provenance.script_id, "azure.list");
+    assert_eq!(provenance.resolved_commit, response.resolved_commit);
+    assert_eq!(provenance.installed_path, response.installed_path);
+    assert!(
+        installed_script_provenance(&ws, "azure", "azure.missing")
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn installed_script_provenance_rejects_symlink() {
+    use std::os::unix::fs::symlink;
+
+    let dir = TempDir::new().unwrap();
+    let ws = workspace_in(&dir);
+    write_synced_cache_and_registry(&ws);
+    let response = install_battery_script(
+        &ws,
+        InstallBatteryScriptRequest {
+            battery_name: "azure".into(),
+            script_id: "azure.list".into(),
+            force: false,
+        },
+    )
+    .unwrap();
+    let actual = response.provenance_path.with_extension("original");
+    fs::rename(&response.provenance_path, &actual).unwrap();
+    symlink(&actual, &response.provenance_path).unwrap();
+
+    let err = installed_script_provenance(&ws, "azure", "azure.list").unwrap_err();
+    assert_eq!(err.code, OperationErrorCode::UnsafePath);
+}
+
+#[cfg(unix)]
+#[test]
+fn installed_script_match_returns_trusted_source_hash_and_rejects_modified_bytes() {
+    let dir = TempDir::new().unwrap();
+    let ws = workspace_in(&dir);
+    write_synced_cache_and_registry(&ws);
+    let installed = install_battery_script(
+        &ws,
+        InstallBatteryScriptRequest {
+            battery_name: "azure".into(),
+            script_id: "azure.list".into(),
+            force: false,
+        },
+    )
+    .unwrap();
+    let inspection = inspect_battery(
+        &ws,
+        InspectBatteryRequest {
+            name: "azure".into(),
+        },
+    )
+    .unwrap();
+    let script = &inspection.manifest.scripts[0];
+    let trusted_hash = installed_script_matches_manifest(&ws, "azure", script)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        Some(trusted_hash),
+        crate::remote_cue::content_hash(&installed.installed_path)
+    );
+
+    fs::write(
+        &installed.installed_path,
+        format!("{}# modified\n", valid_schema_script()),
+    )
+    .unwrap();
+    assert!(
+        installed_script_matches_manifest(&ws, "azure", script)
+            .unwrap()
+            .is_none()
+    );
 }
 
 #[test]

@@ -8,9 +8,13 @@ pub(super) enum AdmissionError {
     #[error("authorized script content lookup failed: {0}")]
     ScriptHashLookup(#[source] RunsError),
     #[error("no authorized script content was recorded for this remote run")]
-    ScriptHashMissing,
+    CueScriptHashMissing,
+    #[error("no authorized script content was recorded for this run")]
+    WorkflowScriptHashMissing,
     #[error("the script changed after this remote run was authorized; it was not executed")]
-    ScriptChanged,
+    CueScriptChanged,
+    #[error("the script changed after this run was authorized; it was not executed")]
+    WorkflowScriptChanged,
     #[error("the authorized script could not be read at execution time")]
     ScriptUnreadable,
     #[error("secret provider policy missing for queued run")]
@@ -34,7 +38,7 @@ pub(super) fn execution_script_path(
     }
     let path = crate::operations::core::canonical_script_path(path, workspace.scripts_root())
         .map_err(|error| script_admission_failure(ExecutionTerminal::Errored, error.to_string()))?;
-    check_cue_script_unchanged(workspace, row, &path)
+    check_pinned_script_unchanged(workspace, row, &path)
         .map_err(|error| script_admission_failure(ExecutionTerminal::Failed, error.to_string()))?;
     Ok(path)
 }
@@ -52,8 +56,7 @@ fn script_admission_failure(terminal: ExecutionTerminal, error: String) -> Execu
     }
 }
 
-/// Refuse a Cue-origin run whose script is no longer the script it was
-/// authorized against.
+/// Refuse a run with pinned script bytes when those bytes have changed.
 ///
 /// The Remote Cue contract declined this third check on the grounds that it
 /// only defended against an attacker who could already write to the workspace.
@@ -67,24 +70,34 @@ fn script_admission_failure(terminal: ExecutionTerminal, error: String) -> Execu
 /// "missing" and "lookup failed" both meant allow-all, is exactly the shape of
 /// mistake this must not repeat.
 ///
-/// Scoped to `RunTrigger::Cue`. A manual or scheduled run is started by someone
-/// on this machine against whatever is on this machine; there is no earlier
-/// authorization for it to have drifted from.
-fn check_cue_script_unchanged(
+/// Cue and workflow runs pin a content hash when they are authorized. Manual
+/// and scheduled runs use the current local script without that earlier pin.
+fn check_pinned_script_unchanged(
     workspace: &Workspace,
     row: &RunRow,
     script_path: &Path,
 ) -> Result<(), AdmissionError> {
-    if row.trigger != RunTrigger::Cue {
+    if !matches!(row.trigger, RunTrigger::Cue | RunTrigger::Workflow) {
         return Ok(());
     }
+    let cue_origin = row.trigger == RunTrigger::Cue;
     let recorded = runs::open(workspace)
         .and_then(|conn| runs::get_run_script_hash(&conn, &row.run_id))
         .map_err(AdmissionError::ScriptHashLookup)?
-        .ok_or(AdmissionError::ScriptHashMissing)?;
+        .ok_or_else(|| {
+            if cue_origin {
+                AdmissionError::CueScriptHashMissing
+            } else {
+                AdmissionError::WorkflowScriptHashMissing
+            }
+        })?;
     match crate::remote_cue::content_hash(script_path) {
         Some(current) if current == recorded => Ok(()),
-        Some(_) => Err(AdmissionError::ScriptChanged),
+        Some(_) => Err(if cue_origin {
+            AdmissionError::CueScriptChanged
+        } else {
+            AdmissionError::WorkflowScriptChanged
+        }),
         None => Err(AdmissionError::ScriptUnreadable),
     }
 }

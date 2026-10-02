@@ -16,6 +16,7 @@ mod open;
 mod query;
 mod state;
 mod trace;
+mod workflow;
 
 fn enqueue_opts() -> EnqueueOptions {
     EnqueueOptions {

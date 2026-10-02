@@ -3,6 +3,7 @@ use super::lifecycle;
 use super::open;
 use super::query::{self, RunFilters, RunRow, RunStats};
 use super::trace::{self, TraceLevel, TraceRow};
+use super::workflow::{WorkflowRun, WorkflowSnapshot};
 use super::{ClaimFilters, RunCompletion, RunsError};
 use crate::workspace::Workspace;
 use rusqlite::Connection;
@@ -26,6 +27,29 @@ impl RunStore {
         options: EnqueueOptions,
     ) -> Result<RunRow, RunsError> {
         super::enqueue(&self.connection, script_path, args, options)
+    }
+
+    pub(crate) fn start_workflow(
+        &self,
+        snapshot: WorkflowSnapshot,
+        actor: &str,
+    ) -> Result<WorkflowRun, RunsError> {
+        super::start_workflow(&self.connection, snapshot, actor)
+    }
+
+    pub(crate) fn get_workflow(&self, workflow_id: &str) -> Result<Option<WorkflowRun>, RunsError> {
+        super::get_workflow(&self.connection, workflow_id)
+    }
+
+    pub(crate) fn advance_workflow_for_run(
+        &self,
+        run_id: &str,
+    ) -> Result<Option<WorkflowRun>, RunsError> {
+        super::advance_workflow_for_run(&self.connection, run_id)
+    }
+
+    pub(crate) fn recover_workflows(&self) -> Result<Vec<WorkflowRun>, RunsError> {
+        super::recover_workflows(&self.connection)
     }
 
     pub(crate) fn enqueue_cue(

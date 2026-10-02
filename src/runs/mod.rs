@@ -31,7 +31,7 @@ pub(crate) use store::RunStore;
 #[cfg(test)]
 pub(crate) use trace::query_traces;
 pub use trace::{TraceLevel, TraceRow, insert_trace};
-#[cfg(test)]
+#[cfg(all(test, unix))]
 pub use workflow::WorkflowState;
 pub use workflow::{
     WorkflowRun, WorkflowSnapshot, WorkflowStepSnapshot, advance_workflow_for_run, get_workflow,

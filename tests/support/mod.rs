@@ -1,6 +1,6 @@
 mod bin;
 pub mod direct_client;
-mod frame;
+pub(crate) mod frame;
 
 pub use bin::omakure_bin;
 

@@ -41,7 +41,7 @@ use omakure::node_identity::NodeIdentity;
 use omakure::node_registry::NodeRegistry;
 use rusqlite::Connection;
 use serde_json::{Value, json};
-use std::io::{Read, Write};
+use std::io::Write;
 use std::net::TcpStream;
 use std::path::Path;
 use std::process::Command;
@@ -215,12 +215,32 @@ fn wait_for_presence_within(
 
 /// Complete a real production handshake and probe/ack round trip, then hand
 /// back the live session.
+struct LiveAdversary {
+    stream: TcpStream,
+    session: TransportSession,
+    identity: NodeIdentity,
+}
+
+impl LiveAdversary {
+    fn exchange_profile(&mut self, payload: Value, created_at: u64, nonce_seed: u8) -> Exchange {
+        exchange(
+            &mut self.stream,
+            &mut self.session,
+            &self.identity,
+            "health_profile",
+            payload,
+            created_at,
+            nonce_seed,
+        )
+    }
+}
+
 fn production_session(
     endpoint: &str,
     workspace: &Path,
     remote_node_id: &str,
     remote_identity_key: &[u8; 32],
-) -> (TcpStream, TransportSession, NodeIdentity) {
+) -> LiveAdversary {
     let (identity, private, certificate) = support::direct_client::node_material(workspace);
     let mut handshake = NoiseHandshake::new(HandshakeRole::Initiator, private, certificate)
         .expect("build production Noise handshake");
@@ -261,7 +281,11 @@ fn production_session(
         &nonce,
     )
     .expect("the production listener must acknowledge an authorized peer");
-    (stream, session, identity)
+    LiveAdversary {
+        stream,
+        session,
+        identity,
+    }
 }
 
 /// Complete one production handshake and probe/ack round trip, returning
@@ -282,7 +306,7 @@ fn try_production_session(
         .set_write_timeout(Some(Duration::from_secs(10)))
         .ok()?;
     stream.write_all(&handshake.write_next().ok()?).ok()?;
-    let response = try_read_frame(&mut stream)?;
+    let response = support::frame::read_frame(&mut stream, None, None).ok()?;
     handshake.read_next(&response, unix_seconds()).ok()?;
     stream.write_all(&handshake.write_next().ok()?).ok()?;
     let mut session = handshake.into_session().ok()?;
@@ -291,7 +315,7 @@ fn try_production_session(
     let probe = sign_probe(&identity, session.session_id(), nonce, unix_seconds()).ok()?;
     let frame = session.write(ENVELOPE_KIND, &probe.encoded()).ok()?;
     stream.write_all(&frame).ok()?;
-    let ack_frame = try_read_frame(&mut stream)?;
+    let ack_frame = support::frame::read_frame(&mut stream, None, None).ok()?;
     let ack = session.read(&ack_frame).ok()?;
     verify_envelope(
         &ack.body,
@@ -303,16 +327,6 @@ fn try_production_session(
     )
     .ok()?;
     Some((stream, session, identity))
-}
-
-fn try_read_frame(stream: &mut TcpStream) -> Option<Vec<u8>> {
-    let mut prefix = [0_u8; 4];
-    stream.read_exact(&mut prefix).ok()?;
-    let length = u32::from_be_bytes(prefix) as usize;
-    let mut encoded = vec![0_u8; length + 4];
-    encoded[..4].copy_from_slice(&prefix);
-    stream.read_exact(&mut encoded[4..]).ok()?;
-    Some(encoded)
 }
 
 /// The frozen admission controller accepts a bounded number of handshakes per
@@ -412,16 +426,12 @@ fn exchange(
         stream
             .set_read_timeout(Some(remaining.max(Duration::from_millis(50))))
             .expect("reply timeout");
-        let mut prefix = [0_u8; 4];
-        if stream.read_exact(&mut prefix).is_err() {
-            break;
-        }
-        let length = u32::from_be_bytes(prefix) as usize;
-        let mut encoded = vec![0_u8; length + 4];
-        encoded[..4].copy_from_slice(&prefix);
-        stream
-            .read_exact(&mut encoded[4..])
-            .expect("read reply body");
+        let mut read_stage = support::frame::ReadStage::Prefix;
+        let encoded = match support::frame::read_frame(stream, None, Some(&mut read_stage)) {
+            Ok(encoded) => encoded,
+            Err(_) if matches!(read_stage, support::frame::ReadStage::Prefix) => break,
+            Err(error) => panic!("read reply body: {error:?}"),
+        };
         let message = session.read(&encoded).expect("decrypt reply");
         let value: Value = serde_json::from_slice(&message.body[..message.body.len() - 64])
             .expect("parse reply envelope");
@@ -878,6 +888,234 @@ fn two_real_nodes_exchange_profile_and_pulse_and_both_adapters_agree() {
 // The adversary half.
 // ---------------------------------------------------------------------------
 
+// 1. Wrong target: a syntactically valid third-party node ID is rejected
+//    before any state is read or written.
+fn reject_wrong_target(client: &mut LiveAdversary, conductor: &Path, manager_id: &str) {
+    assert_dropped(
+        client.exchange_profile(profile_payload(manager_id, 0x01, 1), unix_seconds(), 0x01),
+        conductor,
+        HealthCode::WrongTarget,
+        "a third-party target",
+    );
+}
+
+// 2. Future beyond the frozen skew, and stale beyond the frozen age.
+fn reject_outside_time_window(client: &mut LiveAdversary, conductor_id: &str) {
+    assert_error(
+        client.exchange_profile(
+            profile_payload(conductor_id, 0x02, 1),
+            unix_seconds() + MAX_FUTURE_SKEW_SECONDS as u64 + 5,
+            0x02,
+        ),
+        HealthCode::Future,
+    );
+    assert_error(
+        client.exchange_profile(
+            profile_payload(conductor_id, 0x03, 1),
+            unix_seconds() - MAX_AGE_SECONDS as u64 - 5,
+            0x03,
+        ),
+        HealthCode::Stale,
+    );
+}
+
+// 3. An unknown field anywhere in the closed schema.
+fn reject_unknown_field(client: &mut LiveAdversary, conductor: &Path, conductor_id: &str) {
+    let mut unknown = profile_payload(conductor_id, 0x04, 1);
+    unknown["profile"]["hostname"] = json!("workshop.local");
+    assert_dropped(
+        client.exchange_profile(unknown, unix_seconds(), 0x04),
+        conductor,
+        HealthCode::UnknownField,
+        "a smuggled hostname field",
+    );
+}
+
+// 4. A grammar violation that would smuggle a path.
+fn reject_path_smuggling(client: &mut LiveAdversary, conductor: &Path, conductor_id: &str) {
+    let mut path_smuggle = profile_payload(conductor_id, 0x05, 1);
+    path_smuggle["profile"]["display_name"] = json!("/etc/shadow");
+    assert_dropped(
+        client.exchange_profile(path_smuggle, unix_seconds(), 0x05),
+        conductor,
+        HealthCode::InvalidMessage,
+        "a display name carrying a filesystem path",
+    );
+}
+
+// 5. Oversized: past the frozen per-kind canonical cap.
+fn reject_oversized_profile(client: &mut LiveAdversary, conductor: &Path, conductor_id: &str) {
+    let mut oversized = profile_payload(conductor_id, 0x06, 1);
+    oversized["profile"]["runtimes"] = json!(
+        (0..64)
+            .map(|index| json!({
+                "available": true,
+                "name": format!("runtime{index}"),
+                "version": "9.9.9999999999999999999999"
+            }))
+            .collect::<Vec<Value>>()
+    );
+    assert!(
+        serde_jcs::to_vec(&oversized).unwrap().len() > MAX_CANONICAL_PROFILE / 2,
+        "the oversized fixture must actually be large"
+    );
+    assert_dropped(
+        client.exchange_profile(oversized, unix_seconds(), 0x06),
+        conductor,
+        HealthCode::MessageTooLarge,
+        "an oversized Profile",
+    );
+}
+
+// 6. An accepted Profile, then the same `message_id` replayed.
+fn accept_then_reject_replayed_message(client: &mut LiveAdversary, conductor_id: &str) {
+    let accepted =
+        client.exchange_profile(profile_payload(conductor_id, 0x07, 1), unix_seconds(), 0x07);
+    let (kind, payload) = accepted
+        .reply
+        .expect("an authorized Profile must be acknowledged");
+    assert_eq!(kind, "health_ack", "payload: {payload}");
+    assert_eq!(payload["ack"]["accepted"], true);
+    assert_eq!(payload["ack"]["acked_message_id"], message_id(0x07));
+
+    assert_error(
+        client.exchange_profile(profile_payload(conductor_id, 0x07, 2), unix_seconds(), 0x08),
+        HealthCode::Replay,
+    );
+}
+
+// 7. An out-of-order Profile revision is a replay, not an acceptance.
+fn reject_stale_profile_revision(client: &mut LiveAdversary, conductor_id: &str) {
+    assert_error(
+        client.exchange_profile(profile_payload(conductor_id, 0x09, 1), unix_seconds(), 0x09),
+        HealthCode::Replay,
+    );
+}
+
+// 8. Flood: past the frozen per-minute allowance plus its burst.
+fn reject_profile_flood(client: &mut LiveAdversary, conductor_id: &str) {
+    let mut rate_limited = false;
+    for seed in 0..(MAX_MESSAGES_PER_PEER_PER_MINUTE + RATE_BURST_ALLOWANCE + 4) {
+        let seed = 0x20 + seed as u8;
+        let reply = client.exchange_profile(
+            profile_payload(conductor_id, seed, 100 + seed as u64),
+            unix_seconds(),
+            seed,
+        );
+        if let Some((kind, payload)) = reply.reply
+            && kind == "health_error"
+            && payload["error"]["code"] == HealthCode::RateLimited.code()
+        {
+            rate_limited = true;
+            break;
+        }
+    }
+    assert!(
+        rate_limited,
+        "a flooding peer must hit the frozen per-peer rate limit"
+    );
+    let _ = client.stream.shutdown(std::net::Shutdown::Both);
+}
+
+// 9. Wrong role: a peer trusted as a Conductor cannot report health, and
+//    the rejection is a silent drop rather than an oracle.
+fn reject_wrong_role(
+    endpoint: &str,
+    manager: &Path,
+    conductor: &Path,
+    conductor_id: &str,
+    conductor_key: &[u8; 32],
+) {
+    let mut client = production_session(endpoint, manager, conductor_id, conductor_key);
+    let wrong_role =
+        client.exchange_profile(profile_payload(conductor_id, 0x60, 1), unix_seconds(), 0x60);
+    // The same session proves both halves of the role rule at once: this node
+    // reports its own Profile to the peer it trusts as a Conductor, and refuses
+    // the Profile that peer sent in the other direction.
+    assert!(
+        wrong_role
+            .unrelated
+            .iter()
+            .any(|kind| kind == "health_profile"),
+        "a node must report to the peer it trusts in the conductor role: {:?}",
+        wrong_role.unrelated
+    );
+    assert_dropped(
+        wrong_role,
+        conductor,
+        HealthCode::WrongRole,
+        "a peer trusted as a Conductor reporting health",
+    );
+    let _ = client.stream.shutdown(std::net::Shutdown::Both);
+}
+
+// 10. Revocation: the same authorized Performer, once revoked, is dropped.
+fn reject_revoked_performer(
+    endpoint: &str,
+    performer: &Path,
+    conductor: &Path,
+    conductor_id: &str,
+    conductor_key: &[u8; 32],
+    performer_id: &str,
+) {
+    support::assert_node_success(&support::run_node(
+        conductor,
+        &[
+            "revoke".to_string(),
+            performer_id.to_string(),
+            "--actor".to_string(),
+            "health-plane-transport".to_string(),
+            "--reason".to_string(),
+            "adversary certification".to_string(),
+            "--confirmed".to_string(),
+        ],
+    ));
+    let revoked_session = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut client = production_session(endpoint, performer, conductor_id, conductor_key);
+        let reply = client.exchange_profile(
+            profile_payload(conductor_id, 0x70, 500),
+            unix_seconds(),
+            0x70,
+        );
+        let _ = client.stream.shutdown(std::net::Shutdown::Both);
+        reply.reply
+    }));
+    // A revoked peer is refused at the transport admission gate or, if it still
+    // reaches the Health Plane, dropped without a reply. Both are fail-closed;
+    // neither may acknowledge.
+    if let Ok(Some((kind, payload))) = revoked_session {
+        panic!("a revoked peer received {kind}: {payload}");
+    }
+}
+
+// 11. Nothing an adversary sent changed identity, trust, capability, or
+//     revocation state beyond the one explicit operator revocation.
+fn assert_only_operator_revocation_changed_trust(
+    conductor: &Path,
+    trust_before: &str,
+    performer_id: &str,
+    manager_id: &str,
+) {
+    let trust_after = trust_snapshot(conductor);
+    assert_ne!(
+        trust_before, trust_after,
+        "the explicit operator revocation must be visible"
+    );
+    assert_eq!(
+        trust_after.matches(performer_id).count(),
+        trust_before.matches(performer_id).count(),
+        "no adversary may add or remove a trust row"
+    );
+    assert!(
+        trust_after.contains(manager_id),
+        "the wrong-role peer's trust row must be untouched"
+    );
+    assert!(
+        trust_after.contains("revoked"),
+        "only the operator's revocation changed trust"
+    );
+}
+
 #[test]
 fn contracted_adversaries_are_rejected_without_unauthorized_state_mutation() {
     let conductor = support::TestWorkspace::new("health_adv_conductor");
@@ -935,275 +1173,36 @@ fn contracted_adversaries_are_rejected_without_unauthorized_state_mutation() {
 
     let trust_before = trust_snapshot(conductor.path());
 
-    let (mut stream, mut session, identity) =
-        production_session(&endpoint, performer.path(), &conductor_id, &conductor_key);
+    let mut client = production_session(&endpoint, performer.path(), &conductor_id, &conductor_key);
 
-    // 1. Wrong target: a syntactically valid third-party node ID is rejected
-    //    before any state is read or written.
-    assert_dropped(
-        exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_profile",
-            profile_payload(&manager_id, 0x01, 1),
-            unix_seconds(),
-            0x01,
-        ),
+    reject_wrong_target(&mut client, conductor.path(), &manager_id);
+    reject_outside_time_window(&mut client, &conductor_id);
+    reject_unknown_field(&mut client, conductor.path(), &conductor_id);
+    reject_path_smuggling(&mut client, conductor.path(), &conductor_id);
+    reject_oversized_profile(&mut client, conductor.path(), &conductor_id);
+    accept_then_reject_replayed_message(&mut client, &conductor_id);
+    reject_stale_profile_revision(&mut client, &conductor_id);
+    reject_profile_flood(&mut client, &conductor_id);
+    reject_wrong_role(
+        &endpoint,
+        manager.path(),
         conductor.path(),
-        HealthCode::WrongTarget,
-        "a third-party target",
+        &conductor_id,
+        &conductor_key,
     );
-
-    // 2. Future beyond the frozen skew, and stale beyond the frozen age.
-    assert_error(
-        exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_profile",
-            profile_payload(&conductor_id, 0x02, 1),
-            unix_seconds() + MAX_FUTURE_SKEW_SECONDS as u64 + 5,
-            0x02,
-        ),
-        HealthCode::Future,
-    );
-    assert_error(
-        exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_profile",
-            profile_payload(&conductor_id, 0x03, 1),
-            unix_seconds() - MAX_AGE_SECONDS as u64 - 5,
-            0x03,
-        ),
-        HealthCode::Stale,
-    );
-
-    // 3. An unknown field anywhere in the closed schema.
-    let mut unknown = profile_payload(&conductor_id, 0x04, 1);
-    unknown["profile"]["hostname"] = json!("workshop.local");
-    assert_dropped(
-        exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_profile",
-            unknown,
-            unix_seconds(),
-            0x04,
-        ),
+    reject_revoked_performer(
+        &endpoint,
+        performer.path(),
         conductor.path(),
-        HealthCode::UnknownField,
-        "a smuggled hostname field",
+        &conductor_id,
+        &conductor_key,
+        &performer_id,
     );
-
-    // 4. A grammar violation that would smuggle a path.
-    let mut path_smuggle = profile_payload(&conductor_id, 0x05, 1);
-    path_smuggle["profile"]["display_name"] = json!("/etc/shadow");
-    assert_dropped(
-        exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_profile",
-            path_smuggle,
-            unix_seconds(),
-            0x05,
-        ),
+    assert_only_operator_revocation_changed_trust(
         conductor.path(),
-        HealthCode::InvalidMessage,
-        "a display name carrying a filesystem path",
-    );
-
-    // 5. Oversized: past the frozen per-kind canonical cap.
-    let mut oversized = profile_payload(&conductor_id, 0x06, 1);
-    oversized["profile"]["runtimes"] = json!(
-        (0..64)
-            .map(|index| json!({
-                "available": true,
-                "name": format!("runtime{index}"),
-                "version": "9.9.9999999999999999999999"
-            }))
-            .collect::<Vec<Value>>()
-    );
-    assert!(
-        serde_jcs::to_vec(&oversized).unwrap().len() > MAX_CANONICAL_PROFILE / 2,
-        "the oversized fixture must actually be large"
-    );
-    assert_dropped(
-        exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_profile",
-            oversized,
-            unix_seconds(),
-            0x06,
-        ),
-        conductor.path(),
-        HealthCode::MessageTooLarge,
-        "an oversized Profile",
-    );
-
-    // 6. An accepted Profile, then the same `message_id` replayed.
-    let accepted = exchange(
-        &mut stream,
-        &mut session,
-        &identity,
-        "health_profile",
-        profile_payload(&conductor_id, 0x07, 1),
-        unix_seconds(),
-        0x07,
-    );
-    let (kind, payload) = accepted
-        .reply
-        .expect("an authorized Profile must be acknowledged");
-    assert_eq!(kind, "health_ack", "payload: {payload}");
-    assert_eq!(payload["ack"]["accepted"], true);
-    assert_eq!(payload["ack"]["acked_message_id"], message_id(0x07));
-
-    assert_error(
-        exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_profile",
-            profile_payload(&conductor_id, 0x07, 2),
-            unix_seconds(),
-            0x08,
-        ),
-        HealthCode::Replay,
-    );
-
-    // 7. An out-of-order Profile revision is a replay, not an acceptance.
-    assert_error(
-        exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_profile",
-            profile_payload(&conductor_id, 0x09, 1),
-            unix_seconds(),
-            0x09,
-        ),
-        HealthCode::Replay,
-    );
-
-    // 8. Flood: past the frozen per-minute allowance plus its burst.
-    let mut rate_limited = false;
-    for seed in 0..(MAX_MESSAGES_PER_PEER_PER_MINUTE + RATE_BURST_ALLOWANCE + 4) {
-        let seed = 0x20 + seed as u8;
-        let reply = exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_profile",
-            profile_payload(&conductor_id, seed, 100 + seed as u64),
-            unix_seconds(),
-            seed,
-        );
-        if let Some((kind, payload)) = reply.reply
-            && kind == "health_error"
-            && payload["error"]["code"] == HealthCode::RateLimited.code()
-        {
-            rate_limited = true;
-            break;
-        }
-    }
-    assert!(
-        rate_limited,
-        "a flooding peer must hit the frozen per-peer rate limit"
-    );
-    let _ = stream.shutdown(std::net::Shutdown::Both);
-
-    // 9. Wrong role: a peer trusted as a Conductor cannot report health, and
-    //    the rejection is a silent drop rather than an oracle.
-    let (mut stream, mut session, identity) =
-        production_session(&endpoint, manager.path(), &conductor_id, &conductor_key);
-    let wrong_role = exchange(
-        &mut stream,
-        &mut session,
-        &identity,
-        "health_profile",
-        profile_payload(&conductor_id, 0x60, 1),
-        unix_seconds(),
-        0x60,
-    );
-    // The same session proves both halves of the role rule at once: this node
-    // reports its own Profile to the peer it trusts as a Conductor, and refuses
-    // the Profile that peer sent in the other direction.
-    assert!(
-        wrong_role
-            .unrelated
-            .iter()
-            .any(|kind| kind == "health_profile"),
-        "a node must report to the peer it trusts in the conductor role: {:?}",
-        wrong_role.unrelated
-    );
-    assert_dropped(
-        wrong_role,
-        conductor.path(),
-        HealthCode::WrongRole,
-        "a peer trusted as a Conductor reporting health",
-    );
-    let _ = stream.shutdown(std::net::Shutdown::Both);
-
-    // 10. Revocation: the same authorized Performer, once revoked, is dropped.
-    support::assert_node_success(&support::run_node(
-        conductor.path(),
-        &[
-            "revoke".to_string(),
-            performer_id.clone(),
-            "--actor".to_string(),
-            "health-plane-transport".to_string(),
-            "--reason".to_string(),
-            "adversary certification".to_string(),
-            "--confirmed".to_string(),
-        ],
-    ));
-    let revoked_session = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let (mut stream, mut session, identity) =
-            production_session(&endpoint, performer.path(), &conductor_id, &conductor_key);
-        let reply = exchange(
-            &mut stream,
-            &mut session,
-            &identity,
-            "health_profile",
-            profile_payload(&conductor_id, 0x70, 500),
-            unix_seconds(),
-            0x70,
-        );
-        let _ = stream.shutdown(std::net::Shutdown::Both);
-        reply.reply
-    }));
-    // A revoked peer is refused at the transport admission gate or, if it still
-    // reaches the Health Plane, dropped without a reply. Both are fail-closed;
-    // neither may acknowledge.
-    if let Ok(Some((kind, payload))) = revoked_session {
-        panic!("a revoked peer received {kind}: {payload}");
-    }
-
-    // 11. Nothing an adversary sent changed identity, trust, capability, or
-    //     revocation state beyond the one explicit operator revocation.
-    let trust_after = trust_snapshot(conductor.path());
-    assert_ne!(
-        trust_before, trust_after,
-        "the explicit operator revocation must be visible"
-    );
-    assert_eq!(
-        trust_after.matches(&performer_id).count(),
-        trust_before.matches(&performer_id).count(),
-        "no adversary may add or remove a trust row"
-    );
-    assert!(
-        trust_after.contains(&manager_id),
-        "the wrong-role peer's trust row must be untouched"
-    );
-    assert!(
-        trust_after.contains("revoked"),
-        "only the operator's revocation changed trust"
+        &trust_before,
+        &performer_id,
+        &manager_id,
     );
 
     let _ = conductor_server.terminate();
